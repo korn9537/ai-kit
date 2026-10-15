@@ -1,0 +1,14 @@
+{
+  "name": "korn9537",
+  "owner": {
+    "name": "korn9537"
+  },
+  "description": "korn9537's Claude Code plugins: ai-kit working conventions and their enforcing hooks.",
+  "plugins": [
+    {
+      "name": "ai-kit",
+      "source": ".",
+      "description": "Working conventions for Claude Code with the hooks, agents and pre-commit runner that enforce them."
+    }
+  ]
+}

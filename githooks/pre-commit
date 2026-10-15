@@ -1,0 +1,74 @@
+#!/usr/bin/env sh
+# ai-kit pre-commit runner: universal checks, then the project's ai/kit/pre-commit.sh, then the kit's own checks.
+# Keep fast: only run a check when the files it guards are actually staged.
+#
+# This hook calls `node` directly and never `pnpm`: Git GUIs (GitHub Desktop, SourceTree) run hooks in their own
+# MSYS shell, where the npm `pnpm` shim mis-resolves its directory and every GUI commit fails.
+
+# the plugin root, from this file's own path (the shim in .githooks/ execs it)
+ai_kit_plugin="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Print a check's output only when it fails; on success, collapse its `!` warnings into one line.
+quiet() {
+  out=$("$@" 2>&1); rc=$?
+  if [ $rc -ne 0 ]; then printf '%s\n' "$out"
+  else
+    n=$(printf '%s\n' "$out" | grep -c '^!')
+    [ "$n" -gt 0 ] && echo "warn: $n warning(s) from: $* (run it alone for details)"
+  fi
+  return $rc
+}
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "commit blocked: 'node' is not on PATH for this git client."
+  echo "   Install Node (>= 22) or launch your git client from a shell that has it."
+  echo "   To bypass: git commit --no-verify"
+  exit 1
+fi
+
+# A backslash is a valid filename char on macOS/Linux, so a Windows-style output path (`-o bin\Debug`) creates a
+# malformed dir that .gitignore misses.
+if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -q '\\'; then
+  echo "commit blocked: staged path contains a backslash (\\) — likely a malformed build dir."
+  git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep '\\' | sed 's/^/   /'
+  echo "Delete it (e.g. rm -rf the offending dir) and re-stage. To bypass: git commit --no-verify"
+  exit 1
+fi
+
+# Prettier on staged files when package.json declares it, then re-stage them.
+# Re-stages whole files: a partially staged file (git add -p) gets fully staged.
+if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
+  if [ ! -f node_modules/prettier/bin/prettier.cjs ]; then
+    echo "commit blocked: node_modules/prettier is missing — install packages first."
+    echo "   To bypass: git commit --no-verify"
+    exit 1
+  fi
+  git diff --cached --name-only --diff-filter=ACMR -z \
+    | xargs -0 node node_modules/prettier/bin/prettier.cjs --write --ignore-unknown --log-level warn || {
+    echo "prettier failed — fix the error above, or to bypass: git commit --no-verify"
+    exit 1
+  }
+  git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 git add
+fi
+
+# shellcheck source=/dev/null
+[ -f ai/kit/pre-commit.sh ] && . ai/kit/pre-commit.sh
+
+# Comments are for AI only (the plugin's docs/code-comments.md); scope is comments.include in ai/kit/config.json.
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
+  node "$ai_kit_plugin/scripts/check-comments.mjs" --staged --strict || {
+    echo ""
+    echo "Comment rule failed. Shorten to 1-2 lines, move the rule to a doc, or drop the date / who asked. To bypass: git commit --no-verify"
+    exit 1
+  }
+fi
+
+# The project's kit wiring (config, shim, plugin settings) is still sound.
+if git diff --cached --name-only --diff-filter=ACMRD | grep -qE '^(ai/kit/config\.json|\.githooks/|\.claude/settings\.json$)'; then
+  node "$ai_kit_plugin/scripts/kit.mjs" check || {
+    echo ""
+    echo "ai-kit check failed: apply the fix each line names. To bypass: git commit --no-verify"
+    exit 1
+  }
+fi
