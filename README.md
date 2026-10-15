@@ -15,9 +15,9 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `CLAUDE.core.md`             | git and working conventions, the final-report format                   |
 | `agents/`                    | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                    |
 | `hooks/`                     | Claude Code hooks (below), wired in `hooks/hooks.json`                 |
-| `commands/`                  | `/ai-kit:init`, `/ai-kit:check`                                        |
+| `commands/`                  | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`                     |
 | `githooks/pre-commit`        | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
-| `scripts/kit.mjs`            | `init` / `check` (§Commands)                                           |
+| `scripts/kit.mjs`            | `init` / `check` / `migrate` (§Commands)                               |
 | `scripts/check-comments.mjs` | comment rule check, run by pre-commit and post-edit                    |
 | `docs/`                      | `code-comments.md`, `shared-checkout.md`                               |
 | `conventions/`               | cross-repo coding rules: `general.md`, one per language                |
@@ -56,7 +56,7 @@ plugin's `docs/shared-checkout.md`.
 
 ## Commands
 
-Run from the project root (or `/ai-kit:init`, `/ai-kit:check` inside Claude Code).
+Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate` inside Claude Code).
 
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
   writes the `.githooks/pre-commit` shim when missing (rewrites a 1.x shim; warns about any other hook there) and
@@ -70,6 +70,8 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check` inside Claude Code
   run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
   `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. The pre-commit runner calls it when
   `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`, `.claude/agents/` or `CLAUDE.md` are staged.
+- `node <plugin>/scripts/kit.mjs migrate` turns a clean 1.x repo into a plugin one, then runs `init` and `check`
+  (§Migrating a repo from 1.x).
 
 The shim reads the plugin path from `<git-common-dir>/ai-kit-root`, written by `init` and at each session start.
 Until either has run on a machine, it prints a warning and runs only `ai/kit/pre-commit.sh`.
@@ -118,14 +120,29 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 
 ## Migrating a repo from 1.x
 
-1. Delete `ai-kit/`, `.claude/agents/business-analyst.md` and `.claude/agents/change-reviewer.md`, every hook
-   entry in `.claude/settings.json` that runs `ai-kit/hooks/...`, and the `@ai-kit/CLAUDE.core.md` line in
-   `CLAUDE.md`.
-2. Add the settings from §Install, open Claude Code and trust the folder.
-3. Run `node <plugin>/scripts/kit.mjs init` (or `/ai-kit:init`) to rewrite the shim, then `check`.
-4. In `ai/kit/config.json` drop `ai-kit` from `code_dirs`, and drop `shared_checkout_doc` if it named
-   `ai-kit/docs/shared-checkout.md`.
-5. Commit the deletions and changes together, staged by name.
+Clone this repo, then from a clean working tree in the project run:
+
+```sh
+node <clone>/scripts/kit.mjs migrate
+```
+
+A 1.x repo does not enable the plugin yet, so `/ai-kit:migrate` works there only when the plugin is enabled at
+user scope (`~/.claude/settings.json`). `migrate` refuses on a dirty tree, or when nothing 1.x is left (run `init`
+then). What it does, which is also the manual route:
+
+1. Deletes `ai-kit/` (only when it holds `sync.mjs` or `CLAUDE.core.md`), `.claude/agents/business-analyst.md` and
+   `.claude/agents/change-reviewer.md` (and `.claude/agents/` if left empty).
+2. Removes every hook in `.claude/settings.json` and `.claude/settings.local.json` that runs `ai-kit/hooks/...`,
+   and adds the settings from §Install to `.claude/settings.json`; other keys and hooks stay.
+3. Removes the `@ai-kit/CLAUDE.core.md` line in `CLAUDE.md`; an emptied `## Working conventions` section gets a
+   one-line pointer to the plugin.
+4. In `ai/kit/config.json` drops `ai-kit` from `code_dirs`, and `shared_checkout_doc` if it named `ai-kit/...`;
+   rewrites the 1.x header lines of `ai/kit/` files to the template wording and lists any other line citing
+   `ai-kit/` to review by hand.
+5. Runs `init` (rewrites the shim) and `check`, and prints what it deleted and changed.
+
+Then review `git diff`, commit the deletions and changes together, staged by name, open Claude Code, trust the
+folder and restart the session.
 
 Recommended skill, installed separately: `impeccable` (UI review; a project's `review-checklist.md` can call it).
 
@@ -175,13 +192,26 @@ ai-kit คือ plugin ของ Claude Code ที่รวมกฎการ�
 
 ### ย้าย repo จาก 1.x
 
-1. ลบ `ai-kit/`, `.claude/agents/business-analyst.md`, `.claude/agents/change-reviewer.md`, รายการ hook ใน
-   `.claude/settings.json` ที่เรียก `ai-kit/hooks/...` และบรรทัด `@ai-kit/CLAUDE.core.md` ใน `CLAUDE.md`
-2. ใส่ settings ตาม §Install เปิด Claude Code แล้ว trust โฟลเดอร์
-3. สั่ง `/ai-kit:init` (หรือ `node <plugin>/scripts/kit.mjs init`) เพื่อเขียน shim ใหม่ แล้วรัน `check`
-4. ใน `ai/kit/config.json` เอา `ai-kit` ออกจาก `code_dirs` และเอา `shared_checkout_doc` ออกถ้าชี้ไปที่
-   `ai-kit/docs/shared-checkout.md`
-5. commit ทั้งหมดพร้อมกัน โดย stage ทีละชื่อ
+clone repo นี้ แล้วในโปรเจกต์ที่ working tree สะอาด สั่ง
+
+```sh
+node <clone>/scripts/kit.mjs migrate
+```
+
+repo 1.x ยังไม่ได้เปิด plugin ดังนั้น `/ai-kit:migrate` ใช้ได้เฉพาะเมื่อเปิด plugin ไว้ที่ระดับ user
+(`~/.claude/settings.json`) — `migrate` จะไม่ทำถ้า working tree มีของค้าง หรือไม่มีอะไรของ 1.x เหลือ (ให้ใช้ `init`
+แทน) สิ่งที่มันทำ ซึ่งทำมือตามนี้ก็ได้
+
+1. ลบ `ai-kit/` (เฉพาะเมื่อมี `sync.mjs` หรือ `CLAUDE.core.md`), `.claude/agents/business-analyst.md`,
+   `.claude/agents/change-reviewer.md` (และ `.claude/agents/` ถ้าว่าง)
+2. เอา hook ที่เรียก `ai-kit/hooks/...` ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่
+   settings ตาม §Install ลงใน `.claude/settings.json` — key และ hook อื่นคงไว้
+3. ลบบรรทัด `@ai-kit/CLAUDE.core.md` ใน `CLAUDE.md` ถ้า section `## Working conventions` ว่าง จะใส่บรรทัดเดียวที่ชี้ไป plugin
+4. ใน `ai/kit/config.json` เอา `ai-kit` ออกจาก `code_dirs` และเอา `shared_checkout_doc` ออกถ้าชี้ไปที่ `ai-kit/...`
+   เขียนบรรทัดหัวไฟล์แบบ 1.x ใน `ai/kit/` ใหม่ตาม template บรรทัดอื่นที่ยังอ้าง `ai-kit/` จะแสดงให้แก้เอง
+5. รัน `init` (เขียน shim ใหม่) และ `check` แล้วสรุปว่าลบและแก้อะไร
+
+จากนั้นดู `git diff`, commit ทั้งหมดพร้อมกันโดย stage ทีละชื่อ, เปิด Claude Code, trust โฟลเดอร์ แล้วเปิด session ใหม่
 
 ### กฎข้อเดียวที่ต้องจำ
 

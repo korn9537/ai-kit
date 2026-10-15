@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+- `kit.mjs migrate` (and `/ai-kit:migrate`) migrates a 1.x repo in one step: deletes `ai-kit/` and the old agent
+  copies, drops the kit hooks and enables the plugin in `.claude/settings.json`, removes the `@ai-kit` import,
+  cleans `ai/kit/` (config and known header lines), then runs `init` and `check`. Refuses on a dirty tree.
+
 ## 2.0.0
 
 - Ships as a Claude Code plugin in its own repo (`korn9537/ai-kit`), which is also the `korn9537` marketplace.
