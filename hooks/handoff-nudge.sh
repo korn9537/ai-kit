@@ -19,7 +19,7 @@ used="$(jq -R 'fromjson? // empty | select(.type == "assistant" and .isSidechain
 [[ -n "$used" ]] || exit 0
 
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
-[[ -n "$project" ]] && project="$(kit_toplevel "$project")"
+[[ -n "$project" ]] && project="$(kit_project_root "$project")"
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0
 mark="$gitdir/claude-review/$session.handoff"
 # below the limit (again, after /compact): forget earlier nudges so the next crossing nudges

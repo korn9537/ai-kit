@@ -32,7 +32,7 @@ grep -qi review <<<"$what" || exit 0
 
 session="$(jq -r '.session_id // empty' <<<"$input")"
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
-[[ -n "$project" ]] && project="$(kit_toplevel "$project")"
+[[ -n "$project" ]] && project="$(kit_project_root "$project")"
 [[ -n "$session" && -n "$project" ]] || exit 0
 
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0

@@ -126,13 +126,13 @@ function problems() {
       `core.hooksPath is ${hp || "unset"}, so the kit pre-commit never runs (fix: move other hooks into ai/kit/pre-commit.sh, then git config core.hooksPath .githooks)`,
     );
 
-  // enabled in any scope counts; the project file is recommended so teammates get it
+  // Claude Code applies the highest scope that sets the plugin: local, then project, then user
   const scopes = [
-    at(".claude", "settings.json"),
     at(".claude", "settings.local.json"),
+    at(".claude", "settings.json"),
     join(homedir(), ".claude", "settings.json"),
   ];
-  let enabled = false;
+  let setIn = null;
   for (const p of scopes) {
     let s;
     try {
@@ -141,11 +141,19 @@ function problems() {
       out.push(`${p} is not valid JSON (fix: correct the syntax; ${e.message})`);
       continue;
     }
-    if (s.enabledPlugins?.[PLUGIN] === true) enabled = true;
+    const ep = s.enabledPlugins;
+    if (ep && typeof ep === "object" && Object.hasOwn(ep, PLUGIN)) {
+      setIn = { p, v: ep[PLUGIN] };
+      break;
+    }
   }
-  if (!enabled)
+  if (!setIn)
     out.push(
       `the plugin is not enabled in .claude/settings.json, .claude/settings.local.json or ~/.claude/settings.json (fix: add "enabledPlugins": {"${PLUGIN}": true} and the korn9537 marketplace to the project .claude/settings.json, the recommended place so teammates get it, README.md §Install)`,
+    );
+  else if (setIn.v !== true)
+    out.push(
+      `${setIn.p} disables the plugin ("enabledPlugins": {"${PLUGIN}": ${JSON.stringify(setIn.v)}}) and overrides lower scopes (fix: set it to true or remove that entry)`,
     );
   for (const f of ["settings.json", "settings.local.json"]) {
     let s;
@@ -211,8 +219,12 @@ function init() {
   // the shim reads this; session-start.sh rewrites it each session
   const common = tryGit("rev-parse", "--path-format=absolute", "--git-common-dir");
   if (common && existsSync(common)) {
-    writeFileSync(join(common, MARK), `${kit}\n`);
-    console.log(`+ ${join(common, MARK)}`);
+    try {
+      writeFileSync(join(common, MARK), `${kit}\n`);
+      console.log(`+ ${join(common, MARK)}`);
+    } catch (e) {
+      console.log(`! could not write ${join(common, MARK)}: ${e.message}`);
+    }
   }
 
   const left = problems();

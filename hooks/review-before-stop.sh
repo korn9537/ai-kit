@@ -25,7 +25,7 @@ input="$(cat)"
 transcript="$(jq -r '.transcript_path // empty' <<<"$input")"
 [[ -n "$transcript" && -f "$transcript" ]] || exit 0
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
-[[ -n "$project" ]] && project="$(kit_toplevel "$project")"
+[[ -n "$project" ]] && project="$(kit_project_root "$project")"
 [[ -n "$project" ]] || exit 0
 project="${project//\\//}"
 project="${project%/}"
