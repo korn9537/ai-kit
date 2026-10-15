@@ -45,20 +45,24 @@ quiet() {
 exit 0
 `;
 
-const git = (...a) =>
+// every call runs at the repo root, so pathspecs and output are root-relative from a subdirectory too
+const gitIn = (cwd, a) =>
   execFileSync("git", a, {
+    cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
   }).trim();
-const tryGit = (...a) => {
+const tryGitIn = (cwd, a) => {
   try {
-    return git(...a);
+    return gitIn(cwd, a);
   } catch {
     return null;
   }
 };
 
-const root = tryGit("rev-parse", "--show-toplevel") ?? process.cwd();
+const root =
+  tryGitIn(process.cwd(), ["rev-parse", "--show-toplevel"]) ?? process.cwd();
+const tryGit = (...a) => tryGitIn(root, a);
 const at = (...p) => join(root, ...p);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const shimPath = at(".githooks", "pre-commit");
@@ -192,12 +196,14 @@ function problems() {
   return out;
 }
 
-function initFiles() {
+// created collects the root-relative paths of files this run adds
+function initFiles(created = []) {
   const tpl = join(kit, "templates", "ai-kit-project");
   mkdirSync(at("ai", "kit"), { recursive: true });
   for (const f of readdirSync(tpl))
     if (!existsSync(at("ai", "kit", f))) {
       copyFileSync(join(tpl, f), at("ai", "kit", f));
+      created.push(`ai/kit/${f}`);
       console.log(`+ ai/kit/${f} (fill it in for this project)`);
     }
 
@@ -205,6 +211,7 @@ function initFiles() {
   if (shim === null) {
     mkdirSync(at(".githooks"), { recursive: true });
     writeFileSync(shimPath, SHIM, { mode: 0o755 });
+    created.push(".githooks/pre-commit");
     console.log("+ .githooks/pre-commit");
   } else if (!isShim(shim) && !shim.includes(OLD_SHIM))
     console.log(
@@ -316,6 +323,10 @@ function pruneEmpty(dir) {
   if (!readdirSync(dir).length) rmdirSync(dir);
 }
 
+// shell-quotes a path for the suggested git add line
+const shq = (p) =>
+  /^[\w./@:+-]+$/.test(p) ? p : `'${p.replace(/'/g, "'\\''")}'`;
+
 function fail(msg) {
   console.log(`ai-kit migrate: ${msg}`);
   process.exit(1);
@@ -393,16 +404,15 @@ function migrate() {
       byHand.push(
         `ai-kit/ keeps ${extra.length} file(s) git does not track, left in place (e.g. ${extra[0]}); delete them by hand`,
       );
-    const convDir = join(kitDir, "conventions");
-    if (existsSync(convDir))
-      for (const f of readdirSync(convDir).filter((f) => f.endsWith(".md")))
-        if (
-          !existsSync(join(kit, "conventions", f)) &&
-          dels.includes(`ai-kit/conventions/${f}`)
-        )
-          byHand.push(
-            `ai-kit/conventions/${f} has no counterpart in the plugin's conventions/, deleted (${recover(`ai-kit/conventions/${f}`)})`,
-          );
+    // 1.x-only files have no plugin counterpart by design
+    const oldOnly = new Set(["sync.mjs", "settings.hooks.json", "VERSION"]);
+    for (const d of dels) {
+      const x = d.slice("ai-kit/".length);
+      if (!oldOnly.has(x) && !existsSync(join(kit, x)))
+        byHand.push(
+          `${d} has no counterpart in the plugin, deleted (${recover(d)})`,
+        );
+    }
   }
   for (const a of ["business-analyst.md", "change-reviewer.md"]) {
     const rel = `.claude/agents/${a}`;
@@ -538,14 +548,17 @@ function migrate() {
 
   // 2. write, then run init, then delete last, so a failure leaves every deleted file in place
   const done = [];
+  const created = [];
   try {
     for (const w of writes) {
       mkdirSync(dirname(at(w.rel)), { recursive: true });
+      const isNew = !lexists(at(w.rel));
       writeFileSync(at(w.rel), w.text);
+      if (isNew) created.push(w.rel);
       done.push(`changed ${w.rel}`);
     }
     console.log("ai-kit migrate: running init");
-    initFiles();
+    initFiles(created);
     done.push("ran init (its + lines above)");
     for (const d of dels) {
       rmSync(at(d), { force: true });
@@ -558,7 +571,7 @@ function migrate() {
     console.log(done.length ? "done before the stop:" : "nothing was changed");
     done.forEach((d) => console.log(`  ${d}`));
     console.log(
-      "recover: git restore --source=HEAD --staged --worktree -- . (and delete any file init created, its + lines), fix the cause, then rerun migrate",
+      `recover: in ${root} run git restore --source=HEAD --staged --worktree -- :/${created.length ? `, delete the files migrate created (${created.join(", ")})` : ""}, fix the cause, then rerun migrate`,
     );
     process.exit(1);
   }
@@ -566,7 +579,10 @@ function migrate() {
   const left = problems();
   console.log("\nai-kit migrate summary");
   const kitN = dels.filter((d) => d.startsWith("ai-kit/")).length;
-  if (kitN) console.log(`- deleted ai-kit/ (${kitN} tracked files)`);
+  if (kitN)
+    console.log(
+      `- deleted ai-kit/ (${kitN} tracked files; local edits to a kit file: git show HEAD:ai-kit/<file>)`,
+    );
   dels
     .filter((d) => !d.startsWith("ai-kit/"))
     .forEach((d) => console.log(`- deleted ${d}`));
@@ -583,7 +599,7 @@ function migrate() {
       execFileSync(
         "git",
         ["status", "--porcelain", "-z", "--untracked-files=all"],
-        { encoding: "utf8" },
+        { cwd: root, encoding: "utf8" },
       )
         .split("\0")
         .filter(Boolean)
@@ -593,7 +609,7 @@ function migrate() {
   ];
   console.log(`next steps:
   1. review git status and git diff
-  2. stage by name (git add -- ${changedPaths.join(" ")}), then commit
+  2. stage by name (git add -- ${changedPaths.map(shq).join(" ")}), then commit
   3. open Claude Code in the repo, trust the folder so it installs the plugin, and restart the session`);
   if (left.length) process.exit(1);
 }

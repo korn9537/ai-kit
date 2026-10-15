@@ -133,7 +133,7 @@ then). What it does, which is also the manual route:
 1. Deletes the files git tracks in `ai-kit/` (only when it is the tracked 1.x copy: a tracked `sync.mjs`, no
    `.git`, not a symlink or submodule; otherwise it refuses), and `.claude/agents/business-analyst.md` and
    `.claude/agents/change-reviewer.md` when tracked (and empty folders). An agent copy that differs from
-   `ai-kit/agents/`, or an `ai-kit/conventions/*.md` the plugin lacks, is listed to review by hand with
+   `ai-kit/agents/`, or any `ai-kit/` file the plugin lacks, is listed to review by hand with
    `git show HEAD:<path>` to recover it. Deletes run last, after every write.
 2. Removes every hook in `.claude/settings.json` and `.claude/settings.local.json` that runs the in-repo
    `ai-kit/hooks/...` (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...` or relative), and adds the
@@ -209,7 +209,7 @@ repo 1.x ยังไม่ได้เปิด plugin ดังนั้น `/
 
 1. ลบไฟล์ที่ git track ใน `ai-kit/` (เฉพาะเมื่อเป็นสำเนา 1.x ที่ track: มี `sync.mjs` ที่ track, ไม่มี `.git`, ไม่ใช่
    symlink หรือ submodule ไม่งั้นจะไม่ทำ), `.claude/agents/business-analyst.md`, `.claude/agents/change-reviewer.md`
-   ถ้า track (และโฟลเดอร์ที่ว่าง) agent ที่ต่างจาก `ai-kit/agents/` หรือ `ai-kit/conventions/*.md` ที่ plugin ไม่มี
+   ถ้า track (และโฟลเดอร์ที่ว่าง) agent ที่ต่างจาก `ai-kit/agents/` หรือไฟล์ใน `ai-kit/` ที่ plugin ไม่มี
    จะแสดงให้ตรวจเอง พร้อม `git show HEAD:<path>` ไว้กู้คืน การลบทำหลังสุด หลังเขียนไฟล์ทั้งหมด
 2. เอา hook ที่เรียก `ai-kit/hooks/...` ในโปรเจกต์ (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...`
    หรือ path สัมพัทธ์) ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่ settings ตาม
