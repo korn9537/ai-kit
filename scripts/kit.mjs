@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 const kit = join(import.meta.dirname, "..");
 const PLUGIN = "ai-kit@korn9537";
@@ -62,6 +63,11 @@ const at = (...p) => join(root, ...p);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const shimPath = at(".githooks", "pre-commit");
 const isShim = (s) => s?.includes(MARK) ?? false;
+// only the 1.x wiring: ${CLAUDE_PROJECT_DIR}/ai-kit/hooks/, $CLAUDE_PROJECT_DIR/..., or a relative ai-kit/hooks/
+const KIT_HOOK =
+  /(^|["'\s])(\$\{CLAUDE_PROJECT_DIR\}["']?\/|\$CLAUDE_PROJECT_DIR["']?\/|\.\/)?ai-kit\/hooks\//;
+const isKitHook = (h) => KIT_HOOK.test(h?.command ?? "");
+const isImportLine = (l) => l.trim().replace(/^[-*]\s+/, "") === IMPORT;
 
 function problems() {
   const out = [];
@@ -166,9 +172,9 @@ function problems() {
     }
     const old = Object.values(s.hooks ?? {})
       .flatMap((gs) => (Array.isArray(gs) ? gs : []))
-      .flatMap((g) => g.hooks ?? [])
-      .map((h) => h.command ?? "")
-      .filter((c) => c.includes("ai-kit/hooks/"));
+      .flatMap((g) => g?.hooks ?? [])
+      .filter(isKitHook)
+      .map((h) => h.command);
     for (const c of old)
       out.push(
         `.claude/${f} still runs a hook from an in-repo ai-kit/ copy (fix: delete that entry; the plugin runs it): ${c}`,
@@ -179,14 +185,14 @@ function problems() {
       out.push(
         `.claude/agents/${a} is an old kit copy that shadows the plugin agent (fix: delete it)`,
       );
-  if (read(at("CLAUDE.md"))?.includes(IMPORT))
+  if (read(at("CLAUDE.md"))?.split(/\r?\n/).some(isImportLine))
     out.push(
       `CLAUDE.md still imports ${IMPORT} (fix: delete that line; the plugin injects it at session start)`,
     );
   return out;
 }
 
-function init() {
+function initFiles() {
   const tpl = join(kit, "templates", "ai-kit-project");
   mkdirSync(at("ai", "kit"), { recursive: true });
   for (const f of readdirSync(tpl))
@@ -228,7 +234,10 @@ function init() {
       console.log(`! could not write ${join(common, MARK)}: ${e.message}`);
     }
   }
+}
 
+function init() {
+  initFiles();
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
@@ -250,8 +259,20 @@ const OLD_HEADERS = {
 };
 const POINTER =
   "Working conventions come from the ai-kit plugin (korn9537/ai-kit), injected at session start; project settings in `ai/kit/`.";
-const writeJson = (p, o) => writeFileSync(p, `${JSON.stringify(o, null, 2)}\n`);
-const isKitHook = (h) => (h?.command ?? "").includes("ai-kit/hooks/");
+const eolOf = (t) => (t.includes("\r\n") ? "\r\n" : "\n");
+const jsonText = (o, eol) =>
+  `${JSON.stringify(o, null, 2).replace(/\n/g, eol)}${eol}`;
+const isObj = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
+const lexists = (p) => {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const lsFiles = (...a) =>
+  (tryGit("ls-files", "-z", ...a) ?? "").split("\0").filter(Boolean);
 
 function stripKitHooks(s) {
   if (!s.hooks || typeof s.hooks !== "object") return false;
@@ -276,12 +297,32 @@ function stripKitHooks(s) {
   return changed;
 }
 
+// why ai-kit/ is not the tracked 1.x copy, or null when it is
+function notKitCopy() {
+  const d = at("ai-kit");
+  if (lstatSync(d).isSymbolicLink()) return "is a symlink";
+  if ((tryGit("ls-files", "-s", "--", "ai-kit") ?? "").startsWith("160000"))
+    return "is a submodule";
+  if (lexists(join(d, ".git"))) return "holds a .git (a clone, not the copy)";
+  if (!existsSync(join(d, "sync.mjs"))) return "has no sync.mjs";
+  if (!lsFiles("--", "ai-kit/sync.mjs").length)
+    return "has a sync.mjs git does not track (ignored or untracked)";
+  return null;
+}
+
+function pruneEmpty(dir) {
+  if (!lexists(dir) || !lstatSync(dir).isDirectory()) return;
+  for (const e of readdirSync(dir)) pruneEmpty(join(dir, e));
+  if (!readdirSync(dir).length) rmdirSync(dir);
+}
+
 function fail(msg) {
   console.log(`ai-kit migrate: ${msg}`);
   process.exit(1);
 }
 
 function migrate() {
+  // 1. validate and plan: nothing on disk changes until every input has been read
   const status = tryGit("status", "--porcelain");
   if (status === null) fail("not inside a git repo");
   if (status)
@@ -292,74 +333,124 @@ function migrate() {
   const settingsP = at(".claude", "settings.json");
   const localP = at(".claude", "settings.local.json");
   const settings = {};
+  const settingsText = {};
   for (const p of [settingsP, localP]) {
     const t = read(p);
     if (t === null) continue;
+    let s;
     try {
-      settings[p] = JSON.parse(t) ?? {};
+      s = JSON.parse(t) ?? {};
     } catch (e) {
       fail(`${p} is not valid JSON; fix it first (${e.message})`);
     }
+    if (!isObj(s)) fail(`${p} is not a JSON object; fix it first`);
+    for (const k of ["extraKnownMarketplaces", "enabledPlugins"])
+      if (s[k] !== undefined && !isObj(s[k]))
+        fail(`${p} ${k} is not a JSON object; fix it first`);
+    settings[p] = s;
+    settingsText[p] = t;
   }
+  const confP = at("ai", "kit", "config.json");
+  const confText = read(confP);
+  let conf = null;
+  try {
+    conf = confText === null ? null : JSON.parse(confText);
+  } catch (e) {
+    fail(`ai/kit/config.json is not valid JSON; fix it first (${e.message})`);
+  }
+
   const kitDir = at("ai-kit");
+  const kitExists = lexists(kitDir);
   const claudeMd = read(at("CLAUDE.md"));
   const hasImport =
-    claudeMd?.split("\n").some((l) => l.trim() === IMPORT) ?? false;
+    claudeMd?.split(/\r?\n/).some(isImportLine) ?? false;
   const hasHooks = Object.values(settings).some((s) =>
     stripKitHooks(structuredClone(s)),
   );
-  if (!existsSync(kitDir) && !hasHooks && !hasImport)
+  if (!kitExists && !hasHooks && !hasImport)
     fail(
       "nothing from ai-kit 1.x here (no ai-kit/, no ai-kit/hooks/ entries in settings, no @ai-kit import); run init instead",
     );
-  if (
-    existsSync(kitDir) &&
-    !["sync.mjs", "CLAUDE.core.md"].some((f) => existsSync(join(kitDir, f)))
-  )
-    fail(
-      "ai-kit/ has neither sync.mjs nor CLAUDE.core.md, so it may not be the kit; move or delete it by hand, then rerun",
-    );
-
-  const deleted = [];
-  const changed = [];
-  const byHand = [];
-
-  if (existsSync(kitDir)) {
-    rmSync(kitDir, { recursive: true, force: true });
-    deleted.push("ai-kit/");
+  if (kitExists) {
+    const why = notKitCopy();
+    if (why)
+      fail(
+        `ai-kit/ ${why}, so it is not the tracked 1.x copy and was left alone; move or delete it by hand, then rerun`,
+      );
   }
-  for (const a of ["business-analyst.md", "change-reviewer.md"])
-    if (existsSync(at(".claude", "agents", a))) {
-      rmSync(at(".claude", "agents", a));
-      deleted.push(`.claude/agents/${a}`);
+
+  const writes = [];
+  const dels = [];
+  const byHand = [];
+  const recover = (p) => `recover: git show HEAD:${p}`;
+
+  if (kitExists) {
+    dels.push(...lsFiles("--", "ai-kit"));
+    const extra = (tryGit("ls-files", "--others", "--", "ai-kit") ?? "")
+      .split("\n")
+      .filter(Boolean);
+    if (extra.length)
+      byHand.push(
+        `ai-kit/ keeps ${extra.length} file(s) git does not track, left in place (e.g. ${extra[0]}); delete them by hand`,
+      );
+    const convDir = join(kitDir, "conventions");
+    if (existsSync(convDir))
+      for (const f of readdirSync(convDir).filter((f) => f.endsWith(".md")))
+        if (
+          !existsSync(join(kit, "conventions", f)) &&
+          dels.includes(`ai-kit/conventions/${f}`)
+        )
+          byHand.push(
+            `ai-kit/conventions/${f} has no counterpart in the plugin's conventions/, deleted (${recover(`ai-kit/conventions/${f}`)})`,
+          );
+  }
+  for (const a of ["business-analyst.md", "change-reviewer.md"]) {
+    const rel = `.claude/agents/${a}`;
+    if (!lexists(at(rel))) continue;
+    if (!lsFiles("--", rel).length) {
+      byHand.push(
+        `${rel} is not tracked by git, so it was left in place; delete it by hand if it is the old kit copy`,
+      );
+      continue;
     }
-  const agentsDir = at(".claude", "agents");
-  if (existsSync(agentsDir) && !readdirSync(agentsDir).length)
-    rmdirSync(agentsDir);
+    if (read(at(rel)) !== read(join(kitDir, "agents", a)))
+      byHand.push(
+        `${rel} differs from ai-kit/agents/${a} (local edits?), deleted (${recover(rel)})`,
+      );
+    dels.push(rel);
+  }
 
   for (const [p, s] of Object.entries(settings))
-    if (p !== settingsP && stripKitHooks(s)) {
-      writeJson(p, s);
-      changed.push(".claude/settings.local.json");
-    }
+    if (p !== settingsP && stripKitHooks(s))
+      writes.push({
+        rel: ".claude/settings.local.json",
+        text: jsonText(s, eolOf(settingsText[p])),
+      });
   const s = settings[settingsP] ?? {};
   stripKitHooks(s);
-  s.extraKnownMarketplaces = {
-    ...(s.extraKnownMarketplaces ?? {}),
-    korn9537: {
-      source: { source: "github", repo: "korn9537/ai-kit" },
-      autoUpdate: true,
-    },
-  };
-  s.enabledPlugins = { ...(s.enabledPlugins ?? {}), [PLUGIN]: true };
-  mkdirSync(at(".claude"), { recursive: true });
-  writeJson(settingsP, s);
-  changed.push(".claude/settings.json");
+  if (!Object.hasOwn(s.extraKnownMarketplaces ?? {}, "korn9537"))
+    s.extraKnownMarketplaces = {
+      ...(s.extraKnownMarketplaces ?? {}),
+      korn9537: {
+        source: { source: "github", repo: "korn9537/ai-kit" },
+        autoUpdate: true,
+      },
+    };
+  if (!Object.hasOwn(s.enabledPlugins ?? {}, PLUGIN))
+    s.enabledPlugins = { ...(s.enabledPlugins ?? {}), [PLUGIN]: true };
+  else if (s.enabledPlugins[PLUGIN] !== true)
+    byHand.push(
+      `.claude/settings.json sets "${PLUGIN}": ${JSON.stringify(s.enabledPlugins[PLUGIN])}, left as is; set it to true to turn the plugin on`,
+    );
+  const sText = jsonText(s, eolOf(settingsText[settingsP] ?? "\n"));
+  if (sText !== settingsText[settingsP])
+    writes.push({ rel: ".claude/settings.json", text: sText });
 
   if (hasImport) {
-    const lines = claudeMd.split("\n");
-    const i = lines.findIndex((l) => l.trim() === IMPORT);
-    lines.splice(i, 1);
+    const eol = eolOf(claudeMd);
+    let lines = claudeMd.split(/\r?\n/);
+    const i = lines.findIndex(isImportLine);
+    lines = lines.filter((l) => !isImportLine(l));
     // the section from its heading to the next heading of level 1-2, or the end
     let h = i - 1;
     while (h >= 0 && !/^#{1,2}\s/.test(lines[h])) h--;
@@ -377,19 +468,13 @@ function migrate() {
         POINTER,
         ...(end < lines.length ? [""] : []),
       );
-    writeFileSync(at("CLAUDE.md"), `${lines.join("\n").replace(/\s+$/, "")}\n`);
-    changed.push("CLAUDE.md");
+    writes.push({
+      rel: "CLAUDE.md",
+      text: `${lines.join(eol).replace(/\s+$/, "")}${eol}`,
+    });
   }
 
-  const confP = at("ai", "kit", "config.json");
-  const confText = read(confP);
-  let conf = null;
-  try {
-    conf = confText === null ? null : JSON.parse(confText);
-  } catch {
-    byHand.push("ai/kit/config.json is not valid JSON; fix it by hand");
-  }
-  if (conf && typeof conf === "object" && !Array.isArray(conf)) {
+  if (isObj(conf)) {
     const want = structuredClone(conf);
     if (Array.isArray(want.code_dirs))
       want.code_dirs = want.code_dirs.filter((d) => d !== "ai-kit");
@@ -409,15 +494,16 @@ function migrate() {
               .replace(/,\s*"ai-kit"(?=\s*$)/, "")
               .replace(/^\s*"ai-kit"\s*$/, "")}]`,
         )
-        .replace(/\n\s*"shared_checkout_doc"\s*:\s*"ai-kit\/[^"]*"\s*,/, "")
+        .replace(/\r?\n\s*"shared_checkout_doc"\s*:\s*"ai-kit\/[^"]*"\s*,/, "")
         .replace(/,\s*"shared_checkout_doc"\s*:\s*"ai-kit\/[^"]*"(?=\s*\})/, "");
       let ok = false;
       try {
         ok = JSON.stringify(JSON.parse(text)) === JSON.stringify(want);
       } catch {}
-      if (ok) writeFileSync(confP, text);
-      else writeJson(confP, want);
-      changed.push("ai/kit/config.json");
+      writes.push({
+        rel: "ai/kit/config.json",
+        text: ok ? text : jsonText(want, eolOf(confText)),
+      });
     }
   }
 
@@ -425,8 +511,8 @@ function migrate() {
     ? readdirSync(at("ai", "kit")).filter((f) => /\.(sh|md)$/.test(f))
     : [];
   for (const f of kitFiles) {
-    const p = at("ai", "kit", f);
-    const lines = read(p).split("\n");
+    const t = read(at("ai", "kit", f));
+    const lines = t.split(/\r?\n/);
     let n = 0;
     lines.forEach((l, i) => {
       if (Object.hasOwn(OLD_HEADERS, l)) {
@@ -434,42 +520,80 @@ function migrate() {
         n++;
       }
     });
-    if (n) {
-      writeFileSync(p, lines.join("\n"));
-      changed.push(`ai/kit/${f}`);
-    }
+    if (n) writes.push({ rel: `ai/kit/${f}`, text: lines.join(eolOf(t)) });
   }
+  const after = (rel) =>
+    writes.find((w) => w.rel === rel)?.text ?? read(at(rel)) ?? "";
   for (const f of [
     "CLAUDE.md",
     ...kitFiles.map((f) => `ai/kit/${f}`),
     "ai/kit/config.json",
   ])
-    (read(at(f)) ?? "").split("\n").forEach((l, i) => {
-      if (l.includes("ai-kit/")) byHand.push(`${f}:${i + 1}: ${l.trim()}`);
-    });
+    after(f)
+      .split(/\r?\n/)
+      .forEach((l, i) => {
+        if (l.includes("ai-kit/"))
+          byHand.push(`${f}:${i + 1} still cites ai-kit/: ${l.trim()}`);
+      });
 
-  console.log("ai-kit migrate: running init");
-  init();
+  // 2. write, then run init, then delete last, so a failure leaves every deleted file in place
+  const done = [];
+  try {
+    for (const w of writes) {
+      mkdirSync(dirname(at(w.rel)), { recursive: true });
+      writeFileSync(at(w.rel), w.text);
+      done.push(`changed ${w.rel}`);
+    }
+    console.log("ai-kit migrate: running init");
+    initFiles();
+    done.push("ran init (its + lines above)");
+    for (const d of dels) {
+      rmSync(at(d), { force: true });
+      done.push(`deleted ${d}`);
+    }
+    pruneEmpty(kitDir);
+    pruneEmpty(at(".claude", "agents"));
+  } catch (e) {
+    console.log(`\nai-kit migrate: stopped: ${e.message}`);
+    console.log(done.length ? "done before the stop:" : "nothing was changed");
+    done.forEach((d) => console.log(`  ${d}`));
+    console.log(
+      "recover: git restore --source=HEAD --staged --worktree -- . (and delete any file init created, its + lines), fix the cause, then rerun migrate",
+    );
+    process.exit(1);
+  }
+
   const left = problems();
-
   console.log("\nai-kit migrate summary");
-  deleted.forEach((d) => console.log(`- deleted ${d}`));
-  changed.forEach((c) => console.log(`~ changed ${c}`));
+  const kitN = dels.filter((d) => d.startsWith("ai-kit/")).length;
+  if (kitN) console.log(`- deleted ai-kit/ (${kitN} tracked files)`);
+  dels
+    .filter((d) => !d.startsWith("ai-kit/"))
+    .forEach((d) => console.log(`- deleted ${d}`));
+  writes.forEach((w) => console.log(`~ changed ${w.rel}`));
   if (byHand.length) {
-    console.log("review by hand (still cites the 1.x in-repo ai-kit/):");
+    console.log("review by hand:");
     byHand.forEach((b) => console.log(`  ${b}`));
   }
-  console.log(
-    left.length
-      ? `check: ${left.length} problem(s), listed above`
-      : "check: passed",
-  );
-  const staged = [...deleted, ...changed, ".githooks/pre-commit"]
-    .filter((f) => !f.endsWith("settings.local.json"))
-    .join(" ");
+  left.forEach((p) => console.log(`! ${p}`));
+  console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
+  // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
+  const changedPaths = [
+    ...new Set(
+      execFileSync(
+        "git",
+        ["status", "--porcelain", "-z", "--untracked-files=all"],
+        { encoding: "utf8" },
+      )
+        .split("\0")
+        .filter(Boolean)
+        .map((e) => e.slice(3))
+        .map((p) => (p.startsWith("ai-kit/") ? "ai-kit/" : p)),
+    ),
+  ];
   console.log(`next steps:
   1. review git status and git diff
-  2. stage by name (git add -- ${staged}, plus any new ai/kit/ file listed above), then commit
+  2. stage by name (git add -- ${changedPaths.join(" ")}), then commit
   3. open Claude Code in the repo, trust the folder so it installs the plugin, and restart the session`);
   if (left.length) process.exit(1);
 }

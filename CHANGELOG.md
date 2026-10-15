@@ -4,7 +4,10 @@
 
 - `kit.mjs migrate` (and `/ai-kit:migrate`) migrates a 1.x repo in one step: deletes `ai-kit/` and the old agent
   copies, drops the kit hooks and enables the plugin in `.claude/settings.json`, removes the `@ai-kit` import,
-  cleans `ai/kit/` (config and known header lines), then runs `init` and `check`. Refuses on a dirty tree.
+  cleans `ai/kit/` (config and known header lines), then runs `init` and `check`. Refuses on a dirty tree, or when
+  `ai-kit/` is not the tracked 1.x copy. Deletes only files git tracks, after all writes; lists edited agent copies
+  and conventions the plugin lacks with a `git show HEAD:<path>` hint; keeps an existing marketplace entry and an
+  explicit `false` for the plugin.
 
 ## 2.0.0
 

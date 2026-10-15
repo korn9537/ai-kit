@@ -130,12 +130,17 @@ A 1.x repo does not enable the plugin yet, so `/ai-kit:migrate` works there only
 user scope (`~/.claude/settings.json`). `migrate` refuses on a dirty tree, or when nothing 1.x is left (run `init`
 then). What it does, which is also the manual route:
 
-1. Deletes `ai-kit/` (only when it holds `sync.mjs` or `CLAUDE.core.md`), `.claude/agents/business-analyst.md` and
-   `.claude/agents/change-reviewer.md` (and `.claude/agents/` if left empty).
-2. Removes every hook in `.claude/settings.json` and `.claude/settings.local.json` that runs `ai-kit/hooks/...`,
-   and adds the settings from §Install to `.claude/settings.json`; other keys and hooks stay.
-3. Removes the `@ai-kit/CLAUDE.core.md` line in `CLAUDE.md`; an emptied `## Working conventions` section gets a
-   one-line pointer to the plugin.
+1. Deletes the files git tracks in `ai-kit/` (only when it is the tracked 1.x copy: a tracked `sync.mjs`, no
+   `.git`, not a symlink or submodule; otherwise it refuses), and `.claude/agents/business-analyst.md` and
+   `.claude/agents/change-reviewer.md` when tracked (and empty folders). An agent copy that differs from
+   `ai-kit/agents/`, or an `ai-kit/conventions/*.md` the plugin lacks, is listed to review by hand with
+   `git show HEAD:<path>` to recover it. Deletes run last, after every write.
+2. Removes every hook in `.claude/settings.json` and `.claude/settings.local.json` that runs the in-repo
+   `ai-kit/hooks/...` (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...` or relative), and adds the
+   settings from §Install to `.claude/settings.json` where absent; other keys and hooks, an existing `korn9537`
+   marketplace and an explicit `false` for the plugin stay.
+3. Removes each `@ai-kit/CLAUDE.core.md` line (bulleted too) in `CLAUDE.md`; an emptied `## Working conventions`
+   section gets a one-line pointer to the plugin. Line endings (LF or CRLF) are kept.
 4. In `ai/kit/config.json` drops `ai-kit` from `code_dirs`, and `shared_checkout_doc` if it named `ai-kit/...`;
    rewrites the 1.x header lines of `ai/kit/` files to the template wording and lists any other line citing
    `ai-kit/` to review by hand.
@@ -202,11 +207,16 @@ repo 1.x ยังไม่ได้เปิด plugin ดังนั้น `/
 (`~/.claude/settings.json`) — `migrate` จะไม่ทำถ้า working tree มีของค้าง หรือไม่มีอะไรของ 1.x เหลือ (ให้ใช้ `init`
 แทน) สิ่งที่มันทำ ซึ่งทำมือตามนี้ก็ได้
 
-1. ลบ `ai-kit/` (เฉพาะเมื่อมี `sync.mjs` หรือ `CLAUDE.core.md`), `.claude/agents/business-analyst.md`,
-   `.claude/agents/change-reviewer.md` (และ `.claude/agents/` ถ้าว่าง)
-2. เอา hook ที่เรียก `ai-kit/hooks/...` ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่
-   settings ตาม §Install ลงใน `.claude/settings.json` — key และ hook อื่นคงไว้
-3. ลบบรรทัด `@ai-kit/CLAUDE.core.md` ใน `CLAUDE.md` ถ้า section `## Working conventions` ว่าง จะใส่บรรทัดเดียวที่ชี้ไป plugin
+1. ลบไฟล์ที่ git track ใน `ai-kit/` (เฉพาะเมื่อเป็นสำเนา 1.x ที่ track: มี `sync.mjs` ที่ track, ไม่มี `.git`, ไม่ใช่
+   symlink หรือ submodule ไม่งั้นจะไม่ทำ), `.claude/agents/business-analyst.md`, `.claude/agents/change-reviewer.md`
+   ถ้า track (และโฟลเดอร์ที่ว่าง) agent ที่ต่างจาก `ai-kit/agents/` หรือ `ai-kit/conventions/*.md` ที่ plugin ไม่มี
+   จะแสดงให้ตรวจเอง พร้อม `git show HEAD:<path>` ไว้กู้คืน การลบทำหลังสุด หลังเขียนไฟล์ทั้งหมด
+2. เอา hook ที่เรียก `ai-kit/hooks/...` ในโปรเจกต์ (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...`
+   หรือ path สัมพัทธ์) ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่ settings ตาม
+   §Install ลงใน `.claude/settings.json` ถ้ายังไม่มี — key และ hook อื่น, marketplace `korn9537` ที่มีอยู่ และค่า
+   `false` ของ plugin คงไว้
+3. ลบทุกบรรทัด `@ai-kit/CLAUDE.core.md` (รวมแบบ bullet) ใน `CLAUDE.md` ถ้า section `## Working conventions` ว่าง จะใส่บรรทัดเดียวที่ชี้ไป plugin
+   line ending (LF หรือ CRLF) คงเดิม
 4. ใน `ai/kit/config.json` เอา `ai-kit` ออกจาก `code_dirs` และเอา `shared_checkout_doc` ออกถ้าชี้ไปที่ `ai-kit/...`
    เขียนบรรทัดหัวไฟล์แบบ 1.x ใน `ai/kit/` ใหม่ตาม template บรรทัดอื่นที่ยังอ้าง `ai-kit/` จะแสดงให้แก้เอง
 5. รัน `init` (เขียน shim ใหม่) และ `check` แล้วสรุปว่าลบและแก้อะไร
