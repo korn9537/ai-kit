@@ -9,7 +9,8 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { isAbsolute, join } from "node:path";
 
 const kit = join(import.meta.dirname, "..");
 const PLUGIN = "ai-kit@korn9537";
@@ -93,6 +94,15 @@ function problems() {
               out.push(
                 `ai/kit/config.json conventions lists ${c}, but the plugin has no conventions/${c}.md (fix: remove it, or add the file in the ai-kit repo)`,
               );
+        if (Array.isArray(conf.code_dirs) && conf.code_dirs.includes("ai-kit"))
+          out.push(
+            'ai/kit/config.json code_dirs lists "ai-kit", a 1.x in-repo copy (fix: remove it from code_dirs)',
+          );
+        const doc = conf.shared_checkout_doc;
+        if (typeof doc === "string" && !existsSync(isAbsolute(doc) ? doc : at(doc)))
+          out.push(
+            `ai/kit/config.json shared_checkout_doc names ${doc}, which does not exist (fix: delete the key to use the plugin's docs/shared-checkout.md, or point it at an existing file)`,
+          );
       }
     }
   }
@@ -116,18 +126,26 @@ function problems() {
       `core.hooksPath is ${hp || "unset"}, so the kit pre-commit never runs (fix: move other hooks into ai/kit/pre-commit.sh, then git config core.hooksPath .githooks)`,
     );
 
-  let settings = {};
-  const settingsText = read(at(".claude", "settings.json"));
-  try {
-    settings = JSON.parse(settingsText ?? "{}") ?? {};
-  } catch (e) {
-    out.push(
-      `.claude/settings.json is not valid JSON (fix: correct the syntax; ${e.message})`,
-    );
+  // enabled in any scope counts; the project file is recommended so teammates get it
+  const scopes = [
+    at(".claude", "settings.json"),
+    at(".claude", "settings.local.json"),
+    join(homedir(), ".claude", "settings.json"),
+  ];
+  let enabled = false;
+  for (const p of scopes) {
+    let s;
+    try {
+      s = JSON.parse(read(p) ?? "{}") ?? {};
+    } catch (e) {
+      out.push(`${p} is not valid JSON (fix: correct the syntax; ${e.message})`);
+      continue;
+    }
+    if (s.enabledPlugins?.[PLUGIN] === true) enabled = true;
   }
-  if (settings.enabledPlugins?.[PLUGIN] !== true)
+  if (!enabled)
     out.push(
-      `.claude/settings.json does not enable the plugin (fix: add "enabledPlugins": {"${PLUGIN}": true} and the korn9537 marketplace, README.md §Install)`,
+      `the plugin is not enabled in .claude/settings.json, .claude/settings.local.json or ~/.claude/settings.json (fix: add "enabledPlugins": {"${PLUGIN}": true} and the korn9537 marketplace to the project .claude/settings.json, the recommended place so teammates get it, README.md §Install)`,
     );
   for (const f of ["settings.json", "settings.local.json"]) {
     let s;
@@ -190,9 +208,19 @@ function init() {
   else if (!hp && tryGit("config", "core.hooksPath", ".githooks") === null)
     console.log("! not a git repo: core.hooksPath not set");
 
+  // the shim reads this; session-start.sh rewrites it each session
+  const common = tryGit("rev-parse", "--path-format=absolute", "--git-common-dir");
+  if (common && existsSync(common)) {
+    writeFileSync(join(common, MARK), `${kit}\n`);
+    console.log(`+ ${join(common, MARK)}`);
+  }
+
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
+  console.log(
+    "restart the Claude Code session so the SessionStart hook injects the working conventions",
+  );
 }
 
 const cmd = process.argv[2];

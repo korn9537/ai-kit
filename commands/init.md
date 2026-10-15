@@ -13,3 +13,4 @@ Set up ai-kit in the current project.
    (the repo's own checks), `review-checklist.md`, `analysis-sources.md`. Read the code and docs to propose values.
 4. Help write the project part of `CLAUDE.md`: layout, commands, stack rules, branch and deploy, verify commands.
    The working conventions come from the plugin at session start; do not import or copy them.
+5. Tell the user to restart the Claude Code session so the SessionStart hook injects the working conventions.

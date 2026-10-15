@@ -6,12 +6,14 @@
   Projects enable `ai-kit@korn9537` in `.claude/settings.json` instead of copying `ai-kit/` (README §Migrating).
 - Hooks are wired in `hooks/hooks.json` with `${CLAUDE_PLUGIN_ROOT}`; `settings.hooks.json` is gone. Every hook
   exits silently in a project without `ai/kit/`.
-- New `session-start.sh` injects `CLAUDE.core.md` (replaces the `@ai-kit/CLAUDE.core.md` import) and records the
-  plugin path in `<git-common-dir>/ai-kit-root` for the pre-commit shim.
+- New `session-start.sh` injects `CLAUDE.core.md` (replaces the `@ai-kit/CLAUDE.core.md` import; plain text without
+  `jq`) and records the plugin path in `<git-common-dir>/ai-kit-root` for the pre-commit shim, as `init` does. Hooks
+  use the git toplevel of the project dir, so a session started in a subdirectory still finds `ai/kit/`.
 - Agents are `ai-kit:change-reviewer` and `ai-kit:business-analyst`, read from the plugin; `.claude/agents/` copies
   must go.
 - `sync.mjs` is replaced by `scripts/kit.mjs init|check` and the `/ai-kit:init`, `/ai-kit:check` commands; no
-  `install` or `collect`. `check` also fails when the plugin is not enabled or 1.x leftovers remain.
+  `install` or `collect`. `check` also fails when the plugin is enabled in no settings scope or 1.x leftovers remain
+  (including `code_dirs` `ai-kit` and a missing `shared_checkout_doc`).
 - The `.githooks/pre-commit` shim finds the kit through `ai-kit-root`; without it, it warns and runs only
   `ai/kit/pre-commit.sh`.
 - `shared_checkout_doc` defaults to the plugin's `docs/shared-checkout.md`; templates drop `ai-kit` from

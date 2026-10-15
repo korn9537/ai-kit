@@ -25,6 +25,7 @@ input="$(cat)"
 transcript="$(jq -r '.transcript_path // empty' <<<"$input")"
 [[ -n "$transcript" && -f "$transcript" ]] || exit 0
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
+[[ -n "$project" ]] && project="$(kit_toplevel "$project")"
 [[ -n "$project" ]] || exit 0
 project="${project//\\//}"
 project="${project%/}"
@@ -128,7 +129,7 @@ commit's reviewer only the fix diff (summary containing \"review\"), once. Other
 subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit (its model and effort are fixed in
 $kit_plugin/agents/change-reviewer.md; do not override them); never reuse an earlier commit's reviewer. If that agent type is
 not loaded (the plugin was enabled mid-session), use general-purpose with a description containing \"review\" and tell it to read
-and follow $kit_plugin/agents/change-reviewer.md. Give it the user's request in their words, the changed files and
+and follow $kit_plugin/agents/change-reviewer.md, where \${CLAUDE_PLUGIN_ROOT} means $kit_plugin. Give it the user's request in their words, the changed files and
 their \`git diff\` (or the commits made in this session). When it reports, fix every CONFIRMED finding and judge
 each PLAUSIBLE one; findings from the re-check are fixed without a third pass unless CONFIRMED and about data or
 rule correctness. Until a background reviewer reports, end the turn with one line saying the review is running; the

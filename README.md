@@ -60,16 +60,19 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check` inside Claude Code
 
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
   writes the `.githooks/pre-commit` shim when missing (rewrites a 1.x shim; warns about any other hook there) and
-  sets `core.hooksPath` to `.githooks` unless another path is set (warns).
+  sets `core.hooksPath` to `.githooks` unless another path is set (warns), and writes `<git-common-dir>/ai-kit-root`
+  for the shim.
 - `node <plugin>/scripts/kit.mjs check` exits 1 when `ai/kit/config.json` is missing, malformed or not an object,
   when `conventions` is not an array or names a file `conventions/` lacks, when the shim is missing or not the kit
-  shim, when `core.hooksPath` is not `.githooks`, when `.claude/settings.json` does not enable `ai-kit@korn9537`,
-  when settings still run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of
-  a kit agent, or when `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. The pre-commit
-  runner calls it when `ai/kit/config.json`, `.githooks/` or `.claude/settings.json` are staged.
+  shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`, `.claude/settings.local.json`
+  or `~/.claude/settings.json` enables `ai-kit@korn9537` (the project file is recommended, so teammates get it),
+  when `code_dirs` lists `ai-kit` or `shared_checkout_doc` names a missing file (1.x leftovers), when settings still
+  run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
+  `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. The pre-commit runner calls it when
+  `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`, `.claude/agents/` or `CLAUDE.md` are staged.
 
-The shim reads the plugin path from `<git-common-dir>/ai-kit-root`, written at session start. Until Claude Code
-has opened the repo once on a machine, it prints a warning and runs only `ai/kit/pre-commit.sh`.
+The shim reads the plugin path from `<git-common-dir>/ai-kit-root`, written by `init` and at each session start.
+Until either has run on a machine, it prints a warning and runs only `ai/kit/pre-commit.sh`.
 
 ## Install in a project
 
@@ -93,6 +96,7 @@ has opened the repo once on a machine, it prints a warning and runs only `ai/kit
    `ai/kit/` (code folders, comment-check scope, dev port, `conventions`, the project's checks, checklist,
    analysis sources) and the project part of `CLAUDE.md` (layout, commands, stack rules, branch and deploy,
    verify commands).
+   Then restart the Claude Code session so the SessionStart hook injects the working conventions.
 5. Commit `ai/kit/`, `.githooks/pre-commit`, `.claude/settings.json` and `CLAUDE.md`, staged by name.
 
 ## Updating
@@ -151,6 +155,7 @@ ai-kit คือ plugin ของ Claude Code ที่รวมกฎการ�
 4. สั่ง `/ai-kit:init` — สร้าง `ai/kit/` จาก template, ตั้ง git pre-commit shim, รัน `check` แล้วช่วยกรอก `ai/kit/`
    (รวมถึงเลือกภาษาใน `conventions`) และส่วนของโปรเจกต์ใน `CLAUDE.md` (โครงสร้าง, คำสั่ง, กฎของ stack, branch,
    วิธี verify)
+   จากนั้นปิดแล้วเปิด session ของ Claude Code ใหม่ เพื่อให้ SessionStart hook ใส่กฎการทำงานเข้ามา
 5. commit `ai/kit/`, `.githooks/pre-commit`, `.claude/settings.json`, `CLAUDE.md` โดย stage ทีละชื่อ
 
 ### อัปเดต
