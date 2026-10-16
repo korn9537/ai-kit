@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.0
+
+- `conventions/dart.md` §4: user-facing strings go through gen-l10n `AppLocalizations`, never a literal in a
+  widget; ARB files keep the same keys; dates and numbers through one locale-aware helper.
+
 ## 2.1.0
 
 - `kit.mjs migrate` (and `/ai-kit:migrate`) migrates a 1.x repo in one step: deletes `ai-kit/` and the old agent
