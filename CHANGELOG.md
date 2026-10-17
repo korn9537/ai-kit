@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.4.0
+
+- `scripts/check-docs.mjs`, run by pre-commit and post-edit: added lines of docs in `docs.include` (default
+  `CLAUDE.md`, `docs/**/*.md`, `ai/**/*.md`; `docs.skip` drops READMEs, mockups, design) fail on emoji, bold, filler,
+  dates, Thai outside quotes or code (allowed in table rows). Skips fences, code spans, frontmatter, moved lines
+  (renames, splits), merges, cherry-picks and reverts; quotes exempt Thai and dates; runs before prettier. Off:
+  `include: "^$"`. `ai/kit/` templates drop bold labels.
+
 ## 2.3.0
 
 - `CLAUDE.core.md` §Language: reply to the user in Thai; docs, comments, commits and subagent briefs in English.

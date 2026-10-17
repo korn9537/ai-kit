@@ -1,7 +1,7 @@
 # ai-kit
 
 A Claude Code plugin with a working framework: working rules, hooks that enforce them, a reviewer and an analyst
-agent, a git pre-commit runner, and a comment check. This repo is both the plugin and its marketplace
+agent, a git pre-commit runner, and comment and doc checks. This repo is both the plugin and its marketplace
 (`korn9537`). It holds nothing project-specific. Each project keeps its own settings in `ai/kit/`, which the kit
 reads and never overwrites; a project without `ai/kit/` is left alone, so the plugin is safe at user scope.
 
@@ -19,6 +19,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `githooks/pre-commit`        | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
 | `scripts/kit.mjs`            | `init` / `check` / `migrate` (§Commands)                               |
 | `scripts/check-comments.mjs` | comment rule check, run by pre-commit and post-edit                    |
+| `scripts/check-docs.mjs`     | doc rule check on added lines, run by pre-commit and post-edit         |
 | `docs/`                      | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`                 |
 | `conventions/`               | cross-repo coding rules: `general.md`, one per language                |
 | `templates/ai-kit-project/`  | starter `ai/kit/` files, copied by `init` when missing                 |
@@ -35,19 +36,19 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   with `Review closed: re-checked once` (not quoted).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.
-- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment check, then `ai/kit/post-edit.sh`.
+- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks, then `ai/kit/post-edit.sh`.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A` and `git commit -a` (shared checkout).
 - `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build while the dev port listens.
 
 ## Project settings (`ai/kit/`)
 
-| File                  | Read by                                                                                                                                                                                                    |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks and `check-comments.mjs`: `code_dirs`, `comments.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`; agents and `kit.mjs check`: `conventions` |
-| `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                        |
-| `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                  |
-| `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                   |
-| `analysis-sources.md` | `ai-kit:business-analyst`                                                                                                                                                                                  |
+| File                  | Read by                                                                                                                                                                                                                                     |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`; agents and `kit.mjs check`: `conventions` |
+| `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
+| `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
+| `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
+| `analysis-sources.md` | `ai-kit:business-analyst`                                                                                                                                                                                                                   |
 
 `conventions` lists the language files in `conventions/` that apply to the project, without `.md` (e.g.
 `["go", "sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception
@@ -162,7 +163,8 @@ ai-kit คือ plugin ของ Claude Code ที่รวมกฎการ�
 
 Claude ตอบเป็นภาษาไทย (ชื่อหัวข้อในรายงานและ prompt สำหรับ session ถัดไปยังเป็นภาษาอังกฤษ) ส่วนเอกสาร Markdown
 (spec, CLAUDE.md), comment และ commit message เขียนภาษาอังกฤษแบบให้ AI อ่านอย่างเดียว ใช้ token น้อยที่สุด
-ขอบเขตและข้อยกเว้น (README, mockup, เอกสารสำหรับคนอ่าน) ดู `docs/ai-docs.md`
+ขอบเขตและข้อยกเว้น (README, mockup, เอกสารสำหรับคนอ่าน) ดู `docs/ai-docs.md` — pre-commit ตรวจเฉพาะบรรทัดที่เพิ่มใหม่
+ด้วย `scripts/check-docs.mjs` ปิดได้ด้วย `"docs": { "include": "^$" }` ใน `ai/kit/config.json`
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object

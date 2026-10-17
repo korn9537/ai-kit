@@ -36,6 +36,16 @@ if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | gr
   exit 1
 fi
 
+# Docs are for AI readers (the plugin's docs/ai-docs.md): added lines only, so it runs before prettier reflows
+# them; scope is docs.include in ai/kit/config.json. A partially staged doc: prettier re-stages hunks it did not see.
+if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
+  node "$ai_kit_plugin/scripts/check-docs.mjs" --staged --strict || {
+    echo ""
+    echo "Docs rule failed. Drop emoji, bold, filler and dates; quote Thai product copy. To bypass: git commit --no-verify"
+    exit 1
+  }
+fi
+
 # Prettier on staged files when package.json declares it, then re-stage them.
 # Re-stages whole files: a partially staged file (git add -p) gets fully staged.
 if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then

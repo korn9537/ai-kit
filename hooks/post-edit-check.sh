@@ -34,6 +34,8 @@ run() {
 
 # the script skips files outside config comments.include
 run "comments:check" - node "$kit_plugin/scripts/check-comments.mjs" --strict "$rel"
+# lines added since HEAD, files in config docs.include only
+run "docs:check" - node "$kit_plugin/scripts/check-docs.mjs" --strict "$rel"
 # shellcheck source=/dev/null
 [[ -f ai/kit/post-edit.sh ]] && . ai/kit/post-edit.sh
 

@@ -6,12 +6,14 @@
 - Exempt: `README.md`, mockups, design assets, any doc the project marks human-facing.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
+- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit): emoji, bold, filler (fixed list),
+  dates, Thai outside quotes or code. Scope: `docs.include`/`skip` in `ai/kit/config.json`.
 
 ## Language
 
 - English. Thai costs more tokens per fact.
-- Thai only as product data, quoted, beside its English key: `empty_state: "ยังไม่มีรายการ"`. Same for UI copy and
-  l10n values.
+- Thai only as product data (UI copy, l10n values): quoted beside its English key, `empty_state: "ยังไม่มีรายการ"`,
+  or unquoted in a table cell (`| key | th | en |`).
 
 ## Shape
 

@@ -4,6 +4,10 @@
     "include": "^src/.*\\.(tsx?|jsx?|mjs|cs|py)$",
     "skip": "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)"
   },
+  "docs": {
+    "include": "^(CLAUDE\\.md|(docs|ai)/.*\\.md)$",
+    "skip": "(^|/)README\\.md$|/(mockups|design)/"
+  },
   "build_guard": {
     "port": 3000,
     "hint": "A build writes where the dev server serves from. Run the typecheck instead, or ask the user before building."
