@@ -12,14 +12,14 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | Path                         | What                                                                   |
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `.claude-plugin/`            | `plugin.json` (name, version) and `marketplace.json`                   |
-| `CLAUDE.core.md`             | git and working conventions, the final-report format                   |
+| `CLAUDE.core.md`             | git, language and working conventions, the final-report format         |
 | `agents/`                    | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                    |
 | `hooks/`                     | Claude Code hooks (below), wired in `hooks/hooks.json`                 |
 | `commands/`                  | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`                     |
 | `githooks/pre-commit`        | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
 | `scripts/kit.mjs`            | `init` / `check` / `migrate` (§Commands)                               |
 | `scripts/check-comments.mjs` | comment rule check, run by pre-commit and post-edit                    |
-| `docs/`                      | `code-comments.md`, `shared-checkout.md`                               |
+| `docs/`                      | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`                 |
 | `conventions/`               | cross-repo coding rules: `general.md`, one per language                |
 | `templates/ai-kit-project/`  | starter `ai/kit/` files, copied by `init` when missing                 |
 | `CHANGELOG.md`               | one line per change; the version lives in `.claude-plugin/plugin.json` |
@@ -159,6 +159,10 @@ ai-kit คือ plugin ของ Claude Code ที่รวมกฎการ�
 - repo นี้ — ของกลาง ห้ามมีชื่อ path หรือคำเฉพาะของโปรเจกต์ใด
 - `ai/kit/` ในแต่ละโปรเจกต์ — ค่าตั้ง, check ของโปรเจกต์, checklist ของ reviewer ไม่ก็อปข้ามโปรเจกต์
   โปรเจกต์ที่ไม่มี `ai/kit/` hook ทุกตัวจะไม่ทำอะไร
+
+Claude ตอบเป็นภาษาไทย (ชื่อหัวข้อในรายงานและ prompt สำหรับ session ถัดไปยังเป็นภาษาอังกฤษ) ส่วนเอกสาร Markdown
+(spec, CLAUDE.md), comment และ commit message เขียนภาษาอังกฤษแบบให้ AI อ่านอย่างเดียว ใช้ token น้อยที่สุด
+ขอบเขตและข้อยกเว้น (README, mockup, เอกสารสำหรับคนอ่าน) ดู `docs/ai-docs.md`
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object

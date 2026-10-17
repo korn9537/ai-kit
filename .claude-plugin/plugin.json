@@ -1,6 +1,6 @@
 {
   "name": "ai-kit",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Working conventions for Claude Code with the hooks that enforce them: review before stop, shared-checkout guards, comment check, a change-reviewer and a business-analyst agent, and a git pre-commit runner.",
   "author": { "name": "korn9537" }
 }

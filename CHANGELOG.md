@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.3.0
+
+- `CLAUDE.core.md` §Language: reply to the user in Thai; docs, comments, commits and subagent briefs in English.
+  New `docs/ai-docs.md`: docs are for AI readers only, token-minimal; when a review runs, `change-reviewer` also
+  checks touched docs against it.
+
 ## 2.2.0
 
 - `conventions/dart.md` §4: user-facing strings go through gen-l10n `AppLocalizations`, never a literal in a

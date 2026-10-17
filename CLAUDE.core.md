@@ -9,6 +9,14 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   `git diff --cached --stat` before committing, revert only your own hunks, push only when asked. Details:
   `ai-kit/docs/shared-checkout.md`.
 
+## Language
+
+- Reply to the user in Thai, the final report included. English stays: code, identifiers, commands, paths, quoted
+  output, the report item labels, the Next-session prompt, and the phrase Review closed: re-checked once
+  (hook-matched).
+- Docs (except human-facing ones), code comments, commit messages, subagent briefs and their reports: English.
+  Docs are for AI readers, token-minimal: `ai-kit/docs/ai-docs.md`.
+
 ## Working conventions
 
 - **Summarize before a UI, DB or business-rule change** and wait for a go (also run BA when the user asks for it).

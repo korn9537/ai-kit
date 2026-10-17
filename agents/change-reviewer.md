@@ -14,8 +14,8 @@ Check, in this order:
 1. **The request** — everything the user asked for is done; nothing was added that they did not ask for.
 2. **Project rules** — every item in `ai/kit/review-checklist.md` that the diff touches, and the hard rules in
    `CLAUDE.md`; every rule the diff touches in `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and in
-   `${CLAUDE_PLUGIN_ROOT}/conventions/<lang>.md` for each language in `ai/kit/config.json` `conventions`. The
-   repo checklist wins on a conflict.
+   `${CLAUDE_PLUGIN_ROOT}/conventions/<lang>.md` for each language in `ai/kit/config.json` `conventions`; a doc in
+   the diff against `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`. The repo checklist wins on a conflict.
 3. **Correctness** — bugs, missing null/empty/error states, a write left out of its transaction.
 
 Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
