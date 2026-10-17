@@ -12,6 +12,9 @@ const top = Number(
 const MAX_BLOCK = 2;
 const git = (...a) =>
   execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
+// NUL-separated path lists: git C-quotes a name with `"`, `\` or non-ASCII otherwise
+const gitz = (...a) =>
+  execFileSync("git", [...a, "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
 const root = git("rev-parse", "--show-toplevel")[0];
 const cwd = process.cwd();
 process.chdir(root);
@@ -63,8 +66,8 @@ let files = args
   .map((f) => relative(root, resolve(cwd, f)));
 if (!files.length)
   files = flag("staged")
-    ? git("diff", "--cached", "--name-only", "--diff-filter=ACMR")
-    : git("ls-files");
+    ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    : gitz("ls-files");
 files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && existsSync(f));
 
 const report = [];

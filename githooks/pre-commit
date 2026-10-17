@@ -75,7 +75,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
 fi
 
 # The project's kit wiring (config, shim, plugin settings, no 1.x leftovers) is still sound.
-if git diff --cached --name-only --diff-filter=ACMRD | grep -qE '^(ai/kit/config\.json|\.githooks/|\.claude/settings\.json$|\.claude/agents/|CLAUDE\.md$)'; then
+if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMRD | grep -qE '^(ai/kit/config\.json|\.githooks/|\.claude/settings\.json$|\.claude/agents/|CLAUDE\.md$)'; then
   node "$ai_kit_plugin/scripts/kit.mjs" check || {
     echo ""
     echo "ai-kit check failed: apply the fix each line names. To bypass: git commit --no-verify"

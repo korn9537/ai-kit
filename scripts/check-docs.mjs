@@ -60,6 +60,16 @@ const noCode = (l) => l.replace(/`[^`]*`/g, "");
 const noQuotes = (l) =>
   l.replace(/"[^"]*"/g, '""').replace(/“[^”]*”/g, '""');
 
+// git still C-quotes a path holding `"`, `\` or a control character; a newline in a name stays unmatched
+const ESC = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
+const unquote = (s) =>
+  s.startsWith('"')
+    ? s
+        .slice(1, -1)
+        .replace(/\\([0-7]{3}|.)/g, (_, e) =>
+          e.length === 3 ? String.fromCharCode(parseInt(e, 8)) : (ESC[e] ?? e),
+        )
+    : s;
 // added line numbers per file from one diff (renames paired with -M); a removed line's text marks a move
 const range = staged ? ["--cached"] : ["HEAD"];
 const added = new Map();
@@ -75,7 +85,8 @@ for (const l of (
     continue;
   }
   if (header && l.startsWith("+++ ")) {
-    cur = l === "+++ /dev/null" ? null : l.slice(6).replace(/\t$/, "");
+    const p = unquote(l.slice(4).replace(/\t$/, ""));
+    cur = p === "/dev/null" ? null : p.slice(2);
     if (cur) added.set(cur, new Set());
     continue;
   }

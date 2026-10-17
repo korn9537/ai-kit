@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.1
+
+- `CLAUDE.core.md` report item 6: Open holds only owner decisions, out-of-scope work and blocked in-scope work;
+  in-scope fixable items are fixed before the report, kept limits go in code or docs. Commit subagents return
+  item-6 items only.
+- Paths with `"`, `\`, control or non-ASCII characters are no longer skipped: `check-docs.mjs` reads C-quoted diff
+  headers, `check-comments.mjs` lists files with `-z`, `review-before-stop.sh` and the pre-commit kit-check trigger
+  use `core.quotePath=false` (a comment-only edit to such a file no longer asks for a review).
+
 ## 2.4.0
 
 - `scripts/check-docs.mjs`, run by pre-commit and post-edit: added lines of docs in `docs.include` (default

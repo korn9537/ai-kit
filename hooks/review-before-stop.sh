@@ -99,9 +99,9 @@ files="$(jq -rs "$tail_jq" <<<"$events")"
 [[ -n "$files" ]] || exit 0
 
 code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); prints anything that is not a comment
-  git -C "$project" diff --numstat "$1" ${2:+"$2"} -- . ':(exclude)*.md' | grep -E '^-' || true
-  git -C "$project" diff -U0 "$1" ${2:+"$2"} -- . ':(exclude)*.md' \
-    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) (a/|b/|/dev/null)' \
+  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- . ':(exclude)*.md' | grep -E '^-' || true
+  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- . ':(exclude)*.md' \
+    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
     | sed -E 's/^[+-][[:space:]]*//' \
     | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
 }
@@ -118,7 +118,7 @@ else
   since="$(jq -R 'fromjson? // empty | .timestamp // empty' -r "$transcript" | head -1 || true)"
   base="$(git -C "$project" rev-list -1 --before="$since" HEAD 2>/dev/null || true)"
   if [[ -n "$since" && -n "$base" ]]; then
-    untracked="$(git -C "$project" ls-files --others --exclude-standard | grep -v '\.md$' || true)"
+    untracked="$(git -C "$project" ls-files --others --exclude-standard -- . ':(exclude)*.md' || true)"
     [[ -z "$untracked" && -z "$(code_since "$base")" ]] && exit 0
   fi
 fi

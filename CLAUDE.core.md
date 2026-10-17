@@ -44,8 +44,8 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - A build while the user's dev server runs: ask first (hook-guarded).
 - **A multi-commit plan after a go runs from the main session as coordinator**, so its context stays small: each
   commit goes to a fresh background subagent (`general-purpose`, description `commit: <step>`) that implements,
-  verifies and commits it, then returns only hash, files and open items; an owner question it hits comes back
-  unanswered for the main session to ask. Its brief says it is a commit subagent and must not launch a reviewer.
+  verifies and commits it, then returns only hash, files and open items (report item 6 only); an owner question
+  it hits comes back unanswered for the main session to ask. Its brief says it is a commit subagent and must not launch a reviewer.
   One subagent at a time; the main session keeps talking with the user but does not edit the repo while one runs.
   When it returns, the main session launches that commit's background reviewer on its hash; CONFIRMED fixes go to
   a fresh `commit: fix <step>` subagent, then the one re-check; the next step starts after that. A plan whose
@@ -58,10 +58,12 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
      or "ไม่ต้อง review" opts out); its findings on code you just changed are fixed and re-checked once by the same
      reviewer (fix diff only), with a fresh background reviewer per commit; re-check findings are fixed without a
      third pass unless CONFIRMED and about data or rule correctness, and the report then says, as plain text with no
-     quotes or backticks: Review closed: re-checked once, no third pass. UI suggestions and owner decisions go to
+     quotes or backticks: Review closed: re-checked once, no third pass. UI suggestions (an owner decision) go to
      Open. A finding seen a second time that a script could catch → propose a pre-commit check for it. 4. **Git** —
      commit hash or uncommitted; pushed or not. 5. **User sees** — what looks or behaves differently. 6. **Open** —
-     skipped, left over, or a decision the owner holds (business rule, another screen or module, an open spec question). 7.
+     only a decision the owner holds (business rule, an open spec question), work outside the request, or in-scope
+     work that is blocked (with what blocks it), each with its proposed fix (file:line, cost) where one exists.
+     In-scope and fixable → fix it before the report; a limit kept on purpose → note it in the code or doc. 7.
      **Next session** — only when the handoff hook flagged a large context: a paste-ready prompt in a code block
      (goal, steps left, decisions made here and not in the repo, files to read first, open items), nothing the
      repo or git log already holds.
