@@ -10,7 +10,7 @@
   },
   "build_guard": {
     "port": 3000,
-    "hint": "A build writes where the dev server serves from. Run the typecheck instead, or ask the user before building."
+    "hint": "A build writes where the dev server serves from. Run the typecheck instead."
   },
   "handoff": { "max_context": 150000 },
   "conventions": []

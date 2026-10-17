@@ -38,7 +38,7 @@ command -v lsof >/dev/null 2>&1 || exit 0
 
 # CLAUDE_DEV_GUARD_PORT is for tests only.
 port="${CLAUDE_DEV_GUARD_PORT:-$(kit_conf .build_guard.port 3000)}"
-hint="$(kit_conf .build_guard.hint "A build writes where the dev server serves from and can stop it. Ask the user before building.")"
+hint="$(kit_conf .build_guard.hint "A build writes where the dev server serves from and can stop it. Run the typecheck instead.")"
 
 if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
   cat >&2 <<EOF

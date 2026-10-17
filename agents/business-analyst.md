@@ -31,4 +31,7 @@ Reply with exactly these sections, terse, every claim with its source (path:line
    `ai/kit/analysis-sources.md`.
 6. **Recommendation** — one option and why; the rejected alternatives and why; the one condition that would
    change the recommendation.
-7. **Questions for the user** — only business facts the sources cannot answer. None → say "None".
+7. **Owner decisions** — only questions of the four owner kinds in `CLAUDE.core.md` (money, irreversible or
+   outward action, legal/privacy/consent, changing a decision recorded as final, by its final status label in
+   `ai/kit/analysis-sources.md`). Any other unknown → the assumption you recommend, marked "assumed". None → say
+   "None".

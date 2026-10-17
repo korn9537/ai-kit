@@ -2,7 +2,7 @@
 
 Reader: the `business-analyst` agent (`agents/business-analyst.md` in the ai-kit plugin). Sources in this order of authority.
 
-1. Decisions — where this project records them.
+1. Decisions — where this project records them, and its status labels (final, e.g. Confirmed; default, e.g. Default).
 2. Requirements — where this project keeps them.
 3. Specs — feature or screen specs.
 4. Domain — data model and conventions docs.

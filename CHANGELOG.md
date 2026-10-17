@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.5.0
+
+- `CLAUDE.core.md`: the agent decides; the owner holds only money, irreversible or outward actions,
+  legal/privacy/consent, and changing a Confirmed decision. The BA summary waits for a go only on those; other
+  choices go to a new report item 6 Decided (Open is 7, Next session 8). `business-analyst` asks only owner
+  questions, else states an assumption (reported under Decided). `/ai-kit:check` and `/ai-kit:init` apply the
+  named fixes, asking only before deleting an untracked hook or file or editing settings outside the repo;
+  `/ai-kit:migrate` writes review-by-hand wording itself. Commit subagents return their choices too. A build while
+  the dev server runs is not asked about: run the typecheck (default and template hints say so; a project hint
+  in `ai/kit/config.json` is kept). The analysis-sources template names status labels.
+
 ## 2.4.1
 
 - `CLAUDE.core.md` report item 6: Open holds only owner decisions, out-of-scope work and blocked in-scope work;
