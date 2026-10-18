@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.5.2
+
+- `scripts/check-docs.mjs`: the filler rule also reports a vague quantity (`about`, `around`, `roughly`,
+  `approximately` before a number or `every <number>`), per ai-docs.md "Exact values".
+
 ## 2.5.1
 
 - `scripts/check-docs.mjs`: a rule hit on an edited line is skipped when one removed line of the same hunk,
