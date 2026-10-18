@@ -2,9 +2,9 @@
 
 ## 2.5.1
 
-- `scripts/check-docs.mjs`: a rule hit on an edited line is skipped when one removed line of the same file already
-  had every fragment the rule matches (bold text, Thai runs); a task-status flip on a bold line passes, a new
-  bold or Thai fragment is still reported.
+- `scripts/check-docs.mjs`: a rule hit on an edited line is skipped when one removed line of the same hunk,
+  outside fences and frontmatter, already held at least as many of each fragment the rule matches (bold text,
+  Thai runs); a task-status flip on a bold line passes, a new or repeated fragment is still reported.
 
 ## 2.5.0
 
