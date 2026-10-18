@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.3
+
+- MIT `LICENSE`; `plugin.json` names it.
+
 ## 2.5.2
 
 - `scripts/check-docs.mjs`: the filler rule also reports a vague quantity (`about`, `around`, `roughly`,

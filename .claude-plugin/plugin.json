@@ -1,6 +1,7 @@
 {
   "name": "ai-kit",
-  "version": "2.5.2",
+  "version": "2.5.3",
   "description": "Working conventions for Claude Code with the hooks that enforce them: review before stop, shared-checkout guards, a change-reviewer and a business-analyst agent, a git pre-commit runner, and comment and doc checks.",
-  "author": { "name": "korn9537" }
+  "author": { "name": "korn9537" },
+  "license": "MIT"
 }
