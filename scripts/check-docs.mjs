@@ -1,7 +1,7 @@
 // Reports added doc lines breaking docs/ai-docs.md: emoji, bold, fixed filler list, dates, Thai outside quotes or code.
 // Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs [--staged] [--strict: exit 1 on an issue] [files...]
-// Skips fenced blocks, frontmatter, code spans, moved lines; double/curly quotes and table rows exempt Thai (quotes:
-// dates too). Indented code is not skipped.
+// Skips fenced blocks, frontmatter, code spans, moved lines, hits already on a removed line of the same file; double/
+// curly quotes and table rows exempt Thai (quotes: dates too). Indented code is not skipped.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -59,6 +59,12 @@ const RULES = [
 const noCode = (l) => l.replace(/`[^`]*`/g, "");
 const noQuotes = (l) =>
   l.replace(/"[^"]*"/g, '""').replace(/“[^”]*”/g, '""');
+const prep = (name, l) => (name === THAI || name === "dated" ? noQuotes(noCode(l)) : noCode(l));
+// what a rule matches on a line: bold without its boundary char, Thai as maximal runs
+const frags = (name, re, t) =>
+  [...t.matchAll(name === THAI ? /[฀-๿]+/g : new RegExp(re.source, re.flags + "g"))].map((m) =>
+    name === "bold" ? m[0].slice(m[1].length) : m[0],
+  );
 
 // git still C-quotes a path holding `"`, `\` or a control character; a newline in a name stays unmatched
 const ESC = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
@@ -74,6 +80,7 @@ const unquote = (s) =>
 const range = staged ? ["--cached"] : ["HEAD"];
 const added = new Map();
 const removed = new Set();
+const removedIn = new Map(); // file -> its removed lines
 let cur = null;
 let header = false;
 for (const l of (
@@ -87,14 +94,20 @@ for (const l of (
   if (header && l.startsWith("+++ ")) {
     const p = unquote(l.slice(4).replace(/\t$/, ""));
     cur = p === "/dev/null" ? null : p.slice(2);
-    if (cur) added.set(cur, new Set());
+    if (cur) {
+      added.set(cur, new Set());
+      removedIn.set(cur, []);
+    }
     continue;
   }
   const m = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(l);
   if (m) {
     header = false;
     if (cur) for (let i = 0; i < Number(m[2] ?? 1); i++) added.get(cur).add(Number(m[1]) + i);
-  } else if (!header && l.startsWith("-")) removed.add(l.slice(1).trim());
+  } else if (!header && l.startsWith("-")) {
+    removed.add(l.slice(1).trim());
+    if (cur) removedIn.get(cur).push(l.slice(1));
+  }
 }
 const tracked = new Set((git("ls-files", "-z") ?? "").split("\0"));
 const head = git("rev-parse", "-q", "--verify", "HEAD") !== null;
@@ -138,12 +151,16 @@ for (const f of files) {
       continue;
     }
     if ((want && !want.has(i + 1)) || (l.trim() && removed.has(l.trim()))) continue;
-    const c = noCode(l);
     const row = /^\s*\|/.test(l);
     for (const [name, re] of RULES) {
       if (name === THAI && row) continue;
-      if (re.test(name === THAI || name === "dated" ? noQuotes(c) : c))
-        issues.push(`${f}:${i + 1} ${name}: ${l.trim().slice(0, 80)}`);
+      const t = prep(name, l);
+      if (!re.test(t)) continue;
+      // an edited line keeps its old hits: skip when one removed line already had every fragment
+      const got = frags(name, re, t);
+      const old = (removedIn.get(f) ?? []).map((r) => new Set(frags(name, re, prep(name, r))));
+      if (old.some((o) => got.every((g) => o.has(g)))) continue;
+      issues.push(`${f}:${i + 1} ${name}: ${l.trim().slice(0, 80)}`);
     }
   }
 }

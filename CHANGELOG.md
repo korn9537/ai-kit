@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.5.1
+
+- `scripts/check-docs.mjs`: a rule hit on an edited line is skipped when one removed line of the same file already
+  had every fragment the rule matches (bold text, Thai runs); a task-status flip on a bold line passes, a new
+  bold or Thai fragment is still reported.
+
 ## 2.5.0
 
 - `CLAUDE.core.md`: the agent decides; the owner holds only money, irreversible or outward actions,
