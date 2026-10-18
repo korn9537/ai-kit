@@ -43,7 +43,7 @@ const RULES = [
   ["bold", /(^|[^\w*])\*\*[^*\s]([^*]*[^*\s])?\*\*/],
   [
     "filler",
-    /(?<![/\w])(etc\.|and so on|please note|it is important|basically|in order to|this (document|section|file) (describes|explains)|(about|around|roughly|approximately) (every )?~?\d)/i,
+    /(?<![/\w])(etc\.|and so on|please note|it is important|basically|in order to|this (document|section|file) (describes|explains)|(about|around|roughly|approximately)(?=\s+(every\s+)?~?\d))/i,
   ],
   [
     "dated",

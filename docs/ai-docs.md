@@ -6,8 +6,8 @@
 - Exempt: `README.md`, mockups, design assets, any doc the project marks human-facing.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
-- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit): emoji, bold, filler (fixed list),
-  dates, Thai outside quotes or code. Scope: `docs.include`/`skip` in `ai/kit/config.json`.
+- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit): emoji, bold, filler (fixed list;
+  about, around, roughly, approximately before a number), dates, Thai outside quotes or code. Scope: `docs.include`/`skip` in `ai/kit/config.json`.
   - Not checked: fenced blocks, frontmatter, code spans, a moved line (same text as a removed line of an in-scope
     doc, outside fences and frontmatter). Indented code is checked. Thai exempt in double or curly quotes and in table rows; dates
     exempt in quotes.
