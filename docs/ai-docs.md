@@ -15,6 +15,7 @@
     already held at least as many of each fragment (bold: its text; Thai: a run; others: the match). A removed
     table row holds no Thai. Joining two old lines into one is reported.
   - An unchanged line that leaves a fence or frontmatter counts as added.
+  - A file renamed from an out-of-scope path (`README.md` into `docs/`) is checked in full.
 
 ## Language
 

@@ -53,11 +53,11 @@ const RULES = [
     ),
   ],
   [THAI, /[฀-๿]/],
-].map(([name, re]) => [
-  name,
-  re,
-  name === THAI ? /[฀-๿]+/g : new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"),
-]);
+].map(([name, re]) => {
+  // re.test on a g or y regex keeps lastIndex between lines
+  const one = new RegExp(re.source, re.flags.replace(/[gy]/g, ""));
+  return [name, one, name === THAI ? /[฀-๿]+/g : new RegExp(one.source, one.flags + "g")];
+});
 const noCode = (l) => l.replace(/`[^`]*`/g, "");
 const noQuotes = (l) =>
   l.replace(/"[^"]*"/g, '""').replace(/“[^”]*”/g, '""');
@@ -133,6 +133,18 @@ for (const l of (
     cur.new = path;
     continue;
   }
+  // a 100% rename has no ---/+++ lines or hunks
+  const rn = header && /^rename (from|to) (.*)$/.exec(l);
+  if (rn) {
+    const path = unquote(rn[2]);
+    if (rn[1] === "from") cur.old = path;
+    else {
+      cur.new = path;
+      if (!added.has(path)) added.set(path, new Map());
+      byNew.set(path, cur);
+    }
+    continue;
+  }
   const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(l);
   if (m && cur) {
     header = false;
@@ -145,10 +157,11 @@ for (const l of (
   } else if (!header && hunk && l.startsWith("-")) hunk.removed.push([oldNo++, l.slice(1)]);
 }
 // keep only removed lines the rules saw in HEAD; their text marks a moved line
+// an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added
 const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f);
 const removed = new Set();
 for (const d of diffs) {
-  const seen = d.old && inScope(d.old) ? scan(git("show", `HEAD:${d.old}`) ?? "") : null;
+  const seen = !d.old ? null : inScope(d.old) ? scan(git("show", `HEAD:${d.old}`) ?? "") : new Map();
   d.seen = seen;
   for (const h of d.hunks) {
     if (seen) h.removed = h.removed.filter(([n]) => seen.has(n));
@@ -180,7 +193,7 @@ if (!files.length)
         ...z(git("diff", "HEAD", "--name-only", "--diff-filter=ACMR", "-z")),
         ...z(git("ls-files", "--others", "--exclude-standard", "-z")),
       ];
-files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && existsSync(f));
+files = files.filter((f) => inScope(f) && existsSync(f));
 
 const issues = [];
 for (const f of files) {
@@ -206,9 +219,14 @@ for (const f of files) {
       if (h) {
         const got = counts(name, all, t);
         const { cs, by } = oldCounts(h, name, all);
-        const same = cs[n - h.start];
-        const [first] = got.keys();
-        if ((same && covers(same, got)) || (by.get(first) ?? []).some((k) => covers(cs[k], got))) continue;
+        // candidates: removed lines holding the added line's rarest fragment
+        let best = null;
+        for (const g of got.keys()) {
+          const ks = by.get(g) ?? [];
+          if (!best || ks.length < best.length) best = ks;
+          if (!ks.length) break;
+        }
+        if ((best ?? []).some((k) => covers(cs[k], got))) continue;
       }
       issues.push(`${f}:${n} ${name}: ${l.trim().slice(0, 80)}`);
     }
