@@ -6,7 +6,7 @@
   outside fences and frontmatter, already held at least as many of each fragment the rule matches (bold text,
   Thai runs); a task-status flip on a bold line passes, a new or repeated fragment is still reported. An
   unchanged line leaving a fence or frontmatter is now checked, and a file renamed from an out-of-scope path
-  (for example `README.md` into `docs/`) is checked in full.
+  (for example `README.md` into `docs/`) is checked in full; a line moved in from an out-of-scope file is no longer skipped as a move.
 
 ## 2.5.0
 
