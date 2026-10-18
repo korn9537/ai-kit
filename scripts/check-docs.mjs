@@ -1,7 +1,5 @@
-// Reports added doc lines breaking docs/ai-docs.md: emoji, bold, fixed filler list, dates, Thai outside quotes or code.
+// Reports added doc lines breaking docs/ai-docs.md: emoji, bold, filler, dates, Thai; skips and exemptions there.
 // Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs [--staged] [--strict: exit 1 on an issue] [files...]
-// Skips fenced blocks, frontmatter, code spans, moved lines, hits already on a removed line of the same file; double/
-// curly quotes and table rows exempt Thai (quotes: dates too). Indented code is not skipped.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -55,16 +53,45 @@ const RULES = [
     ),
   ],
   [THAI, /[฀-๿]/],
-];
+].map(([name, re]) => [
+  name,
+  re,
+  name === THAI ? /[฀-๿]+/g : new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g"),
+]);
 const noCode = (l) => l.replace(/`[^`]*`/g, "");
 const noQuotes = (l) =>
   l.replace(/"[^"]*"/g, '""').replace(/“[^”]*”/g, '""');
 const prep = (name, l) => (name === THAI || name === "dated" ? noQuotes(noCode(l)) : noCode(l));
-// what a rule matches on a line: bold without its boundary char, Thai as maximal runs
-const frags = (name, re, t) =>
-  [...t.matchAll(name === THAI ? /[฀-๿]+/g : new RegExp(re.source, re.flags + "g"))].map((m) =>
-    name === "bold" ? m[0].slice(m[1].length) : m[0],
-  );
+// fragment -> count of what a rule matches on a line: bold without its boundary char, Thai as maximal runs
+const counts = (name, all, t) => {
+  const c = new Map();
+  for (const m of t.matchAll(all)) {
+    const g = name === "bold" ? m[0].slice(m[1].length) : m[0];
+    c.set(g, (c.get(g) ?? 0) + 1);
+  }
+  return c;
+};
+// line number -> text of the lines the rules see: outside frontmatter and fenced blocks
+const scan = (text) => {
+  const ls = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const out = new Map();
+  let from = 0;
+  if (ls[0] === "---") {
+    const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
+    if (end > 0) from = end + 1;
+  }
+  let fence = null;
+  for (let i = from; i < ls.length; i++) {
+    const l = ls[i];
+    const open = /^\s*(`{3,}|~{3,})/.exec(l)?.[1];
+    if (fence) {
+      if (open && open[0] === fence[0] && open.length >= fence.length && !l.trim().slice(open.length))
+        fence = null;
+    } else if (open) fence = open;
+    else out.set(i + 1, l);
+  }
+  return out;
+};
 
 // git still C-quotes a path holding `"`, `\` or a control character; a newline in a name stays unmatched
 const ESC = { a: "\x07", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t", v: "\v" };
@@ -76,39 +103,69 @@ const unquote = (s) =>
           e.length === 3 ? String.fromCharCode(parseInt(e, 8)) : (ESC[e] ?? e),
         )
     : s;
-// added line numbers per file from one diff (renames paired with -M); a removed line's text marks a move
+// per file: new line number -> its hunk, and the HEAD path (renames paired with -M); a hunk holds its removed lines
 const range = staged ? ["--cached"] : ["HEAD"];
 const added = new Map();
-const removed = new Set();
-const removedIn = new Map(); // file -> its removed lines
+const diffs = [];
+const byNew = new Map();
 let cur = null;
+let hunk = null;
+let oldNo = 0;
 let header = false;
 for (const l of (
   git("diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", ...range) ?? ""
 ).split("\n")) {
   if (l.startsWith("diff --git ")) {
     header = true;
-    cur = null;
+    cur = { old: null, hunks: [] };
+    diffs.push(cur);
+    hunk = null;
     continue;
   }
-  if (header && l.startsWith("+++ ")) {
+  if (header && (l.startsWith("--- ") || l.startsWith("+++ "))) {
     const p = unquote(l.slice(4).replace(/\t$/, ""));
-    cur = p === "/dev/null" ? null : p.slice(2);
-    if (cur) {
-      added.set(cur, new Set());
-      removedIn.set(cur, []);
+    const path = p === "/dev/null" ? null : p.slice(2);
+    if (l[0] === "-") cur.old = path;
+    else if (path) {
+      added.set(path, new Map());
+      byNew.set(path, cur);
     }
+    cur.new = path;
     continue;
   }
-  const m = /^@@ -\S+ \+(\d+)(?:,(\d+))? @@/.exec(l);
-  if (m) {
+  const m = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(l);
+  if (m && cur) {
     header = false;
-    if (cur) for (let i = 0; i < Number(m[2] ?? 1); i++) added.get(cur).add(Number(m[1]) + i);
-  } else if (!header && l.startsWith("-")) {
-    removed.add(l.slice(1).trim());
-    if (cur) removedIn.get(cur).push(l.slice(1));
+    const [start, len] = [Number(m[3]), Number(m[4] ?? 1)];
+    // end: first new line after the hunk; delta: new minus old line count
+    hunk = { removed: [], start, end: start + (len || 1), delta: len - Number(m[2] ?? 1), counts: new Map() };
+    cur.hunks.push(hunk);
+    oldNo = Number(m[1]);
+    for (let i = 0; i < len; i++) added.get(cur.new)?.set(start + i, hunk);
+  } else if (!header && hunk && l.startsWith("-")) hunk.removed.push([oldNo++, l.slice(1)]);
+}
+// keep only removed lines the rules saw in HEAD; their text marks a moved line
+const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f);
+const removed = new Set();
+for (const d of diffs) {
+  const seen = d.old && inScope(d.old) ? scan(git("show", `HEAD:${d.old}`) ?? "") : null;
+  d.seen = seen;
+  for (const h of d.hunks) {
+    if (seen) h.removed = h.removed.filter(([n]) => seen.has(n));
+    for (const [, r] of h.removed) removed.add(r.trim());
   }
 }
+// fragment counts of each removed line of a hunk, once per rule; a removed table row holds no Thai
+const oldCounts = (h, name, all) => {
+  if (!h.counts.has(name)) {
+    const cs = h.removed.map(([, r]) => (name === THAI && /^\s*\|/.test(r) ? new Map() : counts(name, all, prep(name, r))));
+    const by = new Map();
+    cs.forEach((c, k) => c.forEach((_, g) => (by.get(g) ?? by.set(g, []).get(g)).push(k)));
+    h.counts.set(name, { cs, by });
+  }
+  return h.counts.get(name);
+};
+const covers = (o, got) => [...got].every(([g, n]) => (o.get(g) ?? 0) >= n);
 const tracked = new Set((git("ls-files", "-z") ?? "").split("\0"));
 const head = git("rev-parse", "-q", "--verify", "HEAD") !== null;
 
@@ -131,36 +188,29 @@ for (const f of files) {
   if (text === null) continue;
   // untracked, or no HEAD yet: every line is new
   const want = added.get(f) ?? (staged || (head && tracked.has(f)) ? new Set() : null);
-  const ls = text.replace(/^﻿/, "").split(/\r?\n/);
-  let from = 0;
-  if (ls[0] === "---") {
-    const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
-    if (end > 0) from = end + 1;
-  }
-  let fence = null;
-  for (let i = from; i < ls.length; i++) {
-    const l = ls[i];
-    const open = /^\s*(`{3,}|~{3,})/.exec(l)?.[1];
-    if (fence) {
-      if (open && open[0] === fence[0] && open.length >= fence.length && !l.trim().slice(open.length))
-        fence = null;
-      continue;
-    }
-    if (open) {
-      fence = open;
-      continue;
-    }
-    if ((want && !want.has(i + 1)) || (l.trim() && removed.has(l.trim()))) continue;
+  // an unchanged line the rules did not see in HEAD (it left a fence or frontmatter) counts as added
+  const d = byNew.get(f);
+  let k = 0;
+  let delta = 0;
+  for (const [n, l] of scan(text)) {
+    for (; d?.seen && k < d.hunks.length && d.hunks[k].end <= n; k++) delta += d.hunks[k].delta;
+    const left = d?.seen && !d.seen.has(n - delta);
+    if ((want && !want.has(n) && !left) || (l.trim() && removed.has(l.trim()))) continue;
     const row = /^\s*\|/.test(l);
-    for (const [name, re] of RULES) {
+    const h = added.get(f)?.get(n);
+    for (const [name, re, all] of RULES) {
       if (name === THAI && row) continue;
       const t = prep(name, l);
       if (!re.test(t)) continue;
-      // an edited line keeps its old hits: skip when one removed line already had every fragment
-      const got = frags(name, re, t);
-      const old = (removedIn.get(f) ?? []).map((r) => new Set(frags(name, re, prep(name, r))));
-      if (old.some((o) => got.every((g) => o.has(g)))) continue;
-      issues.push(`${f}:${i + 1} ${name}: ${l.trim().slice(0, 80)}`);
+      // an edited line keeps its old hits: skip when one removed line of its hunk held as many of each fragment
+      if (h) {
+        const got = counts(name, all, t);
+        const { cs, by } = oldCounts(h, name, all);
+        const same = cs[n - h.start];
+        const [first] = got.keys();
+        if ((same && covers(same, got)) || (by.get(first) ?? []).some((k) => covers(cs[k], got))) continue;
+      }
+      issues.push(`${f}:${n} ${name}: ${l.trim().slice(0, 80)}`);
     }
   }
 }
