@@ -21,10 +21,13 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
-| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`                     |
+| `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |
+| `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
+| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
 | `conventions/`                | cross-repo coding rules: `general.md`, one per language                                        |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
+| `templates/ai/`               | one template per `ai/` doc type (`docs/ai-layout.md`); never copied by `init`                  |
 | `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`                         |
 
 Hooks (each exits silently when the project has no `ai/kit/`):
@@ -49,7 +52,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`; agents and `kit.mjs check`: `conventions` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -59,6 +62,10 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 `["go", "sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception
 for one project goes in its `review-checklist.md`, with its reason. `shared_checkout_doc` defaults to this
 plugin's `docs/shared-checkout.md`.
+
+`ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
+`ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns
+when the key is absent in a repo that looks like web or mobile, and when it is set without `ai/screens/index.md`.
 
 ## Commands
 
@@ -178,15 +185,24 @@ ai-kit คือ plugin ของ Claude Code ที่รวมกฎการ�
 agent ตัดสินใจเองทุกเรื่อง ยกเว้น 4 เรื่องที่ต้องถามเจ้าของ: เงิน, การกระทำที่ย้อนกลับไม่ได้หรือออกไปข้างนอก,
 กฎหมาย ความเป็นส่วนตัว consent และการเปลี่ยน decision ที่ Confirmed แล้ว เรื่องที่ตัดสินใจเองแจ้งในรายงานหัวข้อ Decided
 
-Claude ตอบเป็นภาษาไทย (ชื่อหัวข้อในรายงานและ prompt สำหรับ session ถัดไปยังเป็นภาษาอังกฤษ) ส่วนเอกสาร Markdown
-(spec, CLAUDE.md), comment และ commit message เขียนภาษาอังกฤษแบบให้ AI อ่านอย่างเดียว ใช้ token น้อยที่สุด
-ขอบเขตและข้อยกเว้น (README, mockup, เอกสารสำหรับคนอ่าน) ดู `docs/ai-docs.md` — pre-commit ตรวจเฉพาะบรรทัดที่เพิ่มใหม่
+Claude ตอบเป็นภาษาไทย (ชื่อหัวข้อในรายงานและ prompt สำหรับ session ถัดไปยังเป็นภาษาอังกฤษ) เอกสารใน `ai/` comment
+และ commit message เขียนภาษาอังกฤษแบบให้ AI อ่านอย่างเดียว ใช้ token น้อยที่สุด เอกสารที่ agent สร้างใหม่อยู่ใน `ai/`
+เสมอ ยกเว้น user ระบุที่อื่นหรือรูปแบบอื่น ไฟล์นอก `ai/` kit ไม่ยุ่ง รายละเอียดดู `docs/ai-docs.md` — pre-commit ตรวจเฉพาะบรรทัดที่เพิ่มใหม่
 ด้วย `scripts/check-docs.mjs` ปิดได้ด้วย `"docs": { "include": "^$" }` ใน `ai/kit/config.json`
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
 `check` จะไม่ผ่าน)
 ข้อยกเว้นของโปรเจกต์เขียนใน `ai/kit/review-checklist.md` พร้อมเหตุผล
+
+โปรเจกต์ที่มีหน้าจอ (web, mobile) ตั้ง `"ui"` ใน `ai/kit/config.json` แล้วเขียน screen spec ไว้ที่ `ai/screens/`
+ไฟล์ละหน้าจอ (`S-<n>-<slug>.md`) ผูกกับ API spec (`ui.api`) — ลำดับงานคือ data (`ai/data/`) → screen spec → API spec → API → หน้าจอ
+หนึ่งหน้าจออ่านข้อมูลจาก server read เดียว ห้ามหน้าจอดึงหลาย API มารวมเอง รายละเอียดใน `docs/screen-specs.md`
+pre-commit เตือน (ไม่ block) ด้วย `scripts/check-specs.mjs` หน้าจอเดิมที่ยังไม่มี spec ให้เขียนเมื่อแก้หน้านั้นครั้งถัดไป
+
+เอกสารใน `ai/` มีหมวดตายตัว (decisions, requirements, data ไฟล์ละ entity, specs, screens, api, plans, notes) แต่ละหมวดมี
+ชื่อไฟล์ id และ format ของตัวเอง template อยู่ใน `templates/ai/` รายละเอียดใน `docs/ai-layout.md` — `ai/data/` เป็นฐานที่
+screen spec และ API spec ชี้ถึง ของที่ไม่อยู่ในหมวด `check` จะเตือนให้ย้ายเมื่อแก้ครั้งถัดไป
 
 ต้องมี `jq` และ Node 22 ขึ้นไป
 

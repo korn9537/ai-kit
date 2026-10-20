@@ -5,7 +5,7 @@
     "skip": "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)"
   },
   "docs": {
-    "include": "^(CLAUDE\\.md|(docs|ai)/.*\\.md)$",
+    "include": "^ai/.*\\.md$",
     "skip": "(^|/)README\\.md$|/(mockups|design)/"
   },
   "build_guard": {

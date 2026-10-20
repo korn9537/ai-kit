@@ -32,7 +32,7 @@ process.chdir(root);
 const conf = existsSync("ai/kit/config.json")
   ? (JSON.parse(readFileSync("ai/kit/config.json", "utf8")).docs ?? {})
   : {};
-const INCLUDE = new RegExp(conf.include ?? "^(CLAUDE\\.md|(docs|ai)/.*\\.md)$");
+const INCLUDE = new RegExp(conf.include ?? "^ai/.*\\.md$");
 const SKIP = new RegExp(conf.skip ?? "(^|/)README\\.md$|/(mockups|design)/");
 
 const MONTH =

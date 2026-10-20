@@ -126,6 +126,103 @@ function memoryWarnings() {
   return out;
 }
 
+const UI_PLATFORMS = ["web", "mobile"];
+const WEB_DEPS = ["next", "react", "react-dom", "vue", "nuxt", "svelte", "@sveltejs/kit", "@angular/core", "solid-js"];
+// platforms the repo root or an apps/* folder looks like; mobile wins over web (React Native ships react too)
+function detectUi() {
+  const dirs = [root];
+  // apps missing, or a file: root only
+  try {
+    for (const d of readdirSync(at("apps"), { withFileTypes: true }))
+      if (d.isDirectory()) dirs.push(at("apps", d.name));
+  } catch {}
+  const found = new Set();
+  for (const d of dirs) {
+    let pkg = {};
+    try {
+      pkg = JSON.parse(read(join(d, "package.json")) ?? "{}") ?? {};
+    } catch {}
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    if (
+      /^\s*flutter:/m.test(read(join(d, "pubspec.yaml")) ?? "") ||
+      deps["react-native"] ||
+      deps.expo ||
+      (existsSync(join(d, "android")) && existsSync(join(d, "ios")))
+    )
+      found.add("mobile");
+    else if (WEB_DEPS.some((k) => deps[k])) found.add("web");
+  }
+  return UI_PLATFORMS.filter((p) => found.has(p));
+}
+// the docs.include of templates before 2.8.0; docs/ai-docs.md now governs ai/ only
+const OLD_DOCS_INCLUDE = "^(CLAUDE\\.md|(docs|ai)/.*\\.md)$";
+function docsWarnings() {
+  let conf;
+  try {
+    conf = JSON.parse(read(at("ai", "kit", "config.json")) ?? "null");
+  } catch {
+    return [];
+  }
+  return conf?.docs?.include === OLD_DOCS_INCLUDE
+    ? [
+        `ai/kit/config.json docs.include still checks docs/ and CLAUDE.md, which the AI-only doc rule no longer governs (fix: set "include": ${JSON.stringify("^ai/.*\\.md$")})`,
+      ]
+    : [];
+}
+// top-level entries of ai/ (docs/ai-layout.md); a path ui.api or analysis-sources.md names is allowed too
+const AI_LAYOUT = ["kit", "decisions.md", "requirements", "data", "specs", "screens", "api", "plans", "notes.md"];
+function layoutWarnings() {
+  let ents;
+  try {
+    ents = readdirSync(at("ai")).filter((e) => !e.startsWith("."));
+  } catch {
+    return [];
+  }
+  let api = null;
+  try {
+    api = JSON.parse(read(at("ai", "kit", "config.json")) ?? "null")?.ui?.api;
+  } catch {}
+  const allowed = new Set(AI_LAYOUT);
+  if (typeof api === "string") allowed.add(/^(?:\.\/)?ai\/([^/]+)/.exec(api)?.[1]);
+  // a category kept elsewhere under ai/, named in backticks by analysis-sources.md
+  for (const m of (read(at("ai", "kit", "analysis-sources.md")) ?? "").matchAll(/`(?:\.\/)?ai\/([^/`\s]+)/g))
+    allowed.add(m[1]);
+  return ents
+    .filter((e) => !allowed.has(e))
+    .map(
+      (e) =>
+        `ai/${e} is not an ai/ category (fix: when next touched, move it into the category that fits, or out of ai/ when humans read it, move-only commit; the plugin's docs/ai-layout.md)`,
+    );
+}
+// warnings, not problems: a UI project before 2.8.0 must keep committing (docs/screen-specs.md)
+function uiWarnings() {
+  let conf;
+  try {
+    conf = JSON.parse(read(at("ai", "kit", "config.json")) ?? "null");
+  } catch {
+    return [];
+  }
+  if (!isObj(conf)) return [];
+  if (conf.ui === undefined) {
+    const found = detectUi();
+    return found.length
+      ? [
+          `ai/kit/config.json has no ui key, but this looks like a ${found.join(" and ")} project (fix: add "ui": {"platforms": ${JSON.stringify(found)}, "include": "<regex of screen entry files>", "api": "ai/api/"}, or "ui": {"platforms": []} for none; the plugin's docs/screen-specs.md)`,
+        ]
+      : [];
+  }
+  if (
+    isObj(conf.ui) &&
+    Array.isArray(conf.ui.platforms) &&
+    conf.ui.platforms.length &&
+    !existsSync(at("ai", "screens", "index.md"))
+  )
+    return [
+      "ai/kit/config.json sets ui.platforms, but ai/screens/index.md is missing (fix: create it, one line per screen; spec each screen when it is next changed, not all now; the plugin's docs/screen-specs.md)",
+    ];
+  return [];
+}
+
 function problems() {
   const out = [];
   const confText = read(at("ai", "kit", "config.json"));
@@ -163,6 +260,29 @@ function problems() {
           out.push(
             'ai/kit/config.json code_dirs lists "ai-kit", a 1.x in-repo copy (fix: remove it from code_dirs)',
           );
+        if (conf.ui !== undefined) {
+          const ui = conf.ui;
+          if (!isObj(ui))
+            out.push(
+              `ai/kit/config.json ui must be an object (fix: write it as {"platforms": [], "include": "^$", "api": "ai/api/"}, the plugin's docs/screen-specs.md)`,
+            );
+          else {
+            const pl = ui.platforms ?? [];
+            if (!Array.isArray(pl) || pl.some((p) => !UI_PLATFORMS.includes(p)))
+              out.push(
+                `ai/kit/config.json ui.platforms must be an array of ${UI_PLATFORMS.map((p) => `"${p}"`).join(", ")} (fix: write it as ["web"] or [])`,
+              );
+            for (const k of ["include", "api"])
+              if (ui[k] !== undefined && typeof ui[k] !== "string")
+                out.push(`ai/kit/config.json ui.${k} must be a string (fix: the plugin's docs/screen-specs.md §Config)`);
+            if (typeof ui.include === "string")
+              try {
+                new RegExp(ui.include);
+              } catch (e) {
+                out.push(`ai/kit/config.json ui.include is not a valid regex (fix: correct it; ${e.message})`);
+              }
+          }
+        }
         const doc = conf.shared_checkout_doc;
         if (typeof doc === "string" && !existsSync(isAbsolute(doc) ? doc : at(doc)))
           out.push(
@@ -316,6 +436,9 @@ function init() {
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
+  uiWarnings().forEach((w) => console.log(`! ${w}`));
+  docsWarnings().forEach((w) => console.log(`! ${w}`));
+  layoutWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
     "restart the Claude Code session so the SessionStart hook injects the working conventions",
@@ -662,6 +785,9 @@ function migrate() {
   }
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
+  uiWarnings().forEach((w) => console.log(`! ${w}`));
+  docsWarnings().forEach((w) => console.log(`! ${w}`));
+  layoutWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
   // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
   const changedPaths = [
@@ -691,6 +817,9 @@ else if (cmd === "check") {
   const out = problems();
   out.forEach((p) => console.log(`ai-kit: ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {
   console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate>");

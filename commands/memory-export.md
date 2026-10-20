@@ -10,7 +10,7 @@ Move auto-memory into the repo (rule: `${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md`, Pr
 2. Read every file, `MEMORY.md` included. Each fact → its target in the working conventions (Project knowledge),
    chosen by content (frontmatter `type` is a hint only); a decision gets the project's default status. Already in
    the repo, code or git log, or stale against the code → drop, list under Decided.
-3. Rewrite per `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`: English fragments, no bold, the memory's
+3. Rewrite a fact bound for `ai/` per `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`: English fragments, no bold, the memory's
    Why line kept as a one-line reason; a date only when the fact is a deadline.
 4. Commit the repo files, staged by name (a kit proposal is filed, not committed). After the commit, delete the
    moved files and `MEMORY.md` (`rm`, allowed by the guard); ask first for a file you left out.

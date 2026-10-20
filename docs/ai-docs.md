@@ -1,15 +1,18 @@
 # Docs for AI readers
 
 - Reader: AI agents only; no human reads these.
-- Scope: Markdown docs (`CLAUDE.md`, `docs/**/*.md`, `ai/**/*.md`: spec, plan, task, decision, screen files) and
-  OpenAPI / JSON Schema `description` fields.
-- Exempt: `README.md`, mockups, design assets, any doc the project marks human-facing.
+- Scope: `ai/**/*.md`, every category in `docs/ai-layout.md`. Files outside `ai/` are not governed here.
+- A doc the agent creates goes under `ai/`, in this form. Another place or form only when the user names it.
+- Categories, file names, ids and format per type: `docs/ai-layout.md`; screen and API specs:
+  `docs/screen-specs.md`.
+- Human-read docs, mockups, design assets: outside `ai/`, never checked. A human-form doc the user asks for goes
+  outside `ai/`.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
 - Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):
   emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a
   number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates, Thai outside quotes
-  or code. Scope: `docs.include`/`skip` in `ai/kit/config.json`.
+  or code. Scope: `docs.include`/`skip` in `ai/kit/config.json` (default `^ai/.*\.md$`).
   - Not checked: fenced blocks, frontmatter, code spans, a moved line (same text as a removed line of an in-scope
     doc, outside fences and frontmatter; one removed line excuses one added line, its own file first). Indented
     code is checked. Thai exempt in double or curly quotes and in table rows; dates exempt in quotes.
@@ -17,7 +20,7 @@
     already held at least as many of each fragment (bold: its text; Thai: a run; others: the match). A removed
     table row holds no Thai. Joining two old lines into one is reported.
   - An unchanged line that leaves a fence or frontmatter counts as added.
-  - A file renamed from an out-of-scope path (`README.md` into `docs/`) is checked in full.
+  - A file renamed from an out-of-scope path (`README.md` into `ai/`) is checked in full.
 
 ## Language
 
@@ -29,8 +32,8 @@
 
 - Fragments, not sentences: drop articles, filler, hedges, politeness.
 - 3+ parallel items → table or `key: value` lines. Rules → bullets. Prose only for a cause chain a list cannot hold.
-- One fact, one place. Elsewhere a pointer (`→ docs/spec.md §3`, `→ D3`), never a copy.
-- Stable ids on rules, decisions, screens, tasks (`D3`, `S-2`, `T-12`) so pointers stay short.
+- One fact, one place. Elsewhere a pointer (`→ ai/specs/x.md §3`, `→ D3`), never a copy.
+- Stable ids on rules, decisions, requirements, screens (`D3`, `REQ-3`, `S-2`) so pointers stay short.
 - Exact values: numbers, units, paths, names, enum strings. No "about", "etc.", "and so on": list all, or name
   the set ("every list endpoint").
 - Imperative for rules: `Never X`, `X ≥ 44`. Symbols allowed: `→ ≥ ≤ · |`.

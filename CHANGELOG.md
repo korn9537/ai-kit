@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.8.0
+
+- Screen specs for web and mobile projects (`docs/screen-specs.md`): config key `ui` (`platforms`, `include`,
+  `api`); one file per screen in `ai/screens/` linked to the API spec; order data → spec → API spec → API → screen;
+  existing screens get a spec when next changed.
+- `conventions/general.md` item 11: one screen = one server read, the client only formats; item 6: a business
+  state change is its own command.
+- `scripts/check-specs.mjs` (pre-commit, warnings only): endpoints missing from `ui.api` (`.md` folder, OpenAPI
+  JSON or YAML), more than one read, duplicate ids, index drift, a new screen file no spec lists; `--map` prints
+  the reverse map. Tests: `scripts/check-specs.test.mjs`.
+- `kit.mjs check`: problem on a malformed `ui`; warns when a web or mobile repo has no `ui` key, or `ui.platforms`
+  is set without `ai/screens/index.md`. Core rule, BA and reviewer read the screen specs when `ui.platforms` is set.
+- `ai/` layout (`docs/ai-layout.md`): fixed categories (decisions, requirements, data per entity, feature specs,
+  screens, API, plans, notes), file names, ids and a format per type; one template each in `templates/ai/` (not
+  copied by `init`). `ai/data/` is the base that screen and API specs point to. `analysis-sources.md` template
+  and BA fallback use these paths; `kit.mjs check` warns on any other top-level entry under `ai/`.
+- AI-only doc scope narrowed to `ai/**/*.md`: files outside `ai/` are not governed; a doc the agent creates goes
+  under `ai/` unless the user names another place or form. `check-docs.mjs` default and template `docs.include`:
+  `^ai/.*\.md$` (existing projects keep their `docs.include`; `check` warns while it equals the old template value).
+
 ## 2.7.0
 
 - Project knowledge lives in the repo, never in auto-memory (one machine only, the team never sees it):

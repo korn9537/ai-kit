@@ -74,6 +74,12 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   }
 fi
 
+# Screen specs stay linked to the API and the screen files (the plugin's docs/screen-specs.md); warnings only.
+# Starts node only when ui.platforms looks non-empty; the script itself waits for a guarded staged file.
+if tr -d '[:space:]' < ai/kit/config.json 2>/dev/null | grep -q '"platforms":\["'; then
+  quiet node "$ai_kit_plugin/scripts/check-specs.mjs" --staged
+fi
+
 # The project's kit wiring (config, shim, plugin settings, no 1.x leftovers) is still sound.
 if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMRD | grep -qE '^(ai/kit/config\.json|\.githooks/|\.claude/settings\.json$|\.claude/agents/|CLAUDE\.md$)'; then
   node "$ai_kit_plugin/scripts/kit.mjs" check || {

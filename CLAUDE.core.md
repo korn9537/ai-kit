@@ -14,8 +14,9 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - Reply to the user in Thai, the final report included. English stays: code, identifiers, commands, paths, quoted
   output, the report item labels, the Next-session prompt, and the phrase Review closed: re-checked once
   (hook-matched).
-- Docs (except human-facing ones), code comments, commit messages, subagent briefs and their reports: English.
-  Docs are for AI readers, token-minimal: `ai-kit/docs/ai-docs.md`.
+- Docs under `ai/`, code comments, commit messages, subagent briefs and their reports: English. A doc you create
+  goes in its `ai/` category (`ai-kit/docs/ai-layout.md`), AI-only and token-minimal (`ai-kit/docs/ai-docs.md`);
+  another place or form only when the user names it.
 
 ## Working conventions
 
@@ -29,9 +30,13 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   `ai-kit:business-analyst` agent and build the summary from its report: 1. Problem · 2. Recommendation (one, with
   rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data, other modules) · 5.
   Standard it sets or follows. Touches an owner decision → show the summary and wait for a go; otherwise show it and
-  go on with the recommendation; BA assumptions go to Decided. A choice whose reasons must be kept → the decisions
-  source (first in `ai/kit/analysis-sources.md`) with the project's default status, same commit. Small jobs (typo,
-  copy, one style value on one screen, move-only refactor, docs) skip both; unsure → summarize.
+  go on with the recommendation; BA assumptions go to Decided. A choice whose reasons must be kept →
+  `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
+  commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both; unsure →
+  summarize.
+- **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its
+  `ai/screens/S-<n>-*.md`; new screen: `ai/data/` entity → spec → API spec → API → screen; a screen without a
+  spec gets one when next changed. Format: `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<lang>.md` for
   each language in `ai/kit/config.json` `conventions` that the change touches. When summary item 5 sets a standard:
   this repo only → `ai/kit/review-checklist.md` in the same commit; cross-repo → a `proposal` issue on
@@ -44,12 +49,12 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - **Recommend, do not list.** Options come with a verdict, the reason and the one condition that would flip it; an
   anomaly found while checking: in scope → fix it; outside the request → Open, with its fix (file:line, cost).
 - **Project knowledge lives in the repo, never in auto-memory** (`~/.claude/projects/*/memory/` is one machine
-  only; `init` sets `"autoMemoryEnabled": false`, writes there are hook-guarded). Same commit as the work, per
-  `ai-kit/docs/ai-docs.md`: rule or correction for this repo → `CLAUDE.md` or `ai/kit/review-checklist.md`; holds in
-  any repo → kit proposal (`ai-kit/docs/kit-proposals.md`); decision or constraint → decisions source
-  (`ai/kit/analysis-sources.md`); reference (URL, dashboard, ticket, account name) → `ai/notes.md`, one
-  `- R<n>: <what> → <where>` line each; personal preference of the user → tell them, their `~/.claude/CLAUDE.md`
-  holds it.
+  only; `init` sets `"autoMemoryEnabled": false`, writes there are hook-guarded). Same commit as the work, `ai/`
+  targets per `ai-kit/docs/ai-docs.md`: rule or correction for this repo → `CLAUDE.md` or
+  `ai/kit/review-checklist.md`; holds in any repo → kit proposal (`ai-kit/docs/kit-proposals.md`); decision or
+  constraint → `ai/decisions.md` (or the source `ai/kit/analysis-sources.md` names); reference (URL, dashboard,
+  ticket, account name) → `ai/notes.md`, one `- R<n>: <what> → <where>` line each; personal preference of the
+  user → tell them, their `~/.claude/CLAUDE.md` holds it.
 - **Comments** are for AI readers: at most two lines, a constraint or a pointer, no history (`comments:check`,
   `ai-kit/docs/code-comments.md`).
 - **A source file over 40 KB that you need to edit** is split first, move-only, in its own commit.
