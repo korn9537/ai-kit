@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.9.0
+
+- `/ai-kit:retrofit` (`commands/retrofit.md`): brings an existing project into the `ai/` layout. No argument →
+  survey and `ai/plans/retrofit.md`; then one category per run and commit (`config`, `move`, `data`,
+  `decisions`, `requirements`, `screens`, `api`), written only from the code and existing docs; unknowns become
+  open questions; an extracted decision keeps a final source status as `Confirmed`, else `Default`.
+- `kit.mjs check` UI detection also looks at tracked top-level folders and `packages/*` (e.g. `mobile/`), skipping
+  `docs/`, `website/`, `examples/`: a project without a `ui` key may see the detection warning for the first time.
+- `docs/screen-specs.md`: an index line without a spec yet, `- <name> → <entry file> (no spec)`.
+- `kit.mjs inventory` (read-only): `ai/` entries outside the layout, schema sources, screen files with a
+  `ui.include` suggestion, API spec and route files, decision docs, other `.md` outside `ai/`. Test:
+  `scripts/kit-inventory.test.mjs`.
+
 ## 2.8.0
 
 - Screen specs for web and mobile projects (`docs/screen-specs.md`): config key `ui` (`platforms`, `include`,

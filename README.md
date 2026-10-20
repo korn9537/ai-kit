@@ -15,9 +15,10 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
 | `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                                            |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export` |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                                                       |
+| `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
+| `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
@@ -86,6 +87,10 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`).
   The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
   `.claude/agents/` or `CLAUDE.md` are staged.
+- `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside
+  the layout, schema sources, screen files with a `ui.include` suggestion, API spec and route files, decision docs
+  and other `.md` outside `ai/`, grouped by folder. `/ai-kit:retrofit` (`commands/retrofit.md`) uses it to plan,
+  then fills the `ai/` layout one category per commit, only from the code and existing docs.
 - `node <plugin>/scripts/kit.mjs migrate` turns a clean 1.x repo into a plugin one, then runs `init` and `check`
   (§Migrating a repo from 1.x).
 
@@ -203,6 +208,10 @@ pre-commit เตือน (ไม่ block) ด้วย `scripts/check-specs.m
 เอกสารใน `ai/` มีหมวดตายตัว (decisions, requirements, data ไฟล์ละ entity, specs, screens, api, plans, notes) แต่ละหมวดมี
 ชื่อไฟล์ id และ format ของตัวเอง template อยู่ใน `templates/ai/` รายละเอียดใน `docs/ai-layout.md` — `ai/data/` เป็นฐานที่
 screen spec และ API spec ชี้ถึง ของที่ไม่อยู่ในหมวด `check` จะเตือนให้ย้ายเมื่อแก้ครั้งถัดไป
+
+โปรเจกต์เดิมใช้ `/ai-kit:retrofit` — ไม่ใส่ argument จะสำรวจ (`kit.mjs inventory`) แล้วเขียนแผนที่ `ai/plans/retrofit.md`
+จากนั้นสั่งทีละหมวด (`config`, `move`, `data`, `decisions`, `requirements`, `screens`, `api`) หมวดละ commit เขียนจากโค้ดและเอกสาร
+ที่มีอยู่เท่านั้น ส่วนที่หาที่มาไม่ได้ลงเป็นคำถามในแผน decision ที่ต้นทางมีสถานะ final อยู่แล้วเป็น `Confirmed` ที่เหลือเป็น `Default`
 
 ต้องมี `jq` และ Node 22 ขึ้นไป
 

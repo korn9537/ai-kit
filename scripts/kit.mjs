@@ -1,4 +1,5 @@
-// Wires the ai-kit plugin into a project: node <plugin>/scripts/kit.mjs <init|check|migrate>, cwd in the project.
+// Wires the ai-kit plugin into a project, cwd in the project:
+// node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>
 // What each command does: README.md §Commands.
 import { execFileSync } from "node:child_process";
 import {
@@ -51,6 +52,8 @@ const gitIn = (cwd, a) =>
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
+    // ls-files of a large repo is several MB; over the buffer the call fails and reads as empty
+    maxBuffer: 1 << 30,
   }).trim();
 const tryGitIn = (cwd, a) => {
   try {
@@ -128,14 +131,26 @@ function memoryWarnings() {
 
 const UI_PLATFORMS = ["web", "mobile"];
 const WEB_DEPS = ["next", "react", "react-dom", "vue", "nuxt", "svelte", "@sveltejs/kit", "@angular/core", "solid-js"];
-// platforms the repo root or an apps/* folder looks like; mobile wins over web (React Native ships react too)
+// platforms the root, a tracked top-level folder or an apps/* or packages/* folder looks like; mobile wins over
+// web (React Native ships react too); docs sites and examples do not count
 function detectUi() {
   const dirs = [root];
-  // apps missing, or a file: root only
-  try {
-    for (const d of readdirSync(at("apps"), { withFileTypes: true }))
-      if (d.isDirectory()) dirs.push(at("apps", d.name));
-  } catch {}
+  // folders holding a tracked file, from one listing
+  const tracked = new Set();
+  for (const f of lsFiles()) {
+    const p = f.split("/");
+    for (let i = 1; i < Math.min(p.length, 3); i++) tracked.add(p.slice(0, i).join("/"));
+  }
+  for (const parent of [[], ["apps"], ["packages"]])
+    try {
+      for (const d of readdirSync(at(...parent), { withFileTypes: true }))
+        if (
+          d.isDirectory() &&
+          !/^(\.|node_modules$|docs?$|website$|examples?$)/.test(d.name) &&
+          tracked.has([...parent, d.name].join("/"))
+        )
+          dirs.push(at(...parent, d.name));
+    } catch {}
   const found = new Set();
   for (const d of dirs) {
     let pkg = {};
@@ -810,9 +825,90 @@ function migrate() {
   if (left.length) process.exit(1);
 }
 
+// inventory: what a retrofit (commands/retrofit.md) starts from; heuristics over tracked files, read-only
+const INV = {
+  schema: [
+    /(^|\/)prisma\/schema\.prisma$/,
+    /(^|\/)(migrations?|db\/migrate|alembic\/versions)\/.+\.(sql|ts|js|py|rb|go|cs)$/i,
+    /(^|\/)(models?|entities|entity)\/[^/]+\.(ts|js|py|rb|go|cs|dart)$/i,
+    /(^|\/)Configurations\/(.+\/)?[^/]+Configuration\.cs$/,
+    /\.entity\.ts$/,
+    /(^|\/)(schema|db\/schema)\.(ts|sql|rb)$/,
+    /DbContext\.cs$/,
+  ],
+  screens: [
+    /(^|\/)app\/(.+\/)?page\.(tsx|jsx|ts|js)$/,
+    /(^|\/)pages\/(?!api\/).+\.(tsx|jsx|vue)$/,
+    /(^|\/)routes\/(.+\/)?\+page\.svelte$/,
+    /(^|\/)views\/.+\.vue$/,
+    /(^|\/)screens\/.+\.(tsx|jsx|dart)$/,
+    /_screen\.dart$/,
+  ],
+  api: [/(^|\/)(openapi|swagger)[^/]*\.(json|ya?ml)$/i],
+  routes: [
+    /(^|\/)app\/(.+\/)?route\.(ts|js)$/,
+    /(^|\/)pages\/api\//,
+    /(^|\/)(routes|controllers|handlers|endpoints)\/.+\.(ts|js|py|rb|go|cs)$/i,
+    /(Controller|Endpoints?)\.cs$/,
+  ],
+  decisions: [/(^|\/)(adrs?|decisions?)(\/.*)?[^/]*\.(md|markdown|adoc|txt)$/i],
+};
+const SKIP_DIRS = /(^|\/)(node_modules|vendor|dist|build|\.next|Pods|\.dart_tool)\//;
+// "dir/ (n files)" lines, largest first; deeper folders fold into their parents until at most 40 remain
+const grouped = (files) => {
+  const dirs = files.map((f) => (f.includes("/") ? f.slice(0, f.lastIndexOf("/")).split("/") : []));
+  let depth = Math.max(0, ...dirs.map((d) => d.length));
+  let by;
+  for (;;) {
+    by = new Map();
+    for (const d of dirs) {
+      const k = d.length ? `${d.slice(0, depth).join("/")}/` : "./";
+      by.set(k, (by.get(k) ?? 0) + 1);
+    }
+    if (by.size <= 40 || depth <= 1) break;
+    depth--;
+  }
+  return [...by].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([d, n]) => `  ${d} (${n})`);
+};
+function inventory() {
+  const all = lsFiles();
+  if (!all.length) console.log("! git lists no tracked files here: inventory is empty");
+  const files = all.filter((f) => !SKIP_DIRS.test(f) && !f.startsWith("ai/"));
+  let conf = {};
+  try {
+    conf = JSON.parse(read(at("ai", "kit", "config.json")) ?? "{}") ?? {};
+  } catch {}
+  const out = ["ai-kit inventory (heuristics: verify each group against the code)"];
+  // n: files in the section, when the lines are folder groups
+  const sec = (title, list, n = list.length) => {
+    out.push(`\n## ${title} (${n})`);
+    out.push(...(list.length ? list : ["  none"]));
+  };
+  out.push(`ui: ${conf.ui === undefined ? "unset" : JSON.stringify(conf.ui)} · detected: ${detectUi().join(", ") || "none"}`);
+  out.push(`docs.include: ${JSON.stringify(conf.docs?.include ?? null)}`);
+  sec("ai/ entries outside the layout", layoutWarnings().map((w) => `  ${w.split(" ")[0]}`));
+  const hit = (k) => files.filter((f) => INV[k].some((re) => re.test(f)));
+  const schema = hit("schema");
+  sec("schema sources → ai/data/", grouped(schema), schema.length);
+  const screens = hit("screens");
+  sec("screen files → ai/screens/", grouped(screens), screens.length);
+  const used = INV.screens.filter((re) => screens.some((f) => re.test(f)));
+  if (used.length) out.push(`  ui.include suggestion: ${JSON.stringify(used.map((re) => re.source).join("|"))}`);
+  sec("API spec files → ui.api", hit("api").map((f) => `  ${f}`));
+  const routes = hit("routes");
+  sec("route files → ai/api/ when no API spec file", grouped(routes), routes.length);
+  const decisions = hit("decisions");
+  sec("decision docs → ai/decisions.md", decisions.map((f) => `  ${f}`));
+  const plain = (f) => f.endsWith(".md") && !/(^|\/)(README|CHANGELOG|LICENSE|CLAUDE|AGENTS)\.md$/i.test(f) && !decisions.includes(f);
+  const other = files.filter(plain);
+  sec("other .md outside ai/ (requirements, decisions or human docs)", grouped(other), other.length);
+  console.log(out.join("\n"));
+}
+
 const cmd = process.argv[2];
 if (cmd === "init") init();
 else if (cmd === "migrate") migrate();
+else if (cmd === "inventory") inventory();
 else if (cmd === "check") {
   const out = problems();
   out.forEach((p) => console.log(`ai-kit: ${p}`));
@@ -822,6 +918,6 @@ else if (cmd === "check") {
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {
-  console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate>");
+  console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>");
   process.exit(2);
 }

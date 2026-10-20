@@ -26,7 +26,8 @@ Style: `docs/ai-docs.md`. Checked by `scripts/check-specs.mjs` (pre-commit, warn
 ## Screen spec
 
 - One file per screen: `ai/screens/S-<n>-<slug>.md`, heading `# S-<n> <name>`. Ids never reused.
-- `ai/screens/index.md`: one line per screen, `- S-<n> <name> → S-<n>-<slug>.md`.
+- `ai/screens/index.md`: one line per screen, `- S-<n> <name> → S-<n>-<slug>.md`; a screen without a spec yet:
+  `- <name> → <entry file> (no spec)`, its `S-<n>` given when the spec is written.
 - One screen shared by web and mobile = one file; `web:` / `mobile:` lines only for what differs.
 - Template: `templates/ai/screen.md`.
 
