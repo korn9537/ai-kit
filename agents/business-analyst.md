@@ -26,9 +26,9 @@ Reply with exactly these sections, terse, every claim with its source (path:line
 4. **Conflicts and gaps** — where the ask, the requirements, the rules and the code disagree; what the ask leaves
    undefined (edge cases, other roles, existing data, other screens showing the same thing).
 5. **Standard** — the convention or decision the change follows (path:line), or the new standard it would set and
-   where it belongs: cross-repo → `conventions/<lang>.md` in the ai-kit plugin repo (korn9537/ai-kit); this repo
-   only → `ai/kit/review-checklist.md`; a choice whose reasons must be kept → the decisions source listed first in
-   `ai/kit/analysis-sources.md`.
+   where it belongs: cross-repo (test: `${CLAUDE_PLUGIN_ROOT}/docs/kit-proposals.md`) → a `proposal` issue on
+   korn9537/ai-kit; this repo only → `ai/kit/review-checklist.md`; a choice whose reasons must be kept → the decisions
+   source listed first in `ai/kit/analysis-sources.md`.
 6. **Recommendation** — one option and why; the rejected alternatives and why; the one condition that would
    change the recommendation.
 7. **Owner decisions** — only questions of the four owner kinds in `CLAUDE.core.md` (money, irreversible or

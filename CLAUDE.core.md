@@ -33,9 +33,10 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   source (first in `ai/kit/analysis-sources.md`) with the project's default status, same commit. Small jobs (typo,
   copy, one style value on one screen, move-only refactor, docs) skip both; unsure → summarize.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<lang>.md` for
-  each language in `ai/kit/config.json` `conventions` that the change touches. When summary item 5 sets a standard,
-  the same commit records it where item 5 names (cross-repo `conventions/<lang>.md` in the ai-kit plugin repo, a
-  version bump; this repo `ai/kit/review-checklist.md`).
+  each language in `ai/kit/config.json` `conventions` that the change touches. When summary item 5 sets a standard:
+  this repo only → `ai/kit/review-checklist.md` in the same commit; cross-repo → a `proposal` issue on
+  korn9537/ai-kit, never an edit of the installed plugin. Also for a repeated review finding, a user correction or a
+  kit gap. Filing is pre-approved; when, test, format, fallback: `ai-kit/docs/kit-proposals.md`.
 - **Change only what was asked.** Name the files first and stay inside them; a wider change is one sentence the user
   may pick up. "Remove X" means remove it, not move or rename it; keeping any of it goes to Open, never into the
   change. "Every `<x>`" means every instance of that kind, including ones built a different way: list which changed

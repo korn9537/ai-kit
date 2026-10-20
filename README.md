@@ -9,22 +9,23 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 
 ## Layout
 
-| Path                          | What                                                                   |
-| ----------------------------- | ---------------------------------------------------------------------- |
-| `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                   |
-| `CLAUDE.core.md`              | git, language and working conventions, the final-report format         |
-| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                    |
-| `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                 |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`                     |
-| `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
-| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                               |
-| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                    |
-| `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit         |
-| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs` |
-| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`                 |
-| `conventions/`                | cross-repo coding rules: `general.md`, one per language                |
-| `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                 |
-| `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json` |
+| Path                          | What                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                       |
+| `CLAUDE.core.md`              | git, language and working conventions, the final-report format             |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                        |
+| `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                     |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`      |
+| `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`      |
+| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                                   |
+| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                        |
+| `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit             |
+| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`     |
+| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md` |
+| `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                |
+| `conventions/`                | cross-repo coding rules: `general.md`, one per language                    |
+| `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                     |
+| `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`     |
 
 Hooks (each exits silently when the project has no `ai/kit/`):
 
@@ -116,9 +117,15 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
    and `bash hooks/build-while-dev-guard.test.sh`.
 3. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
-   hook, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
+   hook, command, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
    settings to keep working.
 4. Commit and push.
+
+Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
+session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected
+by the user in a way that holds in any repo, or hits a kit gap. Run `/ai-kit:harvest` in this clone to accept,
+merge or reject them; accepted ones land in one commit that closes them on push, and reach every project through
+`autoUpdate`.
 
 ## Migrating a repo from 1.x
 
@@ -201,9 +208,14 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 2. ทดสอบในโปรเจกต์ด้วย `claude --plugin-dir /path/to/ai-kit` และรัน `claude plugin validate /path/to/ai-kit`
 3. เพิ่มเลข `version` ใน `.claude-plugin/plugin.json` และเขียนหนึ่งบรรทัดใน `CHANGELOG.md`
    - patch (2.0.x) — แก้บั๊ก
-   - minor (2.x.0) — เพิ่ม hook, check หรือ config key ที่มีค่า default
+   - minor (2.x.0) — เพิ่ม hook, command, check หรือ config key ที่มีค่า default
    - major (x.0.0) — โปรเจกต์ต้องแก้ `ai/kit/`, `CLAUDE.md` หรือ settings ถึงจะใช้ต่อได้
 4. commit แล้ว push
+
+กฎหรือข้อบกพร่องที่เจอระหว่างทำงานในโปรเจกต์ agent จะเปิดเป็น GitHub issue label `proposal` ใน repo นี้
+(เกณฑ์และรูปแบบอยู่ใน `docs/kit-proposals.md`: ต้องเขียนกฎได้โดยไม่อ้างชื่อโปรเจกต์ code หรือ path จริง ไม่อย่างนั้นลง
+`ai/kit/review-checklist.md` ของโปรเจกต์แทน) จากนั้นสั่ง `/ai-kit:harvest` ใน clone นี้ agent จะรับ รวม หรือปฏิเสธแต่ละข้อ
+ข้อที่รับจะอยู่ใน commit เดียวที่ปิด issue ตอน push แล้วไปถึงทุกโปรเจกต์ผ่าน `autoUpdate`
 
 ### ย้าย repo จาก 1.x
 

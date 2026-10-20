@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.6.0
+
+- Kit proposals: a project session files a GitHub issue labelled `proposal` on korn9537/ai-kit for a cross-repo
+  standard, a review finding seen twice, a user correction that holds in any repo, or a kit gap; never an edit of
+  the installed plugin (the old core rule pointed there, which an update overwrites). `docs/kit-proposals.md`: when
+  to file, the cross-repo test, search before filing, fallback file `ai/kit/kit-proposals.md` without `gh`.
+  `.github/ISSUE_TEMPLATE/proposal.md`: the issue body.
+- `/ai-kit:harvest` (`commands/harvest.md`): in the ai-kit clone, accept, merge or reject open proposals; accepted
+  ones land in one commit with `Closes #<n>`.
+- `CLAUDE.core.md` Conventions and `agents/business-analyst.md` item 5 point to the issue route.
+- `hooks/session-start.sh`: asks for filing when `ai/kit/kit-proposals.md` is not empty.
+
 ## 2.5.4
 
 - `scripts/check-docs.mjs`: one removed line excuses only one added copy as a move, a copy in its own file first

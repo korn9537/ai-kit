@@ -12,6 +12,9 @@ if [[ -n "$common" && -d "$common" ]]; then printf '%s\n' "$kit_plugin" >"$commo
 rep="$kit_plugin/"
 core="$(cat "$kit_plugin/CLAUDE.core.md")"
 core=${core//ai-kit\//"$rep"}
+if [[ -s "$kit_root/ai/kit/kit-proposals.md" ]]; then
+  core+=$'\n\n'"Unfiled kit proposals in ai/kit/kit-proposals.md: file them per ${rep}docs/kit-proposals.md §Filing, then remove each filed entry (delete the file when empty)."
+fi
 if ! command -v jq >/dev/null 2>&1; then
   printf '%s\n' "$core"
   exit 0
