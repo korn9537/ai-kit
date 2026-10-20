@@ -6,12 +6,13 @@
 - Exempt: `README.md`, mockups, design assets, any doc the project marks human-facing.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
-- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit): emoji, bold, filler (fixed list;
-  about, around, roughly, approximately before a number or every <number>), dates, Thai outside quotes or code.
-  Scope: `docs.include`/`skip` in `ai/kit/config.json`.
+- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):
+  emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a
+  number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates, Thai outside quotes
+  or code. Scope: `docs.include`/`skip` in `ai/kit/config.json`.
   - Not checked: fenced blocks, frontmatter, code spans, a moved line (same text as a removed line of an in-scope
-    doc, outside fences and frontmatter). Indented code is checked. Thai exempt in double or curly quotes and in table rows; dates
-    exempt in quotes.
+    doc, outside fences and frontmatter; one removed line excuses one added line, its own file first). Indented
+    code is checked. Thai exempt in double or curly quotes and in table rows; dates exempt in quotes.
   - Edited line: not reported for a rule when one removed line of the same hunk, outside fences and frontmatter,
     already held at least as many of each fragment (bold: its text; Thai: a run; others: the match). A removed
     table row holds no Thai. Joining two old lines into one is reported.

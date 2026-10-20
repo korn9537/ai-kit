@@ -43,7 +43,7 @@ const RULES = [
   ["bold", /(^|[^\w*])\*\*[^*\s]([^*]*[^*\s])?\*\*/],
   [
     "filler",
-    /(?<![/\w])(etc\.|and so on|please note|it is important|basically|in order to|this (document|section|file) (describes|explains)|(about|around|roughly|approximately)(?=\s+(every\s+)?~?\d))/i,
+    /(?<![/\w])(etc\.|and so on|please note|it is important|basically|in order to|this (document|section|file) (describes|explains)|(about|around|roughly|approximately)(?=\s+(every\s+)?(~?(?!(19|20)\d\d\b)\d|(a\s+)?(dozen|hundred|thousand)(?![-\w])))|~(?=\d))/i,
   ],
   [
     "dated",
@@ -159,15 +159,58 @@ for (const l of (
 // keep only removed lines the rules saw in HEAD; their text marks a moved line
 // an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added
 const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f);
-const removed = new Set();
+// HEAD text of each path, one git process for all; a missing blob reads as ""
+const heads = (paths) => {
+  const out = new Map();
+  if (!paths.length) return out;
+  let buf;
+  try {
+    buf = execFileSync("git", ["cat-file", "--batch"], {
+      input: paths.map((p) => `HEAD:${p}\n`).join(""),
+      stdio: ["pipe", "pipe", "ignore"],
+      maxBuffer: 1 << 28,
+    });
+  } catch {
+    return out;
+  }
+  let at = 0;
+  for (const p of paths) {
+    const nl = buf.indexOf(10, at);
+    const hdr = buf.toString("utf8", at, nl);
+    at = nl + 1;
+    // "<oid> <type> <size>" is followed by content; "missing" or a gitlink line is not
+    const m = /^\S+ (\S+) (\d+)$/.exec(hdr);
+    if (!m) continue;
+    const size = Number(m[2]);
+    if (m[1] === "blob") out.set(p, buf.toString("utf8", at, at + size));
+    at += size + 1;
+  }
+  return out;
+};
+const headText = heads([...new Set(diffs.filter((d) => d.old && inScope(d.old)).map((d) => d.old))]);
+// text -> how many removed lines hold it; each moved line uses one up
+const removed = new Map();
 for (const d of diffs) {
-  const seen = !d.old ? null : inScope(d.old) ? scan(git("show", `HEAD:${d.old}`) ?? "") : new Map();
+  const seen = !d.old ? null : inScope(d.old) ? scan(headText.get(d.old) ?? "") : new Map();
   d.seen = seen;
+  d.own = new Map();
   for (const h of d.hunks) {
     if (seen) h.removed = h.removed.filter(([n]) => seen.has(n));
-    for (const [, r] of h.removed) removed.add(r.trim());
+    for (const [, r] of h.removed) {
+      removed.set(r.trim(), (removed.get(r.trim()) ?? 0) + 1);
+      d.own.set(r.trim(), (d.own.get(r.trim()) ?? 0) + 1);
+    }
   }
 }
+// uses one count of a removed line's text from `from`, and from the global count too
+const take = (from, l) => {
+  const t = l.trim();
+  const n = from?.get(t);
+  if (!t || !n) return false;
+  from.set(t, n - 1);
+  if (from !== removed) removed.set(t, removed.get(t) - 1);
+  return true;
+};
 // fragment counts of each removed line of a hunk, once per rule; a removed table row holds no Thai
 const oldCounts = (h, name, all) => {
   if (!h.counts.has(name)) {
@@ -196,6 +239,7 @@ if (!files.length)
 files = files.filter((f) => inScope(f) && existsSync(f));
 
 const issues = [];
+const todo = [];
 for (const f of files) {
   const text = staged ? git("show", `:${f}`) : readFileSync(f, "utf8");
   if (text === null) continue;
@@ -208,28 +252,33 @@ for (const f of files) {
   for (const [n, l] of scan(text)) {
     for (; d?.seen && k < d.hunks.length && d.hunks[k].end <= n; k++) delta += d.hunks[k].delta;
     const left = d?.seen && !d.seen.has(n - delta);
-    if ((want && !want.has(n) && !left) || (l.trim() && removed.has(l.trim()))) continue;
-    const row = /^\s*\|/.test(l);
-    const h = added.get(f)?.get(n);
-    for (const [name, re, all] of RULES) {
-      if (name === THAI && row) continue;
-      const t = prep(name, l);
-      if (!re.test(t)) continue;
-      // an edited line keeps its old hits: skip when one removed line of its hunk held as many of each fragment
-      if (h) {
-        const got = counts(name, all, t);
-        const { cs, by } = oldCounts(h, name, all);
-        // candidates: removed lines holding the added line's rarest fragment
-        let best = null;
-        for (const g of got.keys()) {
-          const ks = by.get(g) ?? [];
-          if (!best || ks.length < best.length) best = ks;
-          if (!ks.length) break;
-        }
-        if ((best ?? []).some((k) => covers(cs[k], got))) continue;
+    if (!want || want.has(n) || left) todo.push({ f, n, l, d });
+  }
+}
+// a moved line takes a removed copy of its own file first, so a copy elsewhere cannot take it
+for (const x of todo) x.moved = take(x.d?.own, x.l);
+for (const { f, n, l, moved } of todo) {
+  if (moved || take(removed, l)) continue;
+  const row = /^\s*\|/.test(l);
+  const h = added.get(f)?.get(n);
+  for (const [name, re, all] of RULES) {
+    if (name === THAI && row) continue;
+    const t = prep(name, l);
+    if (!re.test(t)) continue;
+    // an edited line keeps its old hits: skip when one removed line of its hunk held as many of each fragment
+    if (h) {
+      const got = counts(name, all, t);
+      const { cs, by } = oldCounts(h, name, all);
+      // candidates: removed lines holding the added line's rarest fragment
+      let best = null;
+      for (const g of got.keys()) {
+        const ks = by.get(g) ?? [];
+        if (!best || ks.length < best.length) best = ks;
+        if (!ks.length) break;
       }
-      issues.push(`${f}:${n} ${name}: ${l.trim().slice(0, 80)}`);
+      if ((best ?? []).some((k) => covers(cs[k], got))) continue;
     }
+    issues.push(`${f}:${n} ${name}: ${l.trim().slice(0, 80)}`);
   }
 }
 

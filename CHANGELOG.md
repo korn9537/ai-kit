@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.5.4
+
+- `scripts/check-docs.mjs`: one removed line excuses only one added copy as a move, a copy in its own file first
+  (a line removed once and added three times reported two hits less than it should). HEAD versions are read with
+  one `git cat-file --batch` instead of one `git show` per changed doc. The filler rule also reports `~` before a
+  digit and about, around, roughly, approximately before (a) dozen, hundred or thousand; a year 1900-2099 after
+  them passes.
+- `scripts/check-docs.test.mjs`: fixture tests (temp git repos) for check-docs.
+- `CLAUDE.core.md`, `conventions/csharp.md`, `conventions/typescript.md`: "over 40 KB" (was "~40 KB");
+  the commit-subagent paragraph in `CLAUDE.core.md` rewrapped. README lists the test.
+
 ## 2.5.3
 
 - MIT `LICENSE`; `plugin.json` names it.

@@ -26,5 +26,5 @@ conflict and is where a repo writes an exception, with its reason.
 9. **Audit and transactions** — audit columns (created/updated at/by) are stamped by a `SaveChangesInterceptor`,
    never by handlers; one request = one transaction.
 10. **Tests** — SQL-level behaviour is tested against a real PostgreSQL (Testcontainers), never a stub.
-11. **Large files** — a file over ~40 KB is split, move-only, into `partial class` files named
+11. **Large files** — a file over 40 KB is split, move-only, into `partial class` files named
     `<Class>.<Group>.cs`.

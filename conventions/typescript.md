@@ -20,5 +20,5 @@ Reader: agents writing or reviewing TypeScript and React. Adds to `general.md`; 
    same-origin relative path; reject `//host` and absolute URLs.
 9. **Dates** — no `toISOString()` for day keys; pin `timeZone` (and `calendar`) on every `Intl` format.
 10. **Next.js** — a route file exports only names Next knows; `page.tsx` holds one component, its default export.
-11. **Large files** — a file over ~40 KB is split, move-only, into a sibling folder; the original file keeps its
+11. **Large files** — a file over 40 KB is split, move-only, into a sibling folder; the original file keeps its
     path and re-exports every name it exported, so no importer changes. No index file in that folder.

@@ -9,21 +9,22 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 
 ## Layout
 
-| Path                         | What                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `.claude-plugin/`            | `plugin.json` (name, version) and `marketplace.json`                   |
-| `CLAUDE.core.md`             | git, language and working conventions, the final-report format         |
-| `agents/`                    | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                    |
-| `hooks/`                     | Claude Code hooks (below), wired in `hooks/hooks.json`                 |
-| `commands/`                  | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`                     |
-| `githooks/pre-commit`        | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
-| `scripts/kit.mjs`            | `init` / `check` / `migrate` (§Commands)                               |
-| `scripts/check-comments.mjs` | comment rule check, run by pre-commit and post-edit                    |
-| `scripts/check-docs.mjs`     | doc rule check on added lines, run by pre-commit and post-edit         |
-| `docs/`                      | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`                 |
-| `conventions/`               | cross-repo coding rules: `general.md`, one per language                |
-| `templates/ai-kit-project/`  | starter `ai/kit/` files, copied by `init` when missing                 |
-| `CHANGELOG.md`               | one line per change; the version lives in `.claude-plugin/plugin.json` |
+| Path                          | What                                                                   |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                   |
+| `CLAUDE.core.md`              | git, language and working conventions, the final-report format         |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                    |
+| `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                 |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`                     |
+| `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`  |
+| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                               |
+| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                    |
+| `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit         |
+| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs` |
+| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`                 |
+| `conventions/`                | cross-repo coding rules: `general.md`, one per language                |
+| `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                 |
+| `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json` |
 
 Hooks (each exits silently when the project has no `ai/kit/`):
 
