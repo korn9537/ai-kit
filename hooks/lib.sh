@@ -23,3 +23,13 @@ kit_conf() {
   [[ -f "$kit_config" ]] && v="$(jq -r "$1 // empty" "$kit_config" 2>/dev/null || true)"
   printf '%s' "${v:-$2}"
 }
+
+# kit_memory_dir: Claude Code's auto-memory dir for this repo (main worktree path, non-alphanumerics -> '-'; a long
+# path's hashed slug is not followed, so a miss only skips the nudge).
+kit_memory_dir() {
+  local main
+  main="$(git -C "$kit_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  main="${main%/.git}"
+  [[ -n "$main" ]] || main="$kit_root"
+  printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/${main//[^a-zA-Z0-9]/-}/memory"
+}

@@ -15,6 +15,12 @@ core=${core//ai-kit\//"$rep"}
 if [[ -s "$kit_root/ai/kit/kit-proposals.md" ]]; then
   core+=$'\n\n'"Unfiled kit proposals in ai/kit/kit-proposals.md: file them per ${rep}docs/kit-proposals.md §Filing, then remove each filed entry (delete the file when empty)."
 fi
+mem="$(kit_memory_dir)"
+# MEMORY.md counts only when it holds more than index links (kit.mjs memoryFiles)
+if [[ -n "$(find "$mem" -maxdepth 1 -name '*.md' ! -name MEMORY.md -print -quit 2>/dev/null)" ]] ||
+  grep -qvE '^[[:space:]]*(#.*|[-*][[:space:]]+\[[^]]*\]\([^)]*\).*)?$' "$mem/MEMORY.md" 2>/dev/null; then
+  core+=$'\n\n'"Local auto-memory files in $mem: run /ai-kit:memory-export to move them into the repo."
+fi
 if ! command -v jq >/dev/null 2>&1; then
   printf '%s\n' "$core"
   exit 0

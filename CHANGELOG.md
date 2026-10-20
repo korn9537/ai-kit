@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.7.0
+
+- Project knowledge lives in the repo, never in auto-memory (one machine only, the team never sees it):
+  `CLAUDE.core.md` rule with the target per kind of fact; references go to `ai/notes.md`.
+- `hooks/memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash): blocks writes into
+  `~/.claude/projects/*/memory/`, names the repo file instead.
+- `kit.mjs init` adds `"autoMemoryEnabled": false` to `.claude/settings.json` (existing projects: rerun init);
+  `init` and `check` warn, never fail, on auto-memory on or memory files left; `hooks/session-start.sh` asks for
+  the export while files are left.
+- `/ai-kit:memory-export` (`commands/memory-export.md`): moves each memory file to its repo target, then deletes
+  the local copy.
+
 ## 2.6.0
 
 - Kit proposals: a project session files a GitHub issue labelled `proposal` on korn9537/ai-kit for a cross-repo

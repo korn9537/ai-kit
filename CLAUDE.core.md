@@ -43,6 +43,13 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   and which did not.
 - **Recommend, do not list.** Options come with a verdict, the reason and the one condition that would flip it; an
   anomaly found while checking: in scope → fix it; outside the request → Open, with its fix (file:line, cost).
+- **Project knowledge lives in the repo, never in auto-memory** (`~/.claude/projects/*/memory/` is one machine
+  only; `init` sets `"autoMemoryEnabled": false`, writes there are hook-guarded). Same commit as the work, per
+  `ai-kit/docs/ai-docs.md`: rule or correction for this repo → `CLAUDE.md` or `ai/kit/review-checklist.md`; holds in
+  any repo → kit proposal (`ai-kit/docs/kit-proposals.md`); decision or constraint → decisions source
+  (`ai/kit/analysis-sources.md`); reference (URL, dashboard, ticket, account name) → `ai/notes.md`, one
+  `- R<n>: <what> → <where>` line each; personal preference of the user → tell them, their `~/.claude/CLAUDE.md`
+  holds it.
 - **Comments** are for AI readers: at most two lines, a constraint or a pointer, no history (`comments:check`,
   `ai-kit/docs/code-comments.md`).
 - **A source file over 40 KB that you need to edit** is split first, move-only, in its own commit.

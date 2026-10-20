@@ -72,6 +72,59 @@ const KIT_HOOK =
   /(^|["'\s])(\$\{CLAUDE_PROJECT_DIR\}["']?\/|\$CLAUDE_PROJECT_DIR["']?\/|\.\/)?ai-kit\/hooks\//;
 const isKitHook = (h) => KIT_HOOK.test(h?.command ?? "");
 const isImportLine = (l) => l.trim().replace(/^[-*]\s+/, "") === IMPORT;
+const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
+// Claude Code's auto-memory dir: main worktree path, non-alphanumerics -> '-' (hooks/lib.sh too); a long path's
+// hashed slug and autoMemoryDirectory are not followed, so a miss only skips the warning
+const memoryDir = () => {
+  const common = tryGit("rev-parse", "--path-format=absolute", "--git-common-dir");
+  const main = common?.replace(/\/\.git$/, "") || root;
+  return join(claudeDir(), "projects", main.replace(/[^a-zA-Z0-9]/g, "-"), "memory");
+};
+// MEMORY.md counts only when it holds more than index links
+const memoryFiles = () => {
+  const d = memoryDir();
+  if (!existsSync(d)) return [];
+  return readdirSync(d).filter(
+    (f) =>
+      f.endsWith(".md") &&
+      (f !== "MEMORY.md" ||
+        readFileSync(join(d, f), "utf8")
+          .split(/\r?\n/)
+          .some((l) => l.trim() && !/^\s*(#|[-*]\s+\[[^\]]*\]\([^)]*\))/.test(l))),
+  );
+};
+// warnings, not problems: this machine's state, and a project before 2.7.0 must keep committing
+function memoryWarnings() {
+  const out = [];
+  const scopes = [
+    at(".claude", "settings.local.json"),
+    at(".claude", "settings.json"),
+    join(claudeDir(), "settings.json"),
+  ];
+  let off = { 0: false, 1: true }[process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY];
+  let mem;
+  for (const p of scopes) {
+    let s;
+    try {
+      s = JSON.parse(read(p) ?? "{}") ?? {};
+    } catch {
+      continue;
+    }
+    const e = s.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY;
+    if (off === undefined && (e === "0" || e === "1")) off = e === "1";
+    if (!mem && Object.hasOwn(s, "autoMemoryEnabled")) mem = { p, v: s.autoMemoryEnabled };
+  }
+  if (off === false)
+    out.push("CLAUDE_CODE_DISABLE_AUTO_MEMORY=0 turns auto-memory on over the settings (fix: unset it)");
+  else if (off === undefined && !mem)
+    out.push('.claude/settings.json does not turn off auto-memory (fix: add "autoMemoryEnabled": false, or run init)');
+  else if (off === undefined && mem.v !== false)
+    out.push(`${mem.p} sets "autoMemoryEnabled": ${JSON.stringify(mem.v)} and overrides lower scopes (fix: remove that key)`);
+  const left = memoryFiles();
+  if (left.length)
+    out.push(`${memoryDir()} holds ${left.length} memory file(s) the team cannot see (fix: /ai-kit:memory-export)`);
+  return out;
+}
 
 function problems() {
   const out = [];
@@ -231,6 +284,21 @@ function initFiles(created = []) {
   else if (!hp && tryGit("config", "core.hooksPath", ".githooks") === null)
     console.log("! not a git repo: core.hooksPath not set");
 
+  // project scope so teammates get it; settings.local.json and user scope are the user's (check reports them)
+  const sp = at(".claude", "settings.json");
+  const st = read(sp);
+  let sj;
+  try {
+    sj = JSON.parse(st ?? "{}") ?? {};
+  } catch {}
+  if (isObj(sj) && !Object.hasOwn(sj, "autoMemoryEnabled")) {
+    sj.autoMemoryEnabled = false;
+    mkdirSync(at(".claude"), { recursive: true });
+    writeFileSync(sp, jsonText(sj, st ? eolOf(st) : "\n"));
+    if (st === null) created.push(".claude/settings.json");
+    console.log('~ .claude/settings.json ("autoMemoryEnabled": false)');
+  }
+
   // the shim reads this; session-start.sh rewrites it each session
   const common = tryGit("rev-parse", "--path-format=absolute", "--git-common-dir");
   if (common && existsSync(common)) {
@@ -247,6 +315,7 @@ function init() {
   initFiles();
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
+  memoryWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
     "restart the Claude Code session so the SessionStart hook injects the working conventions",
@@ -592,6 +661,7 @@ function migrate() {
     byHand.forEach((b) => console.log(`  ${b}`));
   }
   left.forEach((p) => console.log(`! ${p}`));
+  memoryWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
   // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
   const changedPaths = [
@@ -620,6 +690,7 @@ else if (cmd === "migrate") migrate();
 else if (cmd === "check") {
   const out = problems();
   out.forEach((p) => console.log(`ai-kit: ${p}`));
+  memoryWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {
   console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate>");

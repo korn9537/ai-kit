@@ -9,28 +9,29 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 
 ## Layout
 
-| Path                          | What                                                                       |
-| ----------------------------- | -------------------------------------------------------------------------- |
-| `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                       |
-| `CLAUDE.core.md`              | git, language and working conventions, the final-report format             |
-| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                        |
-| `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                     |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`      |
-| `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`      |
-| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                                   |
-| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                        |
-| `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit             |
-| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`     |
-| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md` |
-| `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                |
-| `conventions/`                | cross-repo coding rules: `general.md`, one per language                    |
-| `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                     |
-| `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`     |
+| Path                          | What                                                                                           |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- |
+| `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                                           |
+| `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`                                            |
+| `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export` |
+| `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
+| `scripts/kit.mjs`             | `init` / `check` / `migrate` (§Commands)                                                       |
+| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
+| `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
+| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
+| `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`                     |
+| `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
+| `conventions/`                | cross-repo coding rules: `general.md`, one per language                                        |
+| `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
+| `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`                         |
 
 Hooks (each exits silently when the project has no `ai/kit/`):
 
-- `session-start.sh` (SessionStart) injects `CLAUDE.core.md` with its paths pointing into the plugin, and writes
-  the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim.
+- `session-start.sh` (SessionStart) injects `CLAUDE.core.md` with its paths pointing into the plugin, writes
+  the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim, and asks for
+  `/ai-kit:memory-export` while the repo's auto-memory dir holds files.
 - `review-before-stop.sh` (Stop) blocks the final reply until `ai-kit:change-reviewer` has reviewed code edited
   since the last review. `review-snapshot.sh` (PostToolUse on Agent) records what was reviewed.
   Edits by a finished commit subagent count too; one still running is skipped. Also counted as a review: a
@@ -39,6 +40,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.
 - `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks, then `ai/kit/post-edit.sh`.
+- `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
+  `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A` and `git commit -a` (shared checkout).
 - `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build while the dev port listens.
 
@@ -63,16 +66,19 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
 
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
   writes the `.githooks/pre-commit` shim when missing (rewrites a 1.x shim; warns about any other hook there) and
-  sets `core.hooksPath` to `.githooks` unless another path is set (warns), and writes `<git-common-dir>/ai-kit-root`
-  for the shim.
+  sets `core.hooksPath` to `.githooks` unless another path is set (warns), writes `<git-common-dir>/ai-kit-root`
+  for the shim, and adds `"autoMemoryEnabled": false` to `.claude/settings.json` when the key is absent.
 - `node <plugin>/scripts/kit.mjs check` exits 1 when `ai/kit/config.json` is missing, malformed or not an object,
   when `conventions` is not an array or names a file `conventions/` lacks, when the shim is missing or not the kit
   shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`, `.claude/settings.local.json`
   or `~/.claude/settings.json` enables `ai-kit@korn9537` (the project file is recommended, so teammates get it),
   when `code_dirs` lists `ai-kit` or `shared_checkout_doc` names a missing file (1.x leftovers), when settings still
   run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
-  `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. The pre-commit runner calls it when
-  `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`, `.claude/agents/` or `CLAUDE.md` are staged.
+  `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. It warns (`!`, exit unchanged)
+  when auto-memory is not off (no `autoMemoryEnabled: false` in the highest scope that sets it, or
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`).
+  The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
+  `.claude/agents/` or `CLAUDE.md` are staged.
 - `node <plugin>/scripts/kit.mjs migrate` turns a clean 1.x repo into a plugin one, then runs `init` and `check`
   (§Migrating a repo from 1.x).
 
