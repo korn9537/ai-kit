@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.10.0
+
+- `docs/plan-batching.md`: a request or plan with several items starts with one inventory pass (item → files,
+  functions, shared resources), asks all owner questions at once, and batches items that touch the same file into one
+  commit; separate commits only for move-only splits, contract changes and revertable migrations. A bug or
+  calculation fix covers its whole unit before the commit; a mechanical sweep over many files uses a codemod or
+  script; hot files (plan, decision log, roadmap, lockfile) are updated once per batch.
+- Coordinator pipeline (`CLAUDE.core.md`): when a commit subagent returns, its reviewer (reading `git show <hash>`)
+  and the next independent batch's commit subagent start in the same message; still one commit subagent editing
+  the repo at a time. Fix subagents run once no commit subagent runs.
+- Independent reads, searches and checks go out in one message.
+- `docs/shared-checkout.md`: self-contained commits are per batch of code, not per item.
+
 ## 2.9.0
 
 - `/ai-kit:retrofit` (`commands/retrofit.md`): brings an existing project into the `ai/` layout. No argument →

@@ -61,14 +61,20 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - **Verify once per commit**, right before it, only what changed, with the project's verify commands (CLAUDE.md).
   No unprompted tests.
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded).
-- **A multi-commit plan runs from the main session as coordinator**, so its context stays small: each commit goes to a
-  fresh background subagent (`general-purpose`, description `commit: <step>`) that implements, verifies and commits
+- Independent reads, searches and checks go out together in one message.
+- **Several items** (fixes, features, review findings, upgrades): before the first edit, inventory them, ask all
+  owner questions at once, and batch items that touch the same file into one commit; a fix covers its whole unit; a
+  mechanical sweep uses a codemod or script; hot files once per batch (`ai-kit/docs/plan-batching.md`).
+- **A multi-commit plan runs from the main session as coordinator**, so its context stays small: each batch goes to a
+  fresh background subagent (`general-purpose`, description `commit: <batch>`) that implements, verifies and commits
   it, then returns only hash, files, choices it made and open items (report items 6 and 7 only); an owner decision it
   hits comes back unanswered for the main session to ask. Its brief says it is a commit subagent and must not launch
-  a reviewer. One subagent at a time; the main session keeps talking with the user but does not edit the repo while
-  one runs. When it returns, the main session launches that commit's background reviewer on its hash; CONFIRMED
-  fixes go to a fresh `commit: fix <step>` subagent, then the one re-check; the next step starts after that. A plan
-  whose commits share too much context to hand over (one large refactor) says so and runs in the main session.
+  a reviewer. One commit subagent at a time; the main session keeps talking with the user but does not edit the repo
+  while one runs. When it returns, the main session sends in one message that commit's background reviewer on its
+  hash (reading `git show <hash>`, not the work tree) and the next batch's commit subagent, unless that batch waits
+  on this one; CONFIRMED fixes go to a fresh `commit: fix <batch>` subagent once no commit subagent runs, then the one
+  re-check. A plan whose commits share too much context to hand over (one large refactor) says so and runs in the
+  main session.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply):
   1. **Done** — what changed, 1–3 lines. 2. **Files** — links. 3. **Checked** — each command run and its result, the

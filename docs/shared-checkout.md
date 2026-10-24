@@ -4,8 +4,9 @@ Reader: AI agents. Several sessions may share one working tree and one index. Wh
 push triggers, is in the project's CLAUDE.md §Git.
 
 - Never switch branch; push only when asked.
-- Split work into self-contained commits and commit each as soon as its verification passes (verify once per
-  commit), above all a contract change whose consumers break until both sides land.
+- Split work into self-contained commits, one per batch of items that touch the same code, not one per item
+  (`plan-batching.md`), and commit each as soon as its verification passes (verify once per commit), above all a
+  contract change whose consumers break until both sides land.
 - Stage named files only: never `git add -A`, `.`, a directory or a glob, never `git commit -a`
   (the ai-kit plugin's `hooks/git-add-all-guard.sh` blocks them, also on a heredoc line that starts with such a command).
   Before `git add <file>` read `git diff <file>` for hunks that are not yours; before committing read
