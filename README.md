@@ -20,6 +20,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh` and `review-before-stop.sh`: `hooks/<name>.test.sh` |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
+| `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
 | `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
@@ -138,7 +139,8 @@ With `autoUpdate` the marketplace refreshes at startup. By hand: `claude plugin 
 
 Rule: anything shared lives here; anything about one project goes in its `ai/kit/`.
 
-1. Clone `korn9537/ai-kit` and edit there, never the installed copy under `~/.claude/plugins/`.
+1. Clone `korn9537/ai-kit` and edit there, never the installed copy under `~/.claude/plugins/`. Run
+   `git config core.hooksPath .githooks` once for the clone's pre-commit (line wrap check).
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
    and the `hooks/*.test.sh` and `scripts/*.test.mjs` tests.
 3. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new

@@ -167,8 +167,9 @@ if [[ "$state" == none && -n "$changed" && -z "${new_files//$'\n'/}" ]] && (($(w
 fi
 
 launch="launch a fresh Agent with subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit,
-never an earlier commit's reviewer (sonnet from its frontmatter; pass model \"opus\" only when the commit touches a DB
-schema or migration, a calculation, a permission or a decision recorded as final). Agent type not loaded (plugin
+never an earlier commit's reviewer (sonnet, medium effort from its frontmatter; pass model \"opus\" and effort
+\"high\" only when the commit touches a DB schema or migration, a calculation, a permission or a decision recorded
+as final). Agent type not loaded (plugin
 enabled mid-session): general-purpose, description containing \"review\", told to follow
 $kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
 words, the changed files and their \`git diff\` (or this session's commits). Fix every CONFIRMED finding, judge each

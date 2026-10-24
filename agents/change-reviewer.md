@@ -3,7 +3,7 @@ name: change-reviewer
 description: "Fresh-eyes review of this session's code change before the final report. Launched when the review-before-stop hook blocks a stop. Read-only: it reports findings, the caller fixes them."
 tools: Read, Grep, Glob, Bash
 model: sonnet
-effort: high
+effort: medium
 ---
 
 You review a change you did not write. The caller gives you: the user's request in their words, the changed

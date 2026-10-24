@@ -35,9 +35,9 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both; unsure →
   summarize.
-- **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet (agent frontmatter). Pass
-  `model: "opus"` when the change touches a DB schema or migration, a calculation, a permission, or a decision
-  recorded as final; no other model or effort override.
+- **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet at medium effort (agent
+  frontmatter). Pass `model: "opus"` and `effort: "high"` when the change touches a DB schema or migration, a
+  calculation, a permission, or a decision recorded as final; no other model or effort override.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its
   `ai/screens/S-<n>-*.md`; new screen: `ai/data/` entity → spec → API spec → API → screen; a screen without a
   spec gets one when next changed. Format: `ai-kit/docs/screen-specs.md`.

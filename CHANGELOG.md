@@ -2,9 +2,10 @@
 
 ## 2.11.0
 
-- `ai-kit:business-analyst` and `ai-kit:change-reviewer` default to sonnet (was opus). The caller passes
-  `model: "opus"` when the change touches a DB schema or migration, a calculation, a permission, or a decision
-  recorded as final (`CLAUDE.core.md` "Agent model"; the Stop hook's reason says the same).
+- `ai-kit:business-analyst` and `ai-kit:change-reviewer` default to sonnet at medium effort (was opus, high). The
+  caller passes `model: "opus"` and `effort: "high"` when the change touches a DB schema or migration, a calculation,
+  a permission, or a decision recorded as final (`CLAUDE.core.md` "Agent model"; the Stop hook's reason says the
+  same).
 - BA runs for DB and business-rule changes only; a UI-only change (layout, copy, style) is summarized by the main
   session. A small job's final report holds Done, Checked and Git, plus Decided and Open when they hold anything.
 - `review-before-stop.sh`: a change of at most `review.skip_lines` changed code lines (default 10), with no new file
@@ -19,6 +20,8 @@
   review. Test: `hooks/review-before-stop.test.sh`.
 - Coordinator pipeline: CONFIRMED fixes go back to the commit's own subagent by SendMessage instead of a fresh
   `commit: fix` subagent; a commit subagent's brief has it read `CLAUDE.core.md` "Working conventions" first.
+- Kit clone only: `.githooks/pre-commit` runs `scripts/check-wrap.mjs`, which blocks added prose lines over 120
+  characters in `*.md` and `*.sh`; enable with `git config core.hooksPath .githooks`.
 - `post-edit-check.sh` starts `node` only for the checks whose include/skip scope holds the edited file.
   `handoff-nudge.sh` reads the transcript tail only.
 
