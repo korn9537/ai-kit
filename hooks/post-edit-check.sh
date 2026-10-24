@@ -18,6 +18,13 @@ cd "$root" || exit 0
 [[ -d ai/kit ]] || exit 0
 [[ ! -f package.json || -d node_modules ]] || exit 0
 
+# which checks cover the file (config include/skip, else the scripts' defaults): no node start for the rest
+scope="$({ cat ai/kit/config.json 2>/dev/null || echo '{}'; } | jq -r --arg f "$rel" '
+  . as $c | def hit($k; $i; $s): ($f | test($c[$k].include // $i)) and ($f | test($c[$k].skip // $s) | not);
+  [if hit("comments"; "\\.(tsx?|jsx?|mjs|cs)$"; "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)") then "comments" else empty end,
+   if hit("docs"; "^ai/.*\\.md$"; "(^|/)README\\.md$|/(mockups|design)/") then "docs" else empty end] | join(" ")' \
+  2>/dev/null || echo "comments docs")"
+
 out=""
 # run <label> <filter|-> <cmd...>: keep output only on failure; a filter keeps lines naming this file + the next one
 run() {
@@ -33,9 +40,9 @@ run() {
 }
 
 # the script skips files outside config comments.include
-run "comments:check" - node "$kit_plugin/scripts/check-comments.mjs" --strict "$rel"
+[[ "$scope" == *comments* ]] && run "comments:check" - node "$kit_plugin/scripts/check-comments.mjs" --strict "$rel"
 # lines added since HEAD, files in config docs.include only
-run "docs:check" - node "$kit_plugin/scripts/check-docs.mjs" --strict "$rel"
+[[ "$scope" == *docs* ]] && run "docs:check" - node "$kit_plugin/scripts/check-docs.mjs" --strict "$rel"
 # shellcheck source=/dev/null
 [[ -f ai/kit/post-edit.sh ]] && . ai/kit/post-edit.sh
 

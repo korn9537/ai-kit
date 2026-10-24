@@ -12,10 +12,10 @@ session="$(jq -r '.session_id // empty' <<<"$input")"
 [[ -n "$transcript" && -f "$transcript" && -n "$session" ]] || exit 0
 
 max="$(kit_conf '.handoff.max_context' 150000)"
-# context = what the last main-session reply read: fresh input + cache reads + cache writes
-used="$(jq -R 'fromjson? // empty | select(.type == "assistant" and .isSidechain != true) | .message.usage // empty
-  | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)
-  | select(. > 0)' "$transcript" 2>/dev/null | tail -n 1)"
+# context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
+used="$(tail -n 2000 "$transcript" | jq -R 'fromjson? // empty | select(.type == "assistant" and .isSidechain != true)
+  | .message.usage // empty | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)
+  | select(. > 0)' 2>/dev/null | tail -n 1)"
 [[ -n "$used" ]] || exit 0
 
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"

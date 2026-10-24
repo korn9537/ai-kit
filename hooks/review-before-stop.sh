@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Stop hook: code edited in this session after the last review → block the stop once and ask for a fresh-eyes
-# review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Working conventions"). A review = an Agent call whose
-# description or subagent_type contains "review". Docs (*.md) and files outside the repo do not count; a Bash
-# command that writes into the repo counts (auto mode edits that way); a .md-only Bash write does not. Edits by a
-# finished commit subagent (description "commit: ...") count too; one still running is skipped until it ends.
+# review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Working conventions"). A review = an Agent call with
+# that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
+# (fallback). Docs (*.md) and files outside the repo do not count; a Bash command that writes into the repo counts
+# (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a .md-only Bash write does
+# not. Edits by a finished commit subagent (description "commit: ...") count too; one still running is skipped
+# until it ends.
 #
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
 # Escape hatch: a user message starting with "ไม่ต้อง review" or "skip review" after the last edit.
 # Comment-only: nothing but //, one-line /* */ or blank lines changed since the last review's snapshot
-# (review-snapshot.sh), or since the session began when none was reviewed → no review.
+# (review-snapshot.sh), or since the session began when none was reviewed → no review. Small: at most config
+# review.skip_lines changed code lines, no new file, no path matching review.always, nothing reviewed yet (a fix
+# after a review always goes to its re-check) → no review. Gap: sed -i whose script names /tmp/ is not counted.
 set -euo pipefail
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -33,10 +37,18 @@ project="${project%/}"
 read -r -d '' events_jq <<'JQ' || true
   def re_escape: gsub("(?<c>[.+])"; "\\\(.c)");
   ($root | re_escape) as $r
+  # cd into the root, spelled with or without its trailing slash
+  | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
   | def writes_repo:
-      test("sed -i|perl -pi|git apply|apply_patch|write_text|writeFileSync|open\\([^)]*[\"'][wa]")
+      test("(sed -i|perl -pi)(?![^;&|]*/(private/)?tmp/)|git apply|apply_patch|write_text|writeFileSync")
+      or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']")
+      # as a command word: a codemod or a fixing formatter; mv/cp/rm on a repo path, or after cd into the repo
+      or test("(^|[;&|(\n] *)(npx +|node +|bun +)?[\\w./-]*(codemod|jscodeshift)")
+      or test("(^|[;&|(\n] *)(npx +|pnpm +(exec +)?|yarn +|bunx +)?[\\w./-]*(eslint|prettier|biome|stylelint|ruff)\\b[^;&|\n]*--(fix|write)\\b|gofmt +-w|dotnet +format")
+      or test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]*(" + $r + "|[ \"'](\\./)?(" + $dirs + ")/)")
+      or (test($cd) and test("(^|[;&|(\n] *)(git +)?(mv|cp|rm) (?![^;&|\n]*(/tmp|/private/tmp|\\$\\{?TMP))"))
       or test("(>>?|tee) *[\"']?(\\./|\\$\\{?\\w+\\}?/)?(" + $r + "|(" + $dirs + ")/)")
-      or (test("cd [\"']?" + $r) and test("(^|[^0-9&>])(>>?|tee) *(?!/dev/|/tmp|/private/tmp|&)[^ ]"));
+      or (test($cd) and test("(^|[^0-9&>])(>>?|tee) *(?!/dev/|/tmp|/private/tmp|&)[^ ]"));
     def only_md: [scan("[A-Za-z0-9_./-]+\\.[A-Za-z]{1,6}\\b")] | length > 0 and all(test("\\.md$"));
   fromjson? // empty
   | select((.isSidechain == true) == $side)
@@ -54,10 +66,13 @@ read -r -d '' events_jq <<'JQ' || true
         elif .name == "Bash" and ((.input.command // "") | writes_repo and (only_md | not)) then
           {k: "edit", p: "(via Bash)", ts: $ts}
         elif $side then empty
-        elif (.name == "Agent" or .name == "Task" or .name == "SendMessage")
-             and ([.input.description, .input.subagent_type, .input.summary] | map(. // "") | join(" ")
-               | test("review"; "i")) then
-          {k: "review", ts: $ts, recheck: (.name == "SendMessage")}
+        elif (.name == "Agent" or .name == "Task")
+             and ((.input.subagent_type // "") as $t | ($t | test("change-reviewer"))
+               or (($t == "" or $t == "general-purpose") and ((.input.description // "") as $d
+                 | ($d | test("review"; "i")) and ($d | test("^\\s*commit:"; "i") | not)))) then
+          {k: "review", ts: $ts, recheck: false}
+        elif .name == "SendMessage" and ((.input.summary // "") | test("review"; "i")) then
+          {k: "review", ts: $ts, recheck: true}
         else empty end
     elif $side then empty
     elif .type == "user" and .isMeta != true then
@@ -70,9 +85,10 @@ read -r -d '' tail_jq <<'JQ' || true
   sort_by(.ts) | . as $e
   | [range(length) as $i | $e[$i]
      | if .k != "closed" then . elif ([$e[:$i][] | select(.k == "review")] | last | .recheck) == true then .k = "review" else empty end]
-  | (map(.k == "review") | rindex(true)) as $last
-  | (if $last == null then . else .[($last + 1):] end)
-  | map(select(.k == "edit") | .p) | unique | .[]
+  | . as $x | (map(.k == "review") | rindex(true)) as $last
+  # state of the last review: fresh agent, SendMessage re-check, or none (none yet, skip, closed)
+  | {state: (if $last == null then "none" else {"true": "recheck", "false": "reviewed"}[$x[$last].recheck | tostring] // "none" end),
+     files: ((if $last == null then $x else $x[($last + 1):] end) | map(select(.k == "edit") | .p) | unique)}
 JQ
 # config code_dirs: top-level folders a Bash redirect writes code into
 dirs="$(kit_conf '.code_dirs | map(gsub("\\."; "\\.")) | join("|")' 'apps|src|packages|scripts|\.claude|\.githooks')"
@@ -95,12 +111,20 @@ done
 last="$(jq -c '.last_assistant_message // empty | strings
   | {type: "assistant", timestamp: "9999", message: {content: [{type: "text", text: .}]}}' <<<"$input" 2>/dev/null || true)"
 [[ -n "$last" ]] && events+=$'\n'"$(jq -R --arg root "$project/" --arg dirs "$dirs" --argjson side false "$events_jq" <<<"$last" || true)"
-files="$(jq -rs "$tail_jq" <<<"$events")"
+result="$(jq -cs "$tail_jq" <<<"$events")"
+files="$(jq -r '.files[]' <<<"$result")"
 [[ -n "$files" ]] || exit 0
+state="$(jq -r '.state' <<<"$result")"
 
+# no snapshot: diff only the paths this session edited (other sessions share the checkout), all when via Bash
+specs=(.)
+if ! grep -qxF '(via Bash)' <<<"$files"; then
+  specs=()
+  while IFS= read -r f; do specs+=(":(literal)$f"); done <<<"$files"
+fi
 code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); prints anything that is not a comment
-  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- . ':(exclude)*.md' | grep -E '^-' || true
-  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- . ':(exclude)*.md' \
+  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' | grep -E '^-' || true
+  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' \
     | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
     | sed -E 's/^[+-][[:space:]]*//' \
     | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
@@ -110,30 +134,54 @@ session="$(jq -r '.session_id // empty' <<<"$input")"
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null || true)"
 snapshot=""
 [[ -n "$session" && -n "$gitdir" && -f "$gitdir/claude-review/$session" ]] && snapshot="$(cat "$gitdir/claude-review/$session")"
+changed="" new_files="" paths=""
 if [[ -n "$snapshot" ]]; then
   # Both sides built by review-snapshot.sh, so untracked files compare line by line too.
+  specs=(.)
   now_tree="$("$(dirname "$0")/review-snapshot.sh" --tree "$project" 2>/dev/null || true)"
-  [[ -n "$now_tree" && -z "$(code_since "$snapshot" "$now_tree")" ]] && exit 0
+  if [[ -n "$now_tree" ]]; then
+    changed="$(code_since "$snapshot" "$now_tree")"
+    [[ -z "$changed" ]] && exit 0
+    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- . ':(exclude)*.md')"
+    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- . ':(exclude)*.md')"
+  fi
 else
   since="$(jq -R 'fromjson? // empty | .timestamp // empty' -r "$transcript" | head -1 || true)"
   base="$(git -C "$project" rev-list -1 --before="$since" HEAD 2>/dev/null || true)"
   if [[ -n "$since" && -n "$base" ]]; then
-    untracked="$(git -C "$project" ls-files --others --exclude-standard -- . ':(exclude)*.md' || true)"
-    [[ -z "$untracked" && -z "$(code_since "$base")" ]] && exit 0
+    new_files="$(git -C "$project" ls-files --others --exclude-standard -- "${specs[@]}" ':(exclude)*.md' || true)"
+    changed="$(code_since "$base")"
+    [[ -z "$new_files" && -z "$changed" ]] && exit 0
+    new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md')"
+    paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md')"
   fi
 fi
+skip_lines="$(kit_conf '.review.skip_lines' 10)"
+always="$(kit_conf '.review.always' '(^|/)(migrations?|schema|auth|permissions?|polic(y|ies))([/._-]|$)|\.(sql|prisma)$')"
+# JS-style regex (jq test, as the other config patterns); an invalid one counts as a match
+hits_always() { jq -Rse --arg re "$always" 'split("\n") | any(.[]; test($re; "i"))' <<<"$paths" >/dev/null 2>&1 \
+  || [[ $? -ne 1 ]]; }
+if [[ "$state" == none && -n "$changed" && -z "${new_files//$'\n'/}" ]] && (($(wc -l <<<"$changed") <= skip_lines)) &&
+  ! hits_always; then
+  exit 0
+fi
 
-reason="Code changed since the last review. If this commit's reviewer already re-checked once and nothing left is a
-CONFIRMED data or rule issue, write under \"Checked\" as plain text with no quotes or backticks: Review closed: re-checked once, no third pass. Then stop. Re-checking fixes for the findings of the same commit: SendMessage that
-commit's reviewer only the fix diff (summary containing \"review\"), once. Otherwise launch a fresh Agent with
-subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit (its model and effort are fixed in
-$kit_plugin/agents/change-reviewer.md; do not override them); never reuse an earlier commit's reviewer. If that agent type is
-not loaded (the plugin was enabled mid-session), use general-purpose with a description containing \"review\" and tell it to read
-and follow $kit_plugin/agents/change-reviewer.md, where \${CLAUDE_PLUGIN_ROOT} means $kit_plugin. Give it the user's request in their words, the changed files and
-their \`git diff\` (or the commits made in this session). When it reports, fix every CONFIRMED finding and judge
-each PLAUSIBLE one; findings from the re-check are fixed without a third pass unless CONFIRMED and about data or
-rule correctness. Until a background reviewer reports, end the turn with one line saying the review is running; the
-final report comes after its findings. Report the review under \"Checked\". Files:
-$files"
+launch="launch a fresh Agent with subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit,
+never an earlier commit's reviewer (sonnet from its frontmatter; pass model \"opus\" only when the commit touches a DB
+schema or migration, a calculation, a permission or a decision recorded as final). Agent type not loaded (plugin
+enabled mid-session): general-purpose, description containing \"review\", told to follow
+$kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
+words, the changed files and their \`git diff\` (or this session's commits). Fix every CONFIRMED finding, judge each
+PLAUSIBLE one. Until it reports, end the turn with one line saying the review is running; the final report comes
+after. Report the review under \"Checked\"."
+case "$state" in
+  reviewed) reason="Code changed since the last review. Fixes for its findings: SendMessage that reviewer only the
+fix diff, summary containing \"review\", once. New work instead: $launch" ;;
+  recheck) reason="Code changed since the re-check. Fixes for its findings, none of them a CONFIRMED data or rule
+issue left: write under \"Checked\" as plain text with no quotes or backticks:
+Review closed: re-checked once, no third pass. Then stop. New work instead: $launch" ;;
+  *) reason="Code changed with no review yet: $launch" ;;
+esac
+reason+=$'\n'"Files:"$'\n'"$files"
 
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'

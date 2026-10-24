@@ -2,7 +2,7 @@
 name: change-reviewer
 description: "Fresh-eyes review of this session's code change before the final report. Launched when the review-before-stop hook blocks a stop. Read-only: it reports findings, the caller fixes them."
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 effort: high
 ---
 

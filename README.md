@@ -17,6 +17,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh` and `review-before-stop.sh`: `hooks/<name>.test.sh` |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
@@ -37,13 +38,16 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim, and asks for
   `/ai-kit:memory-export` while the repo's auto-memory dir holds files.
 - `review-before-stop.sh` (Stop) blocks the final reply until `ai-kit:change-reviewer` has reviewed code edited
-  since the last review. `review-snapshot.sh` (PostToolUse on Agent) records what was reviewed.
-  Edits by a finished commit subagent count too; one still running is skipped. Also counted as a review: a
-  user message starting with "skip review" or "ไม่ต้อง review", and, right after a re-check, a main-session reply
-  with `Review closed: re-checked once` (not quoted).
+  since the last review. A review is an Agent call of that type (or a general-purpose one with "review" in its
+  description, the fallback). `review-snapshot.sh` (PostToolUse on Agent) records what was reviewed. Before the first
+  review a small change passes without one: at most `review.skip_lines` changed code lines, no new file, no path
+  matching `review.always`. Edits by a finished commit subagent count too; one still running is skipped. Also counted
+  as a review: a user message starting with "skip review" or "ไม่ต้อง review", and, right after a re-check, a
+  main-session reply with `Review closed: re-checked once` (not quoted).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.
-- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks, then `ai/kit/post-edit.sh`.
+- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks whose scope holds the file,
+  then `ai/kit/post-edit.sh`.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A` and `git commit -a` (shared checkout).
@@ -53,7 +57,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -62,7 +66,10 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 `conventions` lists the language files in `conventions/` that apply to the project, without `.md` (e.g.
 `["go", "sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception
 for one project goes in its `review-checklist.md`, with its reason. `shared_checkout_doc` defaults to this
-plugin's `docs/shared-checkout.md`.
+plugin's `docs/shared-checkout.md`. `review.skip_lines` defaults to 10 changed lines, + and − counted apart (0
+reviews every change); `review.always` (a JS-style regex) to migration, schema, auth, permission and policy paths
+and `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its
+re-check.
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns
@@ -133,7 +140,7 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 
 1. Clone `korn9537/ai-kit` and edit there, never the installed copy under `~/.claude/plugins/`.
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
-   and `bash hooks/build-while-dev-guard.test.sh`.
+   and the `hooks/*.test.sh` and `scripts/*.test.mjs` tests.
 3. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
    hook, command, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
    settings to keep working.

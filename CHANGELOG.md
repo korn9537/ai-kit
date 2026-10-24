@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.11.0
+
+- `ai-kit:business-analyst` and `ai-kit:change-reviewer` default to sonnet (was opus). The caller passes
+  `model: "opus"` when the change touches a DB schema or migration, a calculation, a permission, or a decision
+  recorded as final (`CLAUDE.core.md` "Agent model"; the Stop hook's reason says the same).
+- BA runs for DB and business-rule changes only; a UI-only change (layout, copy, style) is summarized by the main
+  session. A small job's final report holds Done, Checked and Git, plus Decided and Open when they hold anything.
+- `review-before-stop.sh`: a change of at most `review.skip_lines` changed code lines (default 10), with no new file
+  and no path matching `review.always` (migrations, schema, auth, permission, policy, `.sql`, `.prisma`), passes
+  without a review. A review is an Agent of type `ai-kit:change-reviewer`, or a general-purpose one with "review" in
+  its description (an Explore agent named "review ..." no longer counts). The block reason names only the next step
+  for the review state (none, reviewed, re-checked). Without a snapshot the diff covers only the paths this session
+  edited, so another session's work in a shared checkout is not counted. `open("x")` reads and `sed -i` on `/tmp`
+  no longer count as repo writes; a codemod, a formatter run with `--fix`/`--write`, and `mv`/`cp`/`rm` on a repo path
+  do. `cd <root>` now matches the root without its trailing slash. The small-change pass applies only before the first
+  review (fixes always go to the re-check), and a commit batch whose description holds "review" is not taken for a
+  review. Test: `hooks/review-before-stop.test.sh`.
+- Coordinator pipeline: CONFIRMED fixes go back to the commit's own subagent by SendMessage instead of a fresh
+  `commit: fix` subagent; a commit subagent's brief has it read `CLAUDE.core.md` "Working conventions" first.
+- `post-edit-check.sh` starts `node` only for the checks whose include/skip scope holds the edited file.
+  `handoff-nudge.sh` reads the transcript tail only.
+
 ## 2.10.0
 
 - `docs/plan-batching.md`: a request or plan with several items starts with one inventory pass (item → files,

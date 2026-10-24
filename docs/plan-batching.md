@@ -31,5 +31,6 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 - One commit subagent edits the repo at a time. When it returns, send in one message: its commit's background
   reviewer (brief: read `git show <hash>`, not the work tree) and, unless the next batch waits on this one, the next
   batch's commit subagent.
-- CONFIRMED fixes for a reviewed commit go to a `commit: fix <batch>` subagent once no commit subagent runs, then the
+- CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (summary
+  `commit: fix <batch>`, no "review") once no commit subagent runs, then the
   one re-check.

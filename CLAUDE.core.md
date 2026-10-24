@@ -26,14 +26,18 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   else inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the
   request goes to Open.
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
-  stage, SLA, permission, scope, calculation, or anything a user sees behave differently. First run the read-only
-  `ai-kit:business-analyst` agent and build the summary from its report: 1. Problem · 2. Recommendation (one, with
-  rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data, other modules) · 5.
-  Standard it sets or follows. Touches an owner decision → show the summary and wait for a go; otherwise show it and
-  go on with the recommendation; BA assumptions go to Decided. A choice whose reasons must be kept →
-  `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
+  stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
+  change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report; a UI-only
+  change (layout, copy, style, no rule or data) is summarized by the main session without it: 1. Problem · 2.
+  Recommendation (one, with rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data,
+  other modules) · 5. Standard it sets or follows. Touches an owner decision → show the summary and wait for a go;
+  otherwise show it and go on with the recommendation; BA assumptions go to Decided. A choice whose reasons must be
+  kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both; unsure →
   summarize.
+- **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet (agent frontmatter). Pass
+  `model: "opus"` when the change touches a DB schema or migration, a calculation, a permission, or a decision
+  recorded as final; no other model or effort override.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its
   `ai/screens/S-<n>-*.md`; new screen: `ai/data/` entity → spec → API spec → API → screen; a screen without a
   spec gets one when next changed. Format: `ai-kit/docs/screen-specs.md`.
@@ -68,18 +72,22 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - **A multi-commit plan runs from the main session as coordinator**, so its context stays small: each batch goes to a
   fresh background subagent (`general-purpose`, description `commit: <batch>`) that implements, verifies and commits
   it, then returns only hash, files, choices it made and open items (report items 6 and 7 only); an owner decision it
-  hits comes back unanswered for the main session to ask. Its brief says it is a commit subagent and must not launch
-  a reviewer. One commit subagent at a time; the main session keeps talking with the user but does not edit the repo
+  hits comes back unanswered for the main session to ask. Its brief says it is a commit subagent, must not launch
+  a reviewer, and first reads the "Working conventions" of `ai-kit/CLAUDE.core.md` (a subagent does not get this
+  text). One commit subagent at a time; the main session keeps talking with the user but does not edit the repo
   while one runs. When it returns, the main session sends in one message that commit's background reviewer on its
   hash (reading `git show <hash>`, not the work tree) and the next batch's commit subagent, unless that batch waits
-  on this one; CONFIRMED fixes go to a fresh `commit: fix <batch>` subagent once no commit subagent runs, then the one
-  re-check. A plan whose commits share too much context to hand over (one large refactor) says so and runs in the
-  main session.
+  on this one; CONFIRMED fixes go back to that commit's own subagent by SendMessage (it holds the context; summary
+  `commit: fix <batch>`, without the word review) once no commit subagent runs, then the one re-check. A plan whose
+  commits share too much context to hand over (one large refactor) says so and runs in the main session.
 - No emoji in replies, docs or UI copy.
-- **A finished task ends with this report** (drop a line that does not apply):
+- **A finished task ends with this report** (drop a line that does not apply; a small job, one that skips the
+  summary, reports Done, Checked and Git, plus Decided and Open when they hold anything):
   1. **Done** — what changed, 1–3 lines. 2. **Files** — links. 3. **Checked** — each command run and its result, the
-     `ai-kit:change-reviewer` findings, and what was not checked. Any code change goes through it (in a commit
-     subagent the coordinator launches it; the Stop hook enforces; a message starting with "skip review" or
+     `ai-kit:change-reviewer` findings, and what was not checked. Any code change goes through it. Before the first
+     review the Stop hook lets a change of at most `review.skip_lines` changed lines (default 10), with no new file
+     and no `review.always` path, pass; a calculation, permission or final-decision change is reviewed anyway (in a
+     commit subagent the coordinator launches it; the Stop hook enforces; a message starting with "skip review" or
      "ไม่ต้อง review" opts out); its findings on code you just changed are fixed and re-checked once by the same
      reviewer (fix diff only), with a fresh background reviewer per commit; re-check findings are fixed without a
      third pass unless CONFIRMED and about data or rule correctness, and the report then says, as plain text with no
