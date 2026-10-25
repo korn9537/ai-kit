@@ -53,6 +53,7 @@ sed -i.bak '1,2s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "pass: 2 changed lines, no review" pass - "$(edit src/a.ts)"
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "block: 20 changed lines, no review yet" block "no review yet" "$(edit src/a.ts)"
+run_case "block: the brief reads the diff and the commits without the token records" block "-- . ':(exclude)ai/usage'" "$(edit src/a.ts)"
 run_case "block: an Explore agent named review is not a review" block "no review yet" \
   "$(edit src/a.ts)" "$(line Agent '{"subagent_type": "Explore", "description": "review folders"}')"
 run_case "pass: change-reviewer after the edit" pass - \

@@ -22,6 +22,8 @@ Check, in this order:
    client composes no business values (`${CLAUDE_PLUGIN_ROOT}/conventions/general.md` item 11).
 4. **Correctness** — bugs, missing null/empty/error states, a write left out of its transaction.
 
+`ai/usage/` holds kit-written token records: skip them.
+
 Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
 
 Reply with findings only, most severe first. Each: file:line · what is wrong · which rule or request it breaks ·
