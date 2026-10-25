@@ -56,8 +56,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   for a "Next session" prompt when the task ends. It never blocks.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
-- `usage-log.sh` (Stop) records each round's token use to `ai/usage/<YYYY-MM>/<session>.jsonl` (the next commit
-  carries it) and shows a one-line summary to the user only; it never blocks.
+- `usage-log.sh` (Stop) records each round's token use to a part file `ai/usage/<YYYY-MM>/<session>.<n>.jsonl` (the
+  next commit carries it) and shows a one-line summary to the user only; it never blocks.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
@@ -84,10 +84,12 @@ and `.sql`/`.prisma`. The skip applies only before the first review: a fix after
 re-check.
 
 `usage.enabled` (default `true`) turns the token records off with `false`. `usage.prompts` is `"full"` (default) or
-`"none"`: with `"full"` the first record of each round holds its prompt, secret-looking values masked and cut to
-1,000 characters. `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default
-prices; a model with no price is reported apart. Records are committed with the next commit (`githooks/pre-commit`
-stages `ai/usage/` by name), and `init` adds `ai/usage/** merge=union` to `.gitattributes`.
+`"none"`: with `"full"` the first record of each round holds its prompt, secret-looking values masked, cut to
+1,000 characters and stored base64. `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`) overrides the
+kit's default prices; a model with no price is reported apart. Records are committed with the next commit
+(`githooks/pre-commit` stages `ai/usage/` by name, except in a path-limited commit). A record never modifies a tracked
+file: it appends to the session's newest part file while that part is not in the index, else it starts part `n+1`,
+so a branch switch or rebase is never blocked.
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns

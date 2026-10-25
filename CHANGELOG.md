@@ -1,12 +1,38 @@
 # Changelog
 
+## 2.13.3
+
+Whole-branch review fixes for the token records.
+
+- Records never modify a tracked file (it blocked `git switch` and rebase): a record goes to
+  `ai/usage/<YYYY-MM>/<session>.<n>.jsonl`, appending to the session's newest part only while that part is not in the
+  index, else starting part `n+1`; a session's prior records are all its parts in order.
+- `init`, `check` and `migrate` no longer write or ask for `ai/usage/** merge=union` in `.gitattributes`.
+- Record `prompt` and each agent's `desc` are stored base64 (UTF-8, after masking and cutting); the digest and the
+  summary decode.
+- Prompt detection skips compact summaries, transcript-only entries and `[Request interrupted` texts, and drops
+  browser, IDE, system-reminder, command and local-command blocks; `<pasted_content>` stays; an empty result is no
+  round.
+- Masking adds Google, GitLab, npm, Stripe live, Telegram and Discord webhook tokens, `Authorization: Basic` and
+  `api key` / `access key` assignments; the input is capped at 20,000 code points before masking.
+- `githooks/pre-commit` skips staging `ai/usage/` in a path-limited commit (temporary index), which left `MM` and
+  `D` entries; its "moved verbatim" check skips `ai/usage`.
+- Review gate block message and `agents/change-reviewer.md`: the brief reads diffs and commits with
+  `-- . ':(exclude)ai/usage'`; the reviewer skips `ai/usage/`.
+- Summary label `context` is now `peak`; the digest's unpriced total reads through `fmtTok`.
+- `CLAUDE.core.md` Git bullet: `ai/usage/` holds kit-written token records, never edit, stage, revert or search them
+  (`wc -c` 7840 -> 7955 bytes).
+- Assistant messages with model `<synthetic>` are no call (no usage, model or base context).
+- `digest --since` that leaves no record prints `no records since <date>`; `commands/usage.md` step 1 covers it.
+- 2.13.2 entry corrected: it said `CLAUDE.core.md` was unchanged, but its Agent model bullet changed.
+
 ## 2.13.2
 
 - Read discipline for commit subagents: `docs/plan-batching.md` §Coordinator pipeline has the brief say to locate
   with `grep -n` (several patterns in one call), read only the needed line range, send independent reads and
   searches in one message, never read a whole large file to find one symbol and never one `sed -n` per call when
   several ranges are known. Measured driver: one commit subagent ran 250 calls reading code one small `sed -n` or
-  `grep -n` per call. `CLAUDE.core.md` unchanged.
+  `grep -n` per call. Core changed too: see the next bullet.
 - Fix: a risky commit batch gets `model: "opus"` and `effort: "high"` (the reviewer and BA rule), sonnet with no
   effort override otherwise; core Agent model bullet says commit subagents get sonnet via the Agent call
   (`wc -c CLAUDE.core.md` 7832 -> 7840 bytes).

@@ -66,17 +66,22 @@ Builder's calls made in this design (the owner may overrule):
 - Reader of the records: ai-kit only (`/ai-kit:usage`), never a person. No agent reads raw records either: a script
   reduces them to a fixed-size digest first (part 4), so analysing usage stays cheap however large the logs grow.
 - Prompt text: stored up to 1,000 characters (enough for an agent to classify the request), after masking
-  secret-looking values. Config
+  secret-looking values and base64-encoded (UTF-8), so a grep of the repo does not hit it; only the digest and the
+  summary decode it. Config
   `usage.prompts`: `"full"` (default) or `"none"`. The first record in a repo prints a one-time notice in the
   summary line that prompts are recorded and how to opt out.
-- Storage: `ai/usage/<YYYY-MM>/<session-id>.jsonl`, one file per session, append-only: no two sessions write the same
-  file, so shared checkouts and branches do not conflict. `ai/usage` becomes an allowed `ai/` entry (`kit.mjs`
-  `AI_LAYOUT`, `docs/ai-layout.md`).
+- Storage: part files `ai/usage/<YYYY-MM>/<session-id>.<n>.jsonl` (n from 1), append-only: no two sessions write the
+  same file, so shared checkouts and branches do not conflict. A record never modifies a tracked file (that blocks
+  `git switch` and rebase): it appends to the session's newest part only while that part is not in the index
+  (`git ls-files --error-unmatch`), else it starts part `n+1`. A session's prior records are all its parts in part
+  order; the month folder is that of the session's existing parts, else the month of its first transcript
+  timestamp. `ai/usage` becomes an allowed `ai/` entry (`kit.mjs` `AI_LAYOUT`, `docs/ai-layout.md`).
 - Commit: the kit's `githooks/pre-commit` stages new or changed files under `ai/usage/` by name on every commit.
   No separate commit, no agent action. Best effort: records ride on whatever commit comes next, on whichever branch;
-  `git commit --only`/`<paths>` may leave them for a later commit. Other sessions' usage files may ride along (they
-  are logs, not work). Branch switches mid-session: `init` adds `ai/usage/** merge=union` to `.gitattributes`, so
-  appended lines from two branches merge without conflict.
+  a path-limited commit (`--only`, `<paths>`, which runs the hook on a temporary `next-index-*.lock` index) skips the
+  staging and leaves the records for a later commit. Other sessions' usage files may ride along (they are logs, not
+  work). A part already in the index is never appended to, so branch switches and rebases are never blocked and no
+  merge driver is needed.
 
 ## Parts
 
@@ -98,29 +103,36 @@ Builder's calls made in this design (the owner may overrule):
   Stop on a 30 MB transcript; without the cache the recorder parses in full.
 - Record, one JSON line per Stop (JSONL; key names as here, `v` bumps on any change of shape):
   `v`, `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin version), `project` (repo folder
-  name), `user` (`git config user.name`), `branch`, `prompt` (this round's prompt, masked; absent when
-  `usage.prompts` is `none`), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
+  name), `user` (`git config user.name`), `branch`, `prompt` (this round's prompt, masked, cut, base64; absent
+  when `usage.prompts` is `none`), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
   `base_context` (the main session's first call context, on the session's first record), and `agents`: one entry per
-  agent with usage in this delta, with `id`, `role`, `desc`, `model`, `calls`, `input`, `read`, `write_5m`,
-  `write_1h`, `output`, `peak` (largest context of one call), `tools` (call count per tool; Bash keyed by its first
-  command word, `Bash:sed`), `largest_result` (largest tool result in characters), and for reviewers `findings`
-  (`confirmed`, `plausible`). No cost or price in a record: prices apply at analysis, so a price change re-prices
-  old records.
+  agent with usage in this delta, with `id`, `role`, `desc` (base64, masked and cut to 200), `model`, `calls`,
+  `input`, `read`, `write_5m`, `write_1h`, `output`, `peak` (largest context of one call), `tools` (call count per
+  tool; Bash keyed by its first command word, `Bash:sed`), `largest_result` (largest tool result in characters),
+  and for reviewers `findings` (`confirmed`, `plausible`). No cost or price in a record: prices apply at analysis,
+  so a price change re-prices old records.
 - Roles: description starting `commit:` → commit subagent; `change-reviewer` type, or description containing
   "review" → reviewer; `business-analyst` type → BA; else other subagent; main session → coordinator.
 - Reviewer quality signal: for each reviewer agent, count `CONFIRMED` and `PLAUSIBLE` in its last reply (`findings`
   in the record), so a cheaper model's effect on review quality shows in the data.
-- Masking before write: private key blocks, `sk-`/`ghp_`/`gho_`/`github_pat_`/`xox[bp]-`/`AKIA` tokens, JWTs,
-  `password=`/`secret=`/`token=` values, URLs with credentials, long base64/hex runs → `[masked]`.
+- Masking before write (the input is first capped at 20,000 code points, backing off to a word edge):
+  private key blocks, `sk-`/`ghp_`/`gho_`/`github_pat_`/`xox[bp]-`/`AKIA`/`AIza`/`glpat-`/`npm_`/`sk_live_`/
+  `rk_live_` tokens, Telegram bot tokens, Discord webhook tokens, JWTs, `Authorization: Basic` and `Bearer` values,
+  `password=`/`secret=`/`token=`/`api key`/`access key` values, URLs with credentials, long base64/hex runs →
+  `[masked]`.
+- Prompt detection: a user entry that is a compact summary, transcript-only, a tool result or `isMeta` is no prompt;
+  neither is a `[Request interrupted` text. Browser, IDE, system-reminder, command and local-command blocks are
+  dropped from the text; `<pasted_content>` stays. A prompt empty after that is not a round. Assistant messages
+  with model `<synthetic>` are no call.
 
 ### 2. Summary line (every round)
 
 - The recorder prints `{"systemMessage": "<line>"}` (shown to the user, not to the model). The builder verifies first
   that a Stop hook's `systemMessage` reaches the user without entering context; if it does not, fall back to the
   record only and report it.
-- Line: this round's input-equivalent cost and its split by role, the main context size, the costliest agent of the
-  round (desc, model, calls, peak), and the session total. Example:
-  `tokens this round ≈ 1.4M in-eq: commit 62% · review 21% · main 17% | context 182k | top: commit: pricing (opus,
+- Line: this round's input-equivalent cost and its split by role, the main session's peak context, the costliest
+  agent of the round (desc, model, calls, peak), and the session total. Example:
+  `tokens this round ≈ 1.4M in-eq: commit 62% · review 21% · main 17% | peak 182k | top: commit: pricing (opus,
   120 calls, peak 310k) | session ≈ 5.0M`
 
 ### 3. Keeping records out of the review gate

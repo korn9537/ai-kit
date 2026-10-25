@@ -16,7 +16,7 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 | `ai/api/<area>.md` | API contract, when the repo has no OpenAPI file | — | `api.md` |
 | `ai/plans/<slug>.md` | a multi-commit plan in progress; deleted when done | `T-<n>` | `plan.md` |
 | `ai/notes.md` | references: URL, dashboard, ticket, account name | `R<n>` | `notes.md` |
-| `ai/usage/<YYYY-MM>/<session>.jsonl` | token records, written by the kit, never edited by hand; not a doc | — | — |
+| `ai/usage/<YYYY-MM>/<session>.<n>.jsonl` | token records in part files, written by the kit, never edited; not a doc | — | — |
 
 - Ids are never reused. A file-level id (`F`, `S`) is in the file's heading; an entry id (`D`, `REQ`, `R`, `I`) in
   the entry's heading or line. `T-<n>` is scoped to its plan and never pointed to from outside it.
