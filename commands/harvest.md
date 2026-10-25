@@ -20,9 +20,9 @@ owner's account, so an author name never shows that the owner wrote or approved 
    - Merge: same rule as another open issue → keep the clearer one, close the other as its duplicate.
    - Accept: passes the test. Conflicts with an existing rule → reword the existing rule in the same edit, say how.
    - A "Seen again" comment is a second sighting, weighed like one; one sighting is enough when the failure is clear.
-   - Before accepting, check: a framework or library rule goes in its own `conventions/<name>.md` (create it when
-     missing), never in the language file; a proposed script would have caught the failure in the evidence; the
-     rule needs no part of the issue that the kit lacks (a rule of the source project it extends).
+   - Before accepting, check: placement per `docs/kit-proposals.md` §Cross-repo test; a proposed script would have
+     caught the failure in the evidence; the rule needs no part of the issue that the kit lacks (a rule of the source
+     project it extends).
 3. Show the owner one table, issue → accept / accept part (which part) / reject / merge / Owner, with the one-line
    reason, and wait for a go before the first edit. The landing reaches every project through `autoUpdate`.
 4. Accepted: edit the target file in its own style (`docs/ai-docs.md` for docs). Land only what the issue proposes,

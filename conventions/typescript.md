@@ -1,7 +1,6 @@
 # TypeScript and React conventions
 
-Reader: agents writing or reviewing TypeScript and React. Adds to `general.md`; the repo's
-`ai/kit/review-checklist.md` wins on a conflict and is where a repo writes an exception, with its reason.
+Reader: agents writing or reviewing TypeScript and React. Adds to `general.md`.
 
 1. **API types** — never hand-written: the client is generated from the OpenAPI spec, regenerated and committed
    in the same change as the API.
@@ -21,7 +20,7 @@ Reader: agents writing or reviewing TypeScript and React. Adds to `general.md`; 
    same-origin relative path; reject `//host` and absolute URLs.
 9. **Dates** — no `toISOString()` for day keys; pin `timeZone` (and `calendar`) on every `Intl` format.
 10. **Next.js** — a route file exports only names Next knows; `page.tsx` holds one component, its default export.
-11. **Large files** — a file over 40 KB is split, move-only, into a sibling folder; the original file keeps its
+11. **Large files** — rule: `general.md` item 12. The split goes into a sibling folder; the original file keeps its
     path and re-exports every name it exported, so no importer changes. No index file in that folder. In a NestJS repo,
     a provider class: `nestjs.md` item 1 replaces this item.
 12. **Lint baseline** — the root ESLint config extends `js.configs.recommended` beside `typescript-eslint`

@@ -32,3 +32,7 @@ on a conflict and is where a repo writes an exception, with its reason.
     component) that composes it; the client only formats, never joins responses or computes business values
     (totals, status, what a role may do). Extra reads only for cached lookups, parts loaded on their own, a
     sub-list with its own paging; a repo with screen specs declares them there (`docs/screen-specs.md`).
+12. **Large files** — a source file over 40 KB that you need to edit is split first, move-only, in its own commit.
+    A lint error the move surfaces is fixed in a follow-up commit, or its suppression names the real reason the rule
+    does not apply; "moved verbatim" is no reason (pre-commit rejects it). How: `typescript.md` item 11,
+    `csharp.md` item 11, `nestjs.md` item 1.

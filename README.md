@@ -43,8 +43,10 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   description, the fallback). `review-snapshot.sh` (PostToolUse on Agent, Task and SendMessage) records what was
   reviewed. Before the first
   review a small change passes without one: at most `review.skip_lines` changed code lines, no new file, no path
-  matching `review.always`. Edits by a finished commit subagent count too; one still running is skipped. Also counted
-  as a review: a user message starting with "skip review" or "ไม่ต้อง review", and, right after a re-check, a
+  matching `review.always` (such a path is reviewed regardless of size). A change of only `//` comments, one-line `/*
+  */` or blank lines since the last review (or since the session began when none) passes too. Edits by a finished
+  commit subagent count too; one still running is skipped. Also counted as a review: a user message starting with
+  "skip review" or "ไม่ต้อง review" after the last edit (earlier edits included), and, right after a re-check, a
   main-session reply with `Review closed: re-checked once` (not quoted).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.

@@ -18,6 +18,7 @@ Style: `docs/ai-docs.md`. Checked by `scripts/check-specs.mjs` (pre-commit, warn
 
 ## Order
 
+- A screen change starts from its `ai/screens/S-<n>-*.md`.
 - New screen: `docs/ai-layout.md` §Order and links. The API's reads are shaped by the screen; rules and states
   come from `ai/data/`.
 - Existing screen without a spec: write it when the screen is next changed, not before.

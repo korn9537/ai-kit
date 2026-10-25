@@ -15,8 +15,8 @@ Source: GitHub issues on `korn9537/ai-kit`, label `proposal`. Filed from project
 
 - Pass: the rule reads complete without the project's name, domain, customers, business rules, code or paths, and
   holds for every repo in that language or framework (or every repo, for `general.md` and core). A
-  framework or library rule goes in its own `conventions/<name>.md` (`nestjs.md`, `typeorm.md`), never in the
-  language file.
+  framework or library rule goes in its own `conventions/<name>.md` (`nestjs.md`, `typeorm.md`; create it when
+  missing), never in the language file.
 - Fail → a standard for this repo only, no issue: a check in `ai/kit/pre-commit.sh` when a script can catch it,
   else a line in `ai/kit/review-checklist.md`.
 - The repo is public: an issue that needs a real snippet or path to make sense fails the test.

@@ -2,11 +2,9 @@
 
 - Reader: AI agents only; no human reads these.
 - Scope: `ai/**/*.md`, every category in `docs/ai-layout.md`. Files outside `ai/` are not governed here.
-- A doc the agent creates goes under `ai/`, in this form. Another place or form only when the user names it.
 - Categories, file names, ids and format per type: `docs/ai-layout.md`; screen and API specs:
   `docs/screen-specs.md`.
-- Human-read docs, mockups, design assets: outside `ai/`, never checked. A human-form doc the user asks for goes
-  outside `ai/`.
+- Human-read docs, mockups, design assets, and any human-form doc the user asks for: outside `ai/`, never checked.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
 - Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):

@@ -1,7 +1,6 @@
 # SQL (PostgreSQL) conventions
 
-Reader: agents writing or reviewing schema, migrations and queries. Adds to `general.md`; the repo's
-`ai/kit/review-checklist.md` wins on a conflict and is where a repo writes an exception, with its reason.
+Reader: agents writing or reviewing schema, migrations and queries. Adds to `general.md`.
 
 1. **Time** — `timestamptz`, values in UTC.
 2. **Append-only tables** — a ledger or history table has no UPDATE or DELETE path; a correction is a new row.

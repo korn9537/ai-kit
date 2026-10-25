@@ -29,5 +29,5 @@ step=$(((used - max) / 50000))
 mkdir -p "$gitdir/claude-review"
 printf '%s\n' "$step" >"$mark"
 
-note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session."
+note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session: a paste-ready prompt in a code block holding the goal, the steps left, decisions made here and not in the repo, files to read first and open items; nothing the repo or git log already holds."
 jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $n}}'

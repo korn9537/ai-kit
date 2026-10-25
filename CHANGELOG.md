@@ -23,6 +23,23 @@
 - `README.md`, `scripts/kit.mjs`: hook bullets corrected; "§Install" citations name "Install in a project".
 - `templates/ai-kit-project/config.json`: `comments.include` no longer lists `py` (the check reads `//` and `/* */`).
 
+- `CLAUDE.core.md` 11019 -> 7793 bytes (injected every session): text moved to where it is needed, duplicates removed,
+  no rule dropped. Coordinator pipeline in full in `docs/plan-batching.md` (core keeps a pointer; `commands/retrofit.md`
+  points there); the 40 KB split rule is `conventions/general.md` item 12 (typescript, csharp, nestjs keep the how);
+  the Stop hook mechanics stay in `README.md` (core keeps what the agent does); the Project knowledge target map is
+  `docs/ai-layout.md` §Where a fact goes (`commands/memory-export.md` reads it there); screen specs and several
+  items are one line plus a pointer (`docs/screen-specs.md` gained "a screen change starts from its spec"); "work
+  outside the request" is defined once, in report item 7; the Next session content list is in the
+  `hooks/handoff-nudge.sh` note.
+- `CLAUDE.core.md`: the Language bullet no longer writes the Review closed phrase in a code span (the hook ignores a
+  phrase preceded by a backtick or quote); it names the phrase of report item 3, which stays plain text.
+- `conventions/*.md`: the "review-checklist wins" sentence is only in `general.md`, the others say "Adds to".
+- `docs/ai-docs.md`: dropped the line repeating core's rule for where a doc goes; human-doc lines folded into one.
+- `commands/harvest.md`: framework placement points to `docs/kit-proposals.md` §Cross-repo test (which now says to
+  create the file when missing). `templates/ai-kit-project/review-checklist.md`: items 2 and 3 dropped (the reviewer
+  already checks CLAUDE.md hard rules and `general.md` item 4). `README.md` §Hooks: "skip review" covers earlier
+  edits. `githooks/pre-commit`: comment points to `general.md` item 12.
+
 ## 2.12.2
 
 - `hooks/session-start.sh`: makes the core paths absolute with `sed`; bash 3.2 (macOS) took 2 s for the

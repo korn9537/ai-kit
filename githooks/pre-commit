@@ -46,7 +46,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   }
 fi
 
-# A lint suppression names why the rule does not apply; "moved verbatim" is no reason (CLAUDE.core.md, 40 KB split).
+# A lint suppression names why the rule does not apply; "moved verbatim" is no reason (conventions/general.md item 12, 40 KB split).
 moved="$(git -c core.quotePath=false diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*.md' \
   | grep -E '^\+' | grep -vE '^\+\+\+ ' | grep -iE 'eslint-disable[^*]*--[[:space:]]*moved verbatim')"
 if [ -n "$moved" ]; then

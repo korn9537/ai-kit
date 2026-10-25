@@ -24,6 +24,16 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 - Outside `ai/`: human-read docs (customer requirements, meeting notes), generated files, history (git log).
   A doc under `ai/` points to its human source, never copies it.
 
+## Where a fact goes
+
+Project knowledge lives in the repo, never in auto-memory; same commit as the work.
+
+- rule or correction for this repo → `CLAUDE.md` or `ai/kit/review-checklist.md`
+- holds in any repo → kit proposal (`docs/kit-proposals.md`)
+- decision or constraint → `ai/decisions.md` (or the source `ai/kit/analysis-sources.md` names)
+- reference (URL, dashboard, ticket, account name) → `ai/notes.md`, one `- R<n>` line each (Per type)
+- personal preference of the user → tell them; their `~/.claude/CLAUDE.md` holds it
+
 ## Order and links
 
 - New feature: data → screen or feature spec → API spec → API → screen or job.

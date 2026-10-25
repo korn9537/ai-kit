@@ -18,8 +18,8 @@ Rules for every step:
 - One source per category: the commit that creates an `ai/` category file repoints its line in
   `ai/kit/analysis-sources.md` to the layout path. The old AI-facing file moves into `ai/` (`move`) or stays as the
   human `source:`; the plan says which.
-- Each category is its own commit, run as a commit subagent per the multi-commit plan rule in the working
-  conventions. A category over 15 files (entities, screens) splits into commits of at most 15.
+- Each category is its own commit, run as a commit subagent per `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md`
+  §Coordinator pipeline. A category over 15 files (entities, screens) splits into commits of at most 15.
 - End with the working-conventions report: files written under Files, stale docs under Decided, open questions
   under Open. Each category's report copies the plan's new `open:` lines to Open, so they survive the plan's
   deletion.
