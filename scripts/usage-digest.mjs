@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { collectSession, transcriptsDir } from "./usage-collect.mjs";
 import { maskPrompt } from "./usage-mask.mjs";
-import { buildRecord, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
+import { buildRecord, dec, enc, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
 
 const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
 const PEAK_OUTLIER = 150000;
@@ -82,7 +82,7 @@ export function baselineRecords(repoRoot, who = {}, since = "") {
         project: who.project ?? "", user: who.user ?? "", branch: who.branch ?? "",
       });
       if (!rec || (since && rec.ts < since)) continue;
-      if (sess.prompts.length) rec.prompt = maskPrompt(sess.prompts[0].text);
+      if (sess.prompts.length) rec.prompt = enc(maskPrompt(sess.prompts[0].text));
       else delete rec.prompt;
       out.recs.push(rec);
     } catch {
@@ -133,7 +133,7 @@ export function digest(recs, prices, meta = {}) {
   // Distinct agents: calls and tools add up across records, peak and largest result are maxima.
   const agents = new Map();
   for (const x of rows) {
-    const g = agents.get(x.key) ?? { role: x.role, desc: x.a.desc, model: x.a.model, session: x.r.session, user: x.r.user, calls: 0, peak: 0, largest: 0, cost: 0, tools: new Map(), findings: null, kit: x.r.kit };
+    const g = agents.get(x.key) ?? { role: x.role, desc: dec(x.a.desc), model: x.a.model, session: x.r.session, user: x.r.user, calls: 0, peak: 0, largest: 0, cost: 0, tools: new Map(), findings: null, kit: x.r.kit };
     g.calls += x.a.calls ?? 0;
     g.peak = Math.max(g.peak, x.a.peak ?? 0);
     g.largest = Math.max(g.largest, x.a.largest_result ?? 0);
@@ -286,7 +286,7 @@ export function digest(recs, prices, meta = {}) {
   for (const x of rows) {
     const e = rds.get(x.rk) ?? { cost: 0, round: x.r.round, user: x.r.user, prompt: "", roles: new Map() };
     e.cost += c(x);
-    e.prompt ||= x.r.prompt ?? "";
+    e.prompt ||= dec(x.r.prompt);
     bump(e.roles, x.role, c(x));
     rds.set(x.rk, e);
   }

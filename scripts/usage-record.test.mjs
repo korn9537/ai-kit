@@ -1,7 +1,7 @@
 // Tests for usage-record.mjs: cumulative session totals to a per-round delta record, and the summary line.
 // Usage: node scripts/usage-record.test.mjs
 import { maskPrompt } from "./usage-mask.mjs";
-import { buildRecord, summaryLine, weight } from "./usage-record.mjs";
+import { buildRecord, dec, enc, summaryLine, weight } from "./usage-record.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -56,7 +56,11 @@ eq("delta subtracts prior records; unchanged agent omitted, zero tool keys dropp
 eq("nothing new → null", buildRecord(session2, [r1, r2], ctx2), null);
 eq("resume after cache loss: no double count", all.reduce((n, r) => n + readOf(r), 0), 1300);
 eq("round = number of prompts so far", r2.round, 2);
-eq("prompt masked and cut", r1.prompt, maskPrompt(session.prompts[0].text));
+eq("prompt masked, cut, then base64", [r1.prompt, dec(r1.prompt)], [enc(maskPrompt(session.prompts[0].text)), "fix it with password=[masked]"]);
+eq("record line holds neither the plain prompt nor the plain desc", [JSON.stringify(r1).includes("fix it"), JSON.stringify(r1).includes("commit: foo")], [false, false]);
+eq("agent desc is base64, masked and cut to 200", [dec(r1.agents[1].desc), dec(buildRecord({ ...session, agents: { x1: { ...sub, desc: `token=abc ${"ab ".repeat(100)}` } } }, [], ctx).agents[0].desc)],
+  ["commit: foo", `token=[masked] ${"ab ".repeat(100)}`.slice(0, 200)]);
+eq("Thai prompt round-trips through base64", dec(buildRecord({ ...session, prompts: [{ round: 1, ts: "2026-01-01T00:00:00Z", text: "แก้ราคา ✓" }] }, [], ctx).prompt), "แก้ราคา ✓");
 eq("prompts none → no prompt key", "prompt" in buildRecord(session, [], { ...ctx, prompts: "none" }), false);
 eq("commits only in this round", r2.commits, ["a1b2c3d"]);
 eq("duration from the round's prompt", r2.duration_s, 90);
@@ -76,13 +80,13 @@ const rB = buildRecord(sessionMore, [rA], { ...ctx, now: new Date("2026-01-01T00
 eq("same round: durations sum to the round's wall time", [rA.round, rB.round, rA.duration_s + rB.duration_s], [1, 1, 180]);
 eq("prompt only on the first record of a round", ["prompt" in rA, "prompt" in rB], [true, false]);
 
-const long = { ...agent({ desc: `a long\n   description ${"x".repeat(100)}`, calls: 99999, read: 9e12, output: 9e12, peak: 9e8 }) };
+const long = { ...agent({ desc: enc(`a long\n   description ${"x".repeat(100)}`), calls: 99999, read: 9e12, output: 9e12, peak: 9e8 }) };
 const opus = { ...long, model: "claude-opus-5-5" };
 const big = { agents: [opus, { ...opus, id: "c", role: "commit", model: "q" }, { ...opus, id: "r", role: "reviewer" }, { ...opus, id: "b", role: "ba", model: "q" }] };
 const capped = summaryLine(big, [big, big, big], { "claude-opus-5-5": 4 }, false);
 eq("summary part capped at 200 characters; in-eq dropped when desc shrink is not enough", [[...capped].length <= 200, capped.includes("in-eq")], [true, false]);
 eq("notice appended whole after the cap", summaryLine(big, [big], { "claude-x": 2 }, true).endsWith(' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)'), true);
-eq("desc collapsed to one line", [capped.includes("\n"), summaryLine({ agents: [agent({ desc: "a\n\nb", calls: 1, read: 5 })] }, [], prices, false).includes("top: a b ")], [false, true]);
+eq("desc collapsed to one line", [capped.includes("\n"), summaryLine({ agents: [agent({ desc: enc("a\n\nb"), calls: 1, read: 5 })] }, [], prices, false).includes("top: a b ")], [false, true]);
 
 let threw = false;
 try {

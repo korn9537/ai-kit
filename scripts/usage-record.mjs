@@ -12,7 +12,12 @@ export const DEFAULT_RATIOS = {
   "claude-sonnet-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
 };
 
+// prompt and desc are stored base64 (UTF-8), so a grep of the repo for a word does not hit a record.
+export const enc = (s) => Buffer.from(String(s ?? ""), "utf8").toString("base64");
+export const dec = (s) => (typeof s === "string" ? Buffer.from(s, "base64").toString("utf8") : "");
+
 const LIMIT = 200;
+const DESC_MAX = 200;
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
 const NOTICE = ' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)';
 const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", other: "other" };
@@ -30,7 +35,7 @@ function deltaAgents(session, prior) {
         for (const [t, n] of Object.entries(p.tools ?? {})) wasTools[t] = (wasTools[t] ?? 0) + n;
       }
     }
-    const d = { id: a.id, role: a.role, desc: a.desc, model: a.model };
+    const d = { id: a.id, role: a.role, desc: enc(maskPrompt(a.desc ?? "", DESC_MAX)), model: a.model };
     for (const k of COUNTED) d[k] = Math.max(0, (a[k] ?? 0) - was[k]);
     d.peak = a.peak ?? 0;
     d.tools = {};
@@ -66,7 +71,7 @@ export function buildRecord(session, prior, ctx) {
     user: ctx.user,
     branch: ctx.branch,
   };
-  if (p && ctx.prompts !== "none" && !prior.some((r) => r.round === round)) rec.prompt = maskPrompt(p.text);
+  if (p && ctx.prompts !== "none" && !prior.some((r) => r.round === round)) rec.prompt = enc(maskPrompt(p.text));
   rec.duration_s = Number.isFinite(since) ? Math.max(0, Math.round((ctx.now.getTime() - since) / 1000)) : 0;
   rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h) => !seen.has(h));
   if (!prior.length && session.baseContext != null) rec.base_context = session.baseContext;
@@ -129,7 +134,7 @@ export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
   const cost = (a) => weight(a, prices) ?? 0;
   const anyPriced = rec.agents.some((a) => weight(a, prices) !== null);
   const top = [...rec.agents].sort((x, y) => (anyPriced ? cost(y) - cost(x) : units(y) - units(x)))[0];
-  const name = (top.desc || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
+  const name = (dec(top.desc) || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
   const sessionCost = totals(sessionRecs.flatMap((r) => r.agents), prices);
   const build = (n, withEq) => `tokens this round ≈ ${totals(rec.agents, prices)}${withEq ? ` (in-eq ${fmtTok(total)})` : ""}: ${split}`
     + ` | context ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`

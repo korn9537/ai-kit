@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
-import { modelShort } from "./usage-record.mjs";
+import { enc, modelShort } from "./usage-record.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -32,10 +32,11 @@ function match(desc, got, re) {
 const P = { "claude-opus-5-5": 4, "claude-sonnet-5-5": 2 };
 const OPUS = "claude-opus-5-5";
 const SONNET = "claude-sonnet-5-5";
-const ag = (o) => ({ id: "main", role: "coordinator", desc: "", model: OPUS, calls: 1, input: 0, read: 0, write_5m: 0, write_1h: 0,
-  output: 0, peak: 0, tools: {}, largest_result: 0, ...o });
+// records store prompt and desc base64; the helpers take plain text
+const ag = (o) => ({ id: "main", role: "coordinator", model: OPUS, calls: 1, input: 0, read: 0, write_5m: 0, write_1h: 0,
+  output: 0, peak: 0, tools: {}, largest_result: 0, ...o, desc: enc(o.desc ?? "") });
 const rec = (o) => ({ v: 1, ts: "2026-02-01T10:00:00Z", session: "s1aaaaaa", round: 1, kit: "2.13.0", project: "p", user: "alice",
-  branch: "b", duration_s: 5, commits: [], agents: [], ...o });
+  branch: "b", duration_s: 5, commits: [], agents: [], ...o, ...(o.prompt === undefined ? {} : { prompt: enc(o.prompt) }) });
 
 const recs = [
   rec({
@@ -81,6 +82,8 @@ match("person and cost in totals", d, /by user: alice \$[\d.]+ \d+%, bob /);
 match("base context trend", d, /base context: 2026-02 40k|base context: .*2026-02 /);
 match("header counts", d, /^records 3 · sessions 2 · rounds 3 · commits 1 · 2026-02-01\.\.2026-02-03/);
 eq("a round's cost spans its records (round 2 of s2 is its own round)", (d.match(/^- \$[\d.]+ r\d+ /gm) ?? []).length, 3);
+match("digest decodes the prompt", d, /^- \$[\d.]+ r1 alice: .*\| fix the login bug$/m);
+match("digest decodes an agent desc", d, /commit "commit: fix login" opus/);
 eq("long prompt cut", d.split("\n").filter((l) => l.startsWith("- $") && l.includes("refactor")).every((l) => l.includes("…")), true);
 
 // size: bounded however many records, users, kits, models and tools there are
@@ -166,7 +169,7 @@ try {
     const b = baselineRecords(proj, { user: "me", project: "proj" });
     eq("baseline: one record per session with usage, round = prompt count, prompt = the first prompt",
       b.recs.map((r) => [r.session, r.kit, r.user, r.round, r.prompt]).sort(),
-      [["sess-one", "baseline", "me", 1, "do the thing"], ["sess-three", "baseline", "me", 2, "first ask"], ["sess-two", "baseline", "me", 1, "other"]]);
+      [["sess-one", "baseline", "me", 1, enc("do the thing")], ["sess-three", "baseline", "me", 2, enc("first ask")], ["sess-two", "baseline", "me", 1, enc("other")]]);
     eq("baseline: records carry the whole session", b.recs.find((r) => r.session === "sess-one").agents[0].read, 1000);
     eq("baseline: a session that fails to collect is skipped and counted", b.skipped, 1);
     const bd = digest(b.recs, P, { source: "baseline", sessionsSkipped: b.skipped });

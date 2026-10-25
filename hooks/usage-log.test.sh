@@ -57,6 +57,9 @@ check "record: first stop writes one line under ai/usage/<YYYY-MM>/<session>.<n>
 check "record: stdout is {\"systemMessage\": ...} and exit 0" \
   "$(t bash -c '[[ "$1" == 0 ]] && jq -e ".systemMessage | startswith(\"tokens this round\")" <<<"$2" >/dev/null' _ "$RC" "$OUT")" \
   "rc=$RC out=$OUT"
+check "record: the prompt is stored base64, not as plain text, and the digest shows it" \
+  "$(t bash -c '! grep -q "fix the login bug" "$1" && [[ "$(jq -r .prompt "$1" | base64 -d)" == "fix the login bug" ]] &&
+    CLAUDE_PROJECT_DIR="$2" node "$3" digest | grep -q "| fix the login bug"' _ "$file" "$REPO" "$PWD/../scripts/usage.mjs")"
 check "record: the first record in a repo carries the prompts notice" "$(t test "$OUT" != "${OUT%prompts are recorded in ai/usage*}")"
 check "record: user, project and branch come from git" \
   "$(t jq -e --arg p "$(basename "$REPO")" '.user == "tester" and .project == $p and (.branch | length > 0)' "$file")"
