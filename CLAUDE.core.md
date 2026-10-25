@@ -7,7 +7,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 ## Git
 
 - The checkout and index may be shared with other sessions: stage named files only (hook-guarded), read
-  `git diff --cached --stat` before committing, revert only your own hunks, push only when asked. Details:
+  `git diff --cached --stat` before committing, revert only your own hunks, push only when asked. `ai/usage/` holds
+  kit-written token records: never edit, stage, revert or search them; the pre-commit adds them. Details:
   `ai-kit/docs/shared-checkout.md`.
 
 ## Language
