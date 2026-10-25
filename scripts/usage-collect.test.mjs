@@ -1,0 +1,111 @@
+// Tests for usage-collect.mjs: transcript JSONL to cumulative per-agent totals, with an incremental cache.
+// Usage: node scripts/usage-collect.test.mjs
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { collectSession, loadCache, roleOf, saveCache, transcriptsDir } from "./usage-collect.mjs";
+
+let passed = 0;
+let failed = 0;
+function eq(desc, got, want) {
+  const g = JSON.stringify(got);
+  const w = JSON.stringify(want);
+  if (g === w) {
+    passed++;
+    console.log(`ok   - ${desc}`);
+  } else {
+    failed++;
+    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
+  }
+}
+const pick = (o, keys) => Object.fromEntries(keys.split(" ").map((k) => [k, o[k]]));
+
+const usage = (input, read, w5, w1, output) => ({
+  input_tokens: input,
+  cache_read_input_tokens: read,
+  cache_creation_input_tokens: w5 + w1,
+  cache_creation: { ephemeral_5m_input_tokens: w5, ephemeral_1h_input_tokens: w1 },
+  output_tokens: output,
+});
+const asst = (id, ts, block, u, extra = {}) =>
+  JSON.stringify({ type: "assistant", timestamp: ts, ...extra, message: { id, model: "claude-opus-5", content: [block], usage: u } });
+const user = (ts, content, extra = {}) => JSON.stringify({ type: "user", timestamp: ts, ...extra, message: { content } });
+const text = (t) => ({ type: "text", text: t });
+const tool = (id, name, input) => ({ type: "tool_use", id, name, input });
+const result = (id, content) => ({ type: "tool_result", tool_use_id: id, content });
+const lines = (...l) => l.join("\n") + "\n";
+
+const dir = mkdtempSync(join(tmpdir(), "usage-collect-"));
+const main = join(dir, "proj", "sess.jsonl");
+const sub = join(dir, "proj", "sess", "subagents");
+mkdirSync(sub, { recursive: true });
+
+const u1 = usage(3, 900, 0, 50, 10);
+const mainLines = [
+  user("2026-01-01T00:00:00Z", "first ask"),
+  user("2026-01-01T00:00:01Z", "<system-reminder>x</system-reminder>"),
+  user("2026-01-01T00:00:01Z", "meta text", { isMeta: true }),
+  user("2026-01-01T00:00:01Z", "<task-notification>done</task-notification>"),
+  user("2026-01-01T00:00:01Z", "sidechain text", { isSidechain: true }),
+  asst("m1", "2026-01-01T00:00:02Z", text("looking"), u1),
+  asst("m1", "2026-01-01T00:00:02Z", tool("t1", "Bash", { command: "cd /x && sed -n 1p f" }), { ...u1, output_tokens: 30 }),
+  user("2026-01-01T00:00:03Z", [result("t1", "x".repeat(5000))]),
+  asst("m2", "2026-01-01T00:00:04Z", tool("t2", "Bash", { command: "git commit -m msg" }), usage(0, 0, 0, 0, 0)),
+  asst("m2", "2026-01-01T00:00:04Z", tool("t3", "Read", { file_path: "/a" }), usage(0, 0, 0, 0, 0)),
+  user("2026-01-01T00:00:05Z", [result("t2", [text("[main a1b2c3d] msg\n 1 file changed")]), result("t3", "ok")]),
+  user("2026-01-01T00:00:06Z", [text("second ask")]),
+  asst("s1", "2026-01-01T00:00:07Z", text("side"), usage(50, 50, 50, 50, 50), { isSidechain: true }),
+  JSON.stringify({ type: "queue-operation", timestamp: "2026-01-01T00:00:08Z" }),
+];
+writeFileSync(main, lines(...mainLines));
+writeFileSync(join(sub, "agent-x1.jsonl"), lines(asst("a1", "2026-01-01T00:00:04Z", text("done"), usage(1, 2, 3, 4, 5), { isSidechain: true })));
+writeFileSync(join(sub, "agent-x1.meta.json"), JSON.stringify({ description: "commit: foo", agentType: "general-purpose", model: "haiku" }));
+writeFileSync(
+  join(sub, "agent-x2.jsonl"),
+  lines(
+    asst("b1", "2026-01-01T00:00:04Z", text("CONFIRMED early"), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+    asst("b2", "2026-01-01T00:00:05Z", text("CONFIRMED a. CONFIRMED b. PLAUSIBLE c."), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+  ),
+);
+writeFileSync(join(sub, "agent-x2.meta.json"), JSON.stringify({ description: "Review the change", agentType: "ai-kit:change-reviewer" }));
+writeFileSync(join(sub, "agent-x3.jsonl"), lines(asst("c1", "2026-01-01T00:00:04Z", text("hi"), usage(1, 1, 1, 1, 1), { isSidechain: true })));
+
+const s = collectSession(main);
+eq("streamed blocks counted once, last usage wins", s.agents.main.output, 30);
+eq("main excludes sidechain lines", s.agents.main.calls, 2);
+eq("token fields", pick(s.agents.main, "input read write_5m write_1h"), { input: 3, read: 900, write_5m: 0, write_1h: 50 });
+eq("peak = largest input+read+writes of one call", s.agents.main.peak, 953);
+
+const base = join(dir, "proj", "base.jsonl");
+writeFileSync(base, lines(asst("z1", "t", text("a"), usage(20, 90, 10, 0, 1)), asst("z2", "t", text("b"), usage(1, 500, 0, 0, 1))));
+eq("base context = first main call", collectSession(base).baseContext, 120);
+eq("tools: Bash by first word after a leading cd", s.agents.main.tools, { "Bash:sed": 1, "Bash:git": 1, Read: 1 });
+eq("largest tool result in chars", s.agents.main.largest_result, 5000);
+eq("prompts: real user text only", s.prompts.map((p) => p.text), ["first ask", "second ask"]);
+eq("commit hashes from git commit output", s.commits.map((c) => c.hash), ["a1b2c3d"]);
+eq("subagent role from meta", s.agents.x1.role, "commit");
+eq("reviewer findings from its last reply", s.agents.x2.findings, { confirmed: 2, plausible: 1 });
+eq("no meta → other, still counted", [s.agents.x3.role, s.agents.x3.calls], ["other", 1]);
+
+// a half-written last line is skipped and the offset stays before it; the cache then reads only what was appended
+const part = join(dir, "proj", "part.jsonl");
+const m3 = asst("m3", "2026-01-01T00:01:00Z", text("third"), usage(1, 1, 1, 1, 1));
+writeFileSync(part, lines(...mainLines) + m3.slice(0, 40));
+const cache = loadCache(join(dir, "no-such-cache.json"));
+const s2 = collectSession(part, cache);
+eq("half-written last line skipped", s2.agents.main.calls, 2);
+appendFileSync(part, m3.slice(40) + "\n");
+const cacheFile = join(dir, "cache", "usage.json");
+saveCache(cacheFile, cache);
+const cache2 = loadCache(cacheFile);
+const s3 = collectSession(part, cache2);
+eq("cache: second run reads only appended lines, same totals", [s3.agents.main.calls, cache2.bytesRead < statSync(part).size], [3, true]);
+
+eq("roleOf", ["commit: x", "Review y", ""].map((d, i) => roleOf(d, ["", "", "ai-kit:business-analyst"][i])), ["commit", "reviewer", "ba"]);
+process.env.CLAUDE_CONFIG_DIR = join(dir, "cfg");
+eq("transcriptsDir slug", transcriptsDir("/Users/a.b/My Repo"), join(dir, "cfg", "projects", "-Users-a-b-My-Repo"));
+eq("unreadable cache file loads empty", Object.keys(loadCache(main).files), []);
+
+rmSync(dir, { recursive: true, force: true });
+console.log(`${passed} passed, ${failed} failed`);
+process.exit(failed ? 1 : 0);
