@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // Token usage CLI. `record` is the Stop hook: reads the hook JSON on stdin, appends this round's delta record to
-// <root>/ai/usage/<YYYY-MM>/<session>.jsonl and prints the one-line summary. It never fails a stop: exit 0 always.
+// the newest part file <root>/ai/usage/<YYYY-MM>/<session>.<n>.jsonl and prints the one-line summary. It never fails
+// a stop: exit 0 always.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectSession, loadCache, saveCache } from "./usage-collect.mjs";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
@@ -34,18 +35,39 @@ function readConfig(root) {
   }
 }
 
-// An existing file of the session under any month folder, so a session never splits across months.
-function sessionFile(usageDir, session, firstTs) {
+// A tracked file is never modified (it would block git switch/rebase): a record appends to the session's newest part
+// only while that part is not in the index, else it starts part n+1. Month = folder of the session's first part.
+function partTarget(usageDir, session, firstTs, root) {
+  const parts = [];
   let months = [];
   try {
     months = readdirSync(usageDir).sort();
   } catch {}
   for (const m of months) {
-    const p = join(usageDir, m, `${session}.jsonl`);
-    if (existsSync(p)) return p;
+    let names = [];
+    try {
+      names = readdirSync(join(usageDir, m));
+    } catch {}
+    for (const f of names) {
+      const mid = f.startsWith(`${session}.`) && f.endsWith(".jsonl") ? f.slice(session.length + 1, -".jsonl".length) : "";
+      if (/^\d+$/.test(mid)) parts.push({ n: Number(mid), path: join(usageDir, m, f), month: m });
+    }
   }
-  const month = /^\d{4}-\d{2}/.test(firstTs) ? firstTs.slice(0, 7) : new Date().toISOString().slice(0, 7);
-  return join(usageDir, month, `${session}.jsonl`);
+  parts.sort((x, y) => x.n - y.n);
+  const month = parts[0]?.month ?? (/^\d{4}-\d{2}/.test(firstTs) ? firstTs.slice(0, 7) : new Date().toISOString().slice(0, 7));
+  const newest = parts[parts.length - 1];
+  let n = 1;
+  if (newest) n = inIndex(root, newest.path) ? newest.n + 1 : newest.n;
+  return { prior: parts.map((p) => p.path), file: join(usageDir, month, `${session}.${n}.jsonl`) };
+}
+
+function inIndex(root, path) {
+  try {
+    execFileSync("git", ["--literal-pathspecs", "ls-files", "--error-unmatch", "--", relative(root, path)], { cwd: root, stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readLines(path) {
@@ -80,8 +102,8 @@ function record(input) {
   if (cachePath) saveCache(cachePath, cache);
 
   const usageDir = join(root, "ai", "usage");
-  const file = sessionFile(usageDir, session, sess.firstTs);
-  const prior = readLines(file);
+  const { prior: partPaths, file } = partTarget(usageDir, session, sess.firstTs, root);
+  const prior = partPaths.flatMap(readLines);
   const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
   const rec = buildRecord(sess, prior, {
     now: new Date(),
