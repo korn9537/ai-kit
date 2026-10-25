@@ -87,6 +87,44 @@ eq("subagent role from meta", s.agents.x1.role, "commit");
 eq("reviewer findings from its last reply", s.agents.x2.findings, { confirmed: 2, plausible: 1 });
 eq("no meta → other, still counted", [s.agents.x3.role, s.agents.x3.calls], ["other", 1]);
 
+// prompt detection: what the harness or an IDE adds is not the user's ask
+const pm = join(dir, "proj", "prompts.jsonl");
+const ask = (t, ...a) => user("2026-01-01T00:00:00Z", t, ...a);
+writeFileSync(pm, lines(
+  ask("real one"),
+  ask("summary of the old chat", { isCompactSummary: true }),
+  ask("shown only", { isVisibleInTranscriptOnly: true }),
+  ask("[Request interrupted by user]"),
+  ask([text("[Request interrupted by user for tool use]")]),
+  ask([text("<browser_instruction>use the tab</browser_instruction>")]),
+  ask([text("<ide_opened_file>The user opened a.ts</ide_opened_file>"), text("ask after ide")]),
+  ask([text("<ide_selection>x</ide_selection>"), text("<ide_diagnostics>y</ide_diagnostics>")]),
+  ask("<ide_opened_file>a.ts</ide_opened_file>\n<system-reminder>r</system-reminder>\nstring ask after tags"),
+  ask([text("<system-reminder>r</system-reminder>"), text("block ask")]),
+  ask("<command-name>/foo</command-name><command-message>foo</command-message><command-args></command-args>"),
+  ask("<local-command-stdout>out</local-command-stdout>"),
+  ask("<local-command-caveat>c</local-command-caveat>"),
+  ask([text("<pasted_content>my own paste</pasted_content>")]),
+  ask("   "),
+  asst("p1", "2026-01-01T00:00:01Z", text("ok"), usage(1, 1, 1, 1, 1)),
+));
+eq("prompts: injected text, interrupts, compact summaries and empty entries are not rounds",
+  collectSession(pm).prompts.map((p) => p.text),
+  ["real one", "ask after ide", "string ask after tags", "block ask", "<pasted_content>my own paste</pasted_content>"]);
+
+// a <synthetic> assistant message is no call: no usage, no model, no base context
+const syn = join(dir, "proj", "syn.jsonl");
+writeFileSync(syn, lines(
+  JSON.stringify({ type: "assistant", timestamp: "t", message: { id: "y1", model: "<synthetic>", content: [text("No response requested.")], usage: usage(0, 0, 0, 0, 0) } }),
+  asst("y2", "t", text("real"), usage(7, 100, 3, 0, 2)),
+));
+const ss = collectSession(syn);
+eq("synthetic message is not counted", [ss.agents.main.calls, ss.agents.main.model, ss.baseContext], [1, "claude-opus-5", 110]);
+const synOnly = join(dir, "proj", "syn-only.jsonl");
+writeFileSync(synOnly, lines(JSON.stringify({ type: "assistant", timestamp: "t", message: { id: "y1", model: "<synthetic>", content: [text("x")], usage: usage(0, 0, 0, 0, 0) } })));
+eq("a session of only synthetic messages: no call, no model, no base context",
+  [collectSession(synOnly).agents.main.calls, collectSession(synOnly).agents.main.model, collectSession(synOnly).baseContext], [0, "", null]);
+
 // a half-written last line is skipped and the offset stays before it; the cache then reads only what was appended
 const part = join(dir, "proj", "part.jsonl");
 const m3 = asst("m3", "2026-01-01T00:01:00Z", text("third"), usage(1, 1, 1, 1, 1));

@@ -5,7 +5,8 @@ import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, read
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
-const NOT_PROMPT = ["<system-reminder", "<task-notification", "<local-command", "<command-"];
+// Text the harness or an IDE adds to a user entry; <pasted_content> is the user's own and stays.
+const INJECTED = /^<((?:browser_instruction|ide_|system-reminder|task-notification|local-command|command-)[\w-]*)[^>]*>/;
 const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
 
 export function roleOf(desc, type) {
@@ -54,6 +55,17 @@ function textOf(content) {
   return content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n");
 }
 
+// A prompt's own text: leading injected elements dropped (an unclosed one takes the rest), interrupt marks are no prompt.
+export function promptText(raw) {
+  let t = String(raw).trimStart();
+  for (let m = INJECTED.exec(t); m; m = INJECTED.exec(t)) {
+    const end = t.indexOf(`</${m[1]}>`, m[0].length);
+    t = end < 0 ? "" : t.slice(end + m[1].length + 3).trimStart();
+  }
+  t = t.trim();
+  return t.startsWith("[Request interrupted") ? "" : t;
+}
+
 function toolKey(b) {
   if (b.name !== "Bash") return b.name;
   const cmd = String(b.input?.command ?? "").replace(/^\s*cd\s+[^&;]*(?:&&|;)\s*/, "");
@@ -65,6 +77,7 @@ function absorb(f, e, isMain) {
   f.firstTs ??= e.timestamp ?? null;
   const msg = e.message;
   if (e.type === "assistant" && msg) {
+    if (msg.model === "<synthetic>") return;
     const u = msg.usage;
     if (u) {
       const cc = u.cache_creation;
@@ -100,9 +113,11 @@ function absorb(f, e, isMain) {
       const m = f.tu[b.tool_use_id] === "Bash" && COMMIT_RE.exec(t);
       if (m && !f.commits.some((c) => c.hash === m[1])) f.commits.push({ ts: e.timestamp ?? "", hash: m[1] });
     }
-    const t = blocks.some((b) => b?.type === "tool_result") ? "" : textOf(msg.content).trim();
-    if (isMain && t && !e.isMeta && !NOT_PROMPT.some((p) => t.startsWith(p)))
-      f.prompts.push({ ts: e.timestamp ?? "", text: t });
+    const isPrompt = isMain && !e.isMeta && !e.isCompactSummary && !e.isVisibleInTranscriptOnly
+      && !blocks.some((b) => b?.type === "tool_result");
+    const t = isPrompt ? (typeof msg.content === "string" ? promptText(msg.content)
+      : blocks.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => promptText(b.text)).filter(Boolean).join("\n")) : "";
+    if (t) f.prompts.push({ ts: e.timestamp ?? "", text: t });
   }
 }
 
