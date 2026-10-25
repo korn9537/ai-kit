@@ -6,6 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statS
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectSession, loadCache, saveCache } from "./usage-collect.mjs";
+import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
 import { DEFAULT_PRICES, DEFAULT_RATIOS, buildRecord, summaryLine } from "./usage-record.mjs";
 
 const git = (cwd, ...args) => {
@@ -99,6 +100,28 @@ function record(input) {
   process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, firstInRepo) })}\n`);
 }
 
+// digest [--since YYYY-MM-DD] [--baseline]: prints the fixed-size digest of ai/usage/** (or of the local transcripts
+// with --baseline, in memory only). Reads only; writes nothing.
+function digestCmd(args) {
+  let since = "";
+  let baseline = false;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--baseline") baseline = true;
+    else if (args[i] === "--since" && /^\d{4}-\d{2}-\d{2}$/.test(args[i + 1] ?? "")) since = args[++i];
+    else throw new Error("usage: usage.mjs digest [--since YYYY-MM-DD] [--baseline]");
+  }
+  const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  const prices = { ...DEFAULT_PRICES, ...(readConfig(root).usage?.prices ?? {}) };
+  if (!baseline) {
+    const { recs, bad } = loadRecords(join(root, "ai", "usage"), since);
+    process.stdout.write(`${digest(recs, prices, { bad })}\n`);
+    return;
+  }
+  const who = { project: basename(root), user: git(root, "config", "user.name") };
+  const { recs, skipped } = baselineRecords(root, who, since);
+  process.stdout.write(`${digest(recs, prices, { skipped, source: "baseline" })}\n`);
+}
+
 function main() {
   const cmd = process.argv[2];
   if (cmd === "record") {
@@ -109,7 +132,16 @@ function main() {
     }
     return;
   }
-  process.stderr.write("usage: usage.mjs record\n");
+  if (cmd === "digest") {
+    try {
+      digestCmd(process.argv.slice(3));
+    } catch (e) {
+      process.stderr.write(`usage-digest: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.exitCode = 2;
+    }
+    return;
+  }
+  process.stderr.write("usage: usage.mjs record | digest [--since YYYY-MM-DD] [--baseline]\n");
   process.exitCode = 2;
 }
 

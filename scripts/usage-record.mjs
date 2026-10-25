@@ -94,8 +94,8 @@ export function weight(a, prices, ratios = DEFAULT_RATIOS) {
   return price === null ? null : (price * units(a, ratios)) / 1e6;
 }
 
-const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)));
-const fmtUsd = (x) => `$${x < 100 ? x.toFixed(2) : Math.round(x)}`;
+export const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)));
+export const fmtUsd = (x) => `$${x < 100 ? x.toFixed(2) : Math.round(x)}`;
 
 function totals(agents, prices) {
   let usd = 0;
@@ -112,7 +112,7 @@ function totals(agents, prices) {
   return [priced ? fmtUsd(usd) : "", unpriced ? `${fmtTok(unpriced)} tok unpriced` : ""].filter(Boolean).join(" + ") || "$0.00";
 }
 
-const modelShort = (m) => /opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?");
+export const modelShort = (m) => /opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?");
 const clip = (s, n) => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
 
 export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
