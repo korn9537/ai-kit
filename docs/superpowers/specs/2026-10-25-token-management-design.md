@@ -63,7 +63,10 @@ Builder's calls made in this design (the owner may overrule):
   relative base price per model, so opus and sonnet sum into one figure and L1 shows its gain. Prices: config
   `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`), kit defaults from Anthropic's pricing page at
   build time, a model with no price reported apart. Valid for API billing and a fair proxy for subscription limits.
-- Prompt text: stored in full up to 4,000 characters, after masking secret-looking values. Config
+- Reader of the records: ai-kit only (`/ai-kit:usage`), never a person. No agent reads raw records either: a script
+  reduces them to a fixed-size digest first (part 4), so analysing usage stays cheap however large the logs grow.
+- Prompt text: stored up to 1,000 characters (enough for an agent to classify the request), after masking
+  secret-looking values. Config
   `usage.prompts`: `"full"` (default) or `"none"`. The first record in a repo prints a one-time notice in the
   summary line that prompts are recorded and how to opt out.
 - Storage: `ai/usage/<YYYY-MM>/<session-id>.jsonl`, one file per session, append-only: no two sessions write the same
@@ -85,15 +88,24 @@ Builder's calls made in this design (the owner may overrule):
   `<session>/subagents/agent-*.jsonl` (+ `.meta.json` for description and type).
 - Counting: one usage per assistant message id (streamed blocks repeat the usage; keep the last). Main session =
   lines without `isSidechain`. Each subagent counted from its own file.
-- Incremental: a state file in the git dir (`<git-dir>/claude-usage/<session>.json`) keeps each transcript's byte
-  offset and running totals, so a Stop parses only new lines. Target under 300 ms per Stop on a 30 MB transcript.
-- Record (one JSON line per Stop): `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin
-  version), `user` (`git config user.name`), `branch`, `prompt` (this round's prompt, masked; absent when
-  `usage.prompts` is `none`), and cumulative per agent: `id`, `role`, `desc`, `model`, `calls`, `input`, `read`,
-  `write_5m`, `write_1h`, `output`, `peak_context`, plus `base_context` (the main session's first call context).
-- A round can produce several records (the review gate blocks a stop, the turn continues). Records are cumulative,
-  so the analysis takes the last record per round and diffs consecutive rounds. A background agent that finishes in
-  a later round is counted in that round's delta.
+- Records hold deltas: what was used since the session's previous record. Delta = the session's cumulative totals
+  now minus the sum of the deltas already in its `ai/usage` file, so the file is the state: a session resumed on
+  another machine or with a lost cache is not counted twice, and summing any set of records gives a correct total.
+  A round can produce several records (the review gate blocks a stop, the turn continues); a background agent that
+  finishes in a later round lands in that round's record.
+- Incremental parsing (speed only, not correctness): a cache in the git dir (`<git-dir>/claude-usage/<session>.json`)
+  keeps each transcript's byte offset and running totals, so a Stop parses only new lines. Target under 300 ms per
+  Stop on a 30 MB transcript; without the cache the recorder parses in full.
+- Record, one JSON line per Stop (JSONL; key names as here, `v` bumps on any change of shape):
+  `v`, `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin version), `project` (repo folder
+  name), `user` (`git config user.name`), `branch`, `prompt` (this round's prompt, masked; absent when
+  `usage.prompts` is `none`), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
+  `base_context` (the main session's first call context, on the session's first record), and `agents`: one entry per
+  agent with usage in this delta, with `id`, `role`, `desc`, `model`, `calls`, `input`, `read`, `write_5m`,
+  `write_1h`, `output`, `peak` (largest context of one call), `tools` (call count per tool; Bash keyed by its first
+  command word, `Bash:sed`), `largest_result` (largest tool result in characters), and for reviewers `findings`
+  (`confirmed`, `plausible`). No cost or price in a record: prices apply at analysis, so a price change re-prices
+  old records.
 - Roles: description starting `commit:` → commit subagent; `change-reviewer` type, or description containing
   "review" → reviewer; `business-analyst` type → BA; else other subagent; main session → coordinator.
 - Reviewer quality signal: for each reviewer agent, count `CONFIRMED` and `PLAUSIBLE` in its last reply (`findings`
@@ -120,13 +132,19 @@ Builder's calls made in this design (the owner may overrule):
 
 ### 4. Analysis (`/ai-kit:usage`)
 
-- `scripts/usage.mjs report [--since <date>] [--by role|model|user|kit|session|prompt]` over `ai/usage/**`: totals per
-  token type, input-equivalent cost per model, shares by role, top agents, top rounds with their prompt, base
-  context trend, reviewer findings per model, and per kit version the same figures so a lever's effect shows.
-- `scripts/usage.mjs baseline` reads this repo's local transcripts (`~/.claude/projects/<slug>/`, slug as in
-  `hooks/lib.sh` `kit_memory_dir`) and prints the same report without writing records: the before-picture.
-- `commands/usage.md`: runs `report` (or `baseline` when `ai/usage/` is empty), then names the largest driver and the
-  kit change it suggests; a cross-repo change → kit proposal per `docs/kit-proposals.md`.
+- `scripts/usage.mjs digest [--since <date>]` over `ai/usage/**`: a fixed-size, token-minimal text for an agent (at
+  most 3,000 tokens however many records), per `docs/ai-docs.md` form. Sections: totals and cost per model; shares
+  by role and by model within each role; cost per commit and per round; per kit version the same figures (a
+  lever's effect); driver signals per role (mean calls, mean and max `peak`, top tool counts, largest results,
+  `base_context` trend); reviewer findings per model; the 10 costliest rounds with prompt excerpt (200 characters),
+  user and the role mix; outliers (an agent over 150k peak or 150 calls).
+- `scripts/usage.mjs digest --baseline` builds the same digest from this repo's local transcripts
+  (`~/.claude/projects/<slug>/`, slug as in `hooks/lib.sh` `kit_memory_dir`) without writing records: the
+  before-picture.
+- `commands/usage.md`: runs `digest` (`--baseline` when `ai/usage/` is empty), reads only the digest, names the
+  largest driver with its evidence and the change that would cut it; a cross-repo change → kit proposal per
+  `docs/kit-proposals.md` (harvest lands it, the next digest compares by kit version); a repo-only change →
+  `ai/kit/review-checklist.md` or the project's settings. Never reads `ai/usage/` files directly.
 
 ### 5. Levers (each its own kit version, after the baseline)
 
@@ -135,13 +153,13 @@ Builder's calls made in this design (the owner may overrule):
 | L1 | commit subagent launched with `model: "sonnet"`; `"opus"` only when the batch touches a DB schema or migration, a calculation, a permission or a decision recorded as final (same rule as reviewers) | `docs/plan-batching.md` §Coordinator pipeline, `CLAUDE.core.md` Agent model | subagents run opus by inheritance |
 | L2 | a commit subagent hands back at a context limit (`usage.subagent_max_context`, default 150000): finish the current item, commit, return what is left; the coordinator launches a fresh one | plan-batching rule + a PostToolUse nudge for subagent calls (builder verifies the hook input identifies the subagent and its transcript; fallback: rule only plus a batch-size cap) | one subagent growing to 406k |
 | L3 | read discipline in the commit-subagent brief: locate with `grep -n`, read the needed range, send independent reads in one message, never read a whole large file to find one function | plan-batching brief text | 170+ single small reads |
-| L4 | base-context report: `report` shows `base_context` per session and the enabled plugins and MCP servers; `kit.mjs check` warns when the base passes `usage.base_warn` (default 40000) and names project settings that disable unused plugins | `scripts/usage.mjs`, `scripts/kit.mjs` | 48.5k fixed per call |
+| L4 | base-context report: `digest` shows `base_context` per session and the enabled plugins and MCP servers; `kit.mjs check` warns when the base passes `usage.base_warn` (default 40000) and names project settings that disable unused plugins | `scripts/usage.mjs`, `scripts/kit.mjs` | 48.5k fixed per call |
 | L5 | main session stays coordinator; handoff threshold reviewed from data (`handoff.max_context`) | config default only if data supports it | main session context growth |
 
 Order: records and baseline first (parts 1–4, one minor version), then L1, then L3, each its own version; the
-`baseline` report from local transcripts is enough to start L1. L2, L4 and L5 are later plans, made once records
+`digest --baseline` from local transcripts is enough to start L1. L2, L4 and L5 are later plans, made once records
 from L1 and L3 exist.
-Each lever's version is compared with the previous one by `report --by kit`; a lever that raises cost or lowers
+Each lever's version is compared with the previous one in the per-kit digest; a lever that raises cost or lowers
 reviewer findings per change is reverted.
 
 ## Constraints
@@ -162,4 +180,4 @@ reviewer findings per change is reverted.
 
 Analysis scripts used for the numbers above (session scratchpad, not in the repo): `analyze.mjs` (cost by role,
 model, agent), `growth.mjs` (context growth, largest tool results), `tokens.mjs` (per round). The recorder and
-`usage.mjs report` replace them.
+`usage.mjs digest` replace them.
