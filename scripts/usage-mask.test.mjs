@@ -40,5 +40,23 @@ eq("jwt with empty signature", maskPrompt("eyJhbGciOiJub25lIn0.eyJzdWIiOiIxIn0."
 eq("pgp private key block", maskPrompt("a -----BEGIN PGP PRIVATE KEY BLOCK-----\nxyz\n-----END PGP PRIVATE KEY BLOCK----- b"), "a [masked] b");
 eq("bearer header", maskPrompt("Authorization: Bearer abc.DEF-123_x"), "Authorization: Bearer [masked]");
 
+eq("google api key", maskPrompt(`k=AIza${"Ab1_-".repeat(7)}`), "k=[masked]");
+eq("gitlab token", maskPrompt(`glpat-${"abcDEF123_-"}xyz456789 ok`), "[masked] ok");
+eq("npm token", maskPrompt(`//registry:_authToken=npm_${"aB3".repeat(12)}`), "//registry:_authToken=[masked]");
+eq("basic auth header", maskPrompt("Authorization: Basic dXNlcjpwYXNz"), "Authorization: Basic [masked]");
+eq("stripe live keys", maskPrompt(`sk_live_${"a1".repeat(12)} rk_live_${"B2".repeat(12)}`), "[masked] [masked]");
+eq("telegram bot token", maskPrompt(`bot 123456789:AA${"x_y-".repeat(9)} end`), "bot [masked] end");
+eq("discord webhook token", maskPrompt("https://discord.com/api/webhooks/123456789/abcDEF-ghi_JKL1 hi"), "https://discord.com/api/webhooks/123456789/[masked] hi");
+eq("api key with a space", maskPrompt("api key: abc and API Key = def"), "api key: [masked] and API Key = [masked]");
+eq("access key with a space", maskPrompt("access key: abc"), "access key: [masked]");
+eq("access_key", maskPrompt("access_key=abc"), "access_key=[masked]");
+
+// the input is capped at 20,000 code points before masking; the cut never splits a trailing token
+const edge = maskPrompt(`${"w ".repeat(9995)}AKIAIOSFODNN7EXAMPLE${" tail".repeat(2000)}`, 30000);
+eq("pre-mask cap: output within 20,000 and no half secret at the cut", `${[...edge].length <= 20000} ${edge.includes("AKIAIOSFOD")}`, "true false");
+const t0 = Date.now();
+const huge = maskPrompt("a1 b2 ".repeat(1_000_000));
+eq("5M characters in well under a second, cut to max", `${[...huge].length} ${Date.now() - t0 < 1000}`, "1000 true");
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
