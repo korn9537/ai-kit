@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.13.0
+
+- Token records: `hooks/usage-log.sh` (Stop) runs `scripts/usage.mjs record`, which appends each round's per-agent
+  token deltas to `ai/usage/<YYYY-MM>/<session>.jsonl` (prompts masked and cut to 1,000 characters). Config
+  `usage.enabled` (default `true`), `usage.prompts` (`"full"` default | `"none"`), `usage.prices`.
+- Summary: every round prints one line (cost by role, context, costliest agent, session total) to the user only,
+  never to the model; the first record in a repo adds a one-time notice of what is recorded and how to opt out.
+- Records in git, out of the review gate: `githooks/pre-commit` stages `ai/usage/` by name, `init` adds
+  `ai/usage/** merge=union` to `.gitattributes`, `kit.mjs` allows `ai/usage` in the `ai/` layout, and
+  `review-before-stop.sh` and `review-snapshot.sh` ignore it.
+- `scripts/usage.mjs digest [--since] [--baseline]` and `/ai-kit:usage`: a fixed-size digest (cost per model, role,
+  kit version; driver signals; reviewer findings; costliest rounds; outliers) and the one change that cuts the
+  largest driver. `--baseline` reads local transcripts before any record exists.
+
 ## 2.12.3
 
 - `CLAUDE.core.md`: review gate wording matches the Stop hook (`review.always` path reviewed regardless of size; a
