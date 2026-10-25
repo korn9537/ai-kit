@@ -31,11 +31,12 @@ Reply with exactly these sections, terse, every claim with its source (path:line
    undefined (edge cases, other roles, existing data, other screens showing the same thing).
 5. **Standard** — the convention or decision the change follows (path:line), or the new standard it would set and
    where it belongs: cross-repo (test: `${CLAUDE_PLUGIN_ROOT}/docs/kit-proposals.md`) → a `proposal` issue on
-   korn9537/ai-kit; this repo only → `ai/kit/review-checklist.md`; a choice whose reasons must be kept →
+   korn9537/ai-kit; this repo only → a check in `ai/kit/pre-commit.sh` when a script can catch it, else a line in
+   `ai/kit/review-checklist.md`; a choice whose reasons must be kept →
    `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names).
 6. **Recommendation** — one option and why; the rejected alternatives and why; the one condition that would
    change the recommendation.
-7. **Owner decisions** — only questions of the four owner kinds in `CLAUDE.core.md` (money, irreversible or
+7. **Owner decisions** — only questions of the four owner kinds (money, irreversible or
    outward action, legal/privacy/consent, changing a decision recorded as final, by its final status label in
    `ai/kit/analysis-sources.md`, default `Confirmed`). A change to a price, fee, discount or any amount a customer
    pays is money even as a bug fix toward the evident intent: list it with the recommendation, never as

@@ -21,7 +21,8 @@ Rules for every step:
 - Each category is its own commit, run as a commit subagent per the multi-commit plan rule in the working
   conventions. A category over 15 files (entities, screens) splits into commits of at most 15.
 - End with the working-conventions report: files written under Files, stale docs under Decided, open questions
-  under Open.
+  under Open. Each category's report copies the plan's new `open:` lines to Open, so they survive the plan's
+  deletion.
 
 ## No argument: survey and plan
 
@@ -38,7 +39,7 @@ Rules for every step:
 
 | arg | does |
 |---|---|
-| `config` | `ai/kit/config.json`: `ui` (`docs/screen-specs.md` §Config, `include` from the inventory suggestion, `api` the API spec file or `ai/api/`), `docs.include` `^ai/.*\\.md$` when it still holds the old default; `ai/kit/analysis-sources.md` placeholder lines replaced by the layout paths |
+| `config` | `ai/kit/config.json`: `ui` (`docs/screen-specs.md` §Config, `include` from the inventory suggestion, `api` the API spec file or `ai/api/`), `docs.include` `^ai/.*\\.md$` when it still holds the old default |
 | `move` | `ai/` entries outside the layout into their category, human-read docs out of `ai/`; move-only commit, then a second commit fixing links to moved files |
 | `data` | one `ai/data/<entity>.md` per entity from the schema sources: `source`, `written by`, fields whose meaning the name does not give, states from enums and the code that changes them (with the role it checks), invariants `I<n>` from validation and constraints, relations from foreign keys, lifecycle from delete and retention code |
 | `decisions` | `ai/decisions.md` from ADRs, decision docs and code comments that state a choice and its reason. Status: the source's final status (accepted, approved, Confirmed) → `Confirmed`; proposed, open or none → `Default`; list the mapping under Decided |

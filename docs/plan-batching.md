@@ -13,7 +13,8 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
    review); the commit message names each item. A separate commit only for: a move-only split, a contract change
    (both sides in it), a migration or data change that may need its own revert.
 4. **Order**: a batch waits for another only when it needs that batch's code, schema or output, or shares a file or
-   resource with it. Show the plan (batches, their items, what waits for what), then go on; the user may correct it.
+   resource with it. Show the plan (batches, their items, what waits for what). An owner decision open → wait
+   for the owner's go; none → go on, the user may correct it.
 5. **Hot files** most items would touch (plan and state docs, decision log, roadmap, changelog, lockfile, generated
    clients): update once per batch, or once at the end of the plan, not once per item.
 
@@ -32,5 +33,5 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
   reviewer (brief: read `git show <hash>`, not the work tree) and, unless the next batch waits on this one, the next
   batch's commit subagent.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (summary
-  `commit: fix <batch>`, no "review") once no commit subagent runs, then the
-  one re-check.
+  `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
+  runs, then the one re-check.

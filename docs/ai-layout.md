@@ -36,8 +36,9 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 
 ## Per type
 
-- Decision: `status` (`Confirmed` final, `Default` until the owner confirms) · `rule` · `why` one line ·
-  `rejected` only when a later agent would otherwise pick it. Superseded → `status: Superseded by D<n>`, rule kept.
+- Decision: `status` (`Confirmed` final, `Default` until the owner confirms) · `rule` one line, a pointer when the
+  rule lives in another file · `why` one line · `rejected` only when a later agent would otherwise pick it. Superseded →
+  `status: Superseded by D<n>`, rule kept.
 - Requirement: `source` (human doc path or ticket) · `need` · `acceptance` as bullets a test can check.
 - Data: `source` (migration or model path; columns live there, never listed here) · `written by` (the module
   that owns writes; readers are not listed) · fields only where the meaning is not obvious from the name (enum

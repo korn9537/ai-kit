@@ -6,7 +6,8 @@ Source: GitHub issues on `korn9537/ai-kit`, label `proposal`. Filed from project
 ## When to file
 
 - Summary item 5 (or BA item 5) sets a new standard that passes the cross-repo test.
-- A reviewer finding seen a second time that passes the test. A script could catch it → say so in the issue.
+- A reviewer finding seen a second time that passes the test. A script could catch it → say so in the issue. A
+  repeated finding a script could catch that fails the test → add the pre-commit check, no issue.
 - The user corrects how the agent works, in a way that holds in any repo.
 - A kit gap: hook misfire, check false positive or miss, rule that contradicts another.
 
@@ -16,8 +17,8 @@ Source: GitHub issues on `korn9537/ai-kit`, label `proposal`. Filed from project
   holds for every repo in that language or framework (or every repo, for `general.md` and core). A
   framework or library rule goes in its own `conventions/<name>.md` (`nestjs.md`, `typeorm.md`), never in the
   language file.
-- Fail → this repo only, no issue: a check in `ai/kit/pre-commit.sh` when a script can catch it, else a line in
-  `ai/kit/review-checklist.md`.
+- Fail → a standard for this repo only, no issue: a check in `ai/kit/pre-commit.sh` when a script can catch it,
+  else a line in `ai/kit/review-checklist.md`.
 - The repo is public: an issue that needs a real snippet or path to make sense fails the test.
 
 ## Filing

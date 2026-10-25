@@ -38,4 +38,5 @@ Reader: AI agents only. A comment exists to stop the next agent from making a wr
 - Keep: license headers, `eslint-disable`/`#pragma`/`@ts-expect-error` with a short reason, Go directives
   (`//go:`, `//nolint`, `//line`), Dart `// ignore:`, generated files (a Go file with
   `// Code generated ... DO NOT EDIT.` in its header is skipped whole), vendored registry files (shadcn
-  `components/ui/*`).
+  `components/ui/*`). The check reports a license header over 2 lines, and vendored files whose comments break
+  these rules; exempt them with `comments.skip` in `ai/kit/config.json`.

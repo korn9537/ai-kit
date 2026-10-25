@@ -1,7 +1,7 @@
 {
   "code_dirs": ["src", "scripts", ".claude", ".githooks", "ai/kit"],
   "comments": {
-    "include": "^src/.*\\.(tsx?|jsx?|mjs|cs|py)$",
+    "include": "^src/.*\\.(tsx?|jsx?|mjs|cs)$",
     "skip": "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)"
   },
   "docs": {

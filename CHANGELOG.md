@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.12.3
+
+- `CLAUDE.core.md`: review gate wording matches the Stop hook (`review.always` path reviewed regardless of size; a
+  calculation, permission or final-decision change gets a reviewer launched by hand; "skip review" covers earlier
+  edits; any change outside `*.md` goes through review except what the hook lets pass); no third pass after the
+  re-check, except a CONFIRMED data or rule correctness finding, which gets a fresh reviewer; the fix summary holds
+  no word review anywhere; a multi-commit plan waits for the owner's go only when an owner decision is open; project
+  CLAUDE.md wins on commands, stack, branch and deploy, never over the four owner kinds; UI-only defined, a user's BA
+  request overrides the small-job skip; conventions files also read what they add to; this-repo standard goes to
+  `pre-commit.sh` when a script can catch it; build guard and comment-check pointers corrected.
+- `docs/kit-proposals.md`, `docs/plan-batching.md`, `docs/ai-docs.md`, `docs/ai-layout.md`,
+  `docs/code-comments.md`, `docs/shared-checkout.md`: same rules and corrections (dates matched, `comments.skip`
+  for license headers and vendored files, Decision `rule` one line).
+- `agents/business-analyst.md`, `agents/change-reviewer.md`: owner kinds listed without the core pointer; reviewer
+  description names the per-commit launch; BA item 5 uses the pre-commit short form.
+- `commands/check.md`, `commands/init.md`, `commands/retrofit.md`, `commands/harvest.md`,
+  `commands/memory-export.md`: `check` fixes every problem and each warning unless it needs an owner decision, `init`
+  runs that procedure; the retrofit `config` row no longer mentions `analysis-sources.md`; retrofit reports carry
+  the plan's new `open:` lines; harvest follows core and reviews the staged diff; memory dir printed only when it
+  holds files.
+- `README.md`, `scripts/kit.mjs`: hook bullets corrected; "§Install" citations name "Install in a project".
+- `templates/ai-kit-project/config.json`: `comments.include` no longer lists `py` (the check reads `//` and `/* */`).
+
 ## 2.12.2
 
 - `hooks/session-start.sh`: makes the core paths absolute with `sed`; bash 3.2 (macOS) took 2 s for the

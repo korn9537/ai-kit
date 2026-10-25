@@ -40,19 +40,22 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   `/ai-kit:memory-export` while the repo's auto-memory dir holds files.
 - `review-before-stop.sh` (Stop) blocks the final reply until `ai-kit:change-reviewer` has reviewed code edited
   since the last review. A review is an Agent call of that type (or a general-purpose one with "review" in its
-  description, the fallback). `review-snapshot.sh` (PostToolUse on Agent) records what was reviewed. Before the first
+  description, the fallback). `review-snapshot.sh` (PostToolUse on Agent, Task and SendMessage) records what was
+  reviewed. Before the first
   review a small change passes without one: at most `review.skip_lines` changed code lines, no new file, no path
   matching `review.always`. Edits by a finished commit subagent count too; one still running is skipped. Also counted
   as a review: a user message starting with "skip review" or "ไม่ต้อง review", and, right after a re-check, a
   main-session reply with `Review closed: re-checked once` (not quoted).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.
-- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks whose scope holds the file
+- `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
-- `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A` and `git commit -a` (shared checkout).
-- `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build while the dev port listens.
+- `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
+  `git commit -a` (shared checkout).
+- `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build command (`build_guard.build_re`; default
+  `pnpm`/`npm`/`yarn build`, `next build`, `turbo build`) while the dev port listens.
 
 ## Project settings (`ai/kit/`)
 
@@ -227,7 +230,8 @@ screen spec และ API spec ชี้ถึง ของที่ไม่อ
 
 ### ติดตั้งในโปรเจกต์
 
-1. ใส่ `extraKnownMarketplaces` และ `enabledPlugins` ตามตัวอย่างใน §Install ลงใน `.claude/settings.json` แล้ว commit
+1. ใส่ `extraKnownMarketplaces` และ `enabledPlugins` ตามตัวอย่างใน §Install in a project
+   ลงใน `.claude/settings.json` แล้ว commit
 2. เปิด Claude Code ใน repo แล้วกด trust โฟลเดอร์ จะมีให้ติดตั้ง marketplace และ plugin
 3. ถ้าโปรเจกต์มี git pre-commit อยู่แล้ว ให้ย้าย check เหล่านั้นไปไว้ใน `ai/kit/pre-commit.sh` แล้วเอาของเดิมออก
    ถ้าเป็น `.githooks/pre-commit` ให้ลบไฟล์ ถ้าเป็น husky หรือ hooks path อื่น ให้เอาออกจาก script `prepare` ใน
@@ -277,8 +281,8 @@ repo 1.x ยังไม่ได้เปิด plugin ดังนั้น `/
    จะแสดงให้ตรวจเอง พร้อม `git show HEAD:<path>` ไว้กู้คืน การลบทำหลังสุด หลังเขียนไฟล์ทั้งหมด
 2. เอา hook ที่เรียก `ai-kit/hooks/...` ในโปรเจกต์ (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...`
    หรือ path สัมพัทธ์) ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่ settings ตาม
-   §Install ลงใน `.claude/settings.json` ถ้ายังไม่มี — key และ hook อื่น, marketplace `korn9537` ที่มีอยู่ และค่า
-   `false` ของ plugin คงไว้
+   §Install in a project ลงใน `.claude/settings.json` ถ้ายังไม่มี — key และ hook อื่น, marketplace `korn9537`
+   ที่มีอยู่ และค่า `false` ของ plugin คงไว้
 3. ลบทุกบรรทัด `@ai-kit/CLAUDE.core.md` (รวมแบบ bullet) ใน `CLAUDE.md` ถ้า section `## Working conventions` ว่าง จะใส่บรรทัดเดียวที่ชี้ไป plugin
    line ending (LF หรือ CRLF) คงเดิม
 4. ใน `ai/kit/config.json` เอา `ai-kit` ออกจาก `code_dirs` และเอา `shared_checkout_doc` ออกถ้าชี้ไปที่ `ai-kit/...`

@@ -11,9 +11,10 @@
 - Goal: fewest tokens that still prevent a wrong build.
 - Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):
   emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a
-  number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates, Thai outside quotes
-  or code, a code file pointer in the `a.ts:12` form (code spans included; other spellings unchecked). Scope:
-  `docs.include`/`skip` in `ai/kit/config.json` (default `^ai/.*\.md$`).
+  number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates (only
+  `YYYY-MM-DD`, `D Month YYYY` and `Month D, YYYY` are matched), Thai outside quotes or code, a code file pointer in the
+  `a.ts:12` form (code spans included; other spellings unchecked). Scope: `docs.include`/`skip` in
+  `ai/kit/config.json` (default `^ai/.*\.md$`).
   - Not checked: fenced blocks, frontmatter, code spans (except line pointers), a moved line (same text as a
     removed line of an in-scope doc, outside fences and frontmatter; one removed line excuses one added line, its
     own file first). Indented code is checked. Thai exempt in double or curly quotes and in table rows; dates

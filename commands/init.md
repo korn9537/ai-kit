@@ -7,8 +7,7 @@ Set up ai-kit in the current project.
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" init` from the project root. It creates the missing `ai/kit/`
    files from templates (never overwrites), writes the `.githooks/pre-commit` shim, sets `core.hooksPath`, and adds
    `"autoMemoryEnabled": false` to `.claude/settings.json` when the key is absent.
-2. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" check` and fix each problem it names; ask first only
-   before deleting a hook or file git does not track, or editing settings outside the repo.
+2. Run the /ai-kit:check procedure.
 3. Help the user fill `ai/kit/` for this project: `config.json` (code folders, comment-check scope, dev port, the
    languages for `conventions`, from `${CLAUDE_PLUGIN_ROOT}/conventions/`; `ui` per
    `${CLAUDE_PLUGIN_ROOT}/docs/screen-specs.md`, platforms from the `check` warning, `{"platforms": []}` when the

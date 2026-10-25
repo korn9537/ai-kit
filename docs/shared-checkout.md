@@ -1,7 +1,7 @@
 # Shared checkout (git)
 
 Reader: AI agents. Several sessions may share one working tree and one index. Which branch to commit on, and what a
-push triggers, is in the project's CLAUDE.md §Git.
+push triggers, is in the project's CLAUDE.md (branch and deploy).
 
 - Never switch branch; push only when asked.
 - Split work into self-contained commits, one per batch of items that touch the same code, not one per item

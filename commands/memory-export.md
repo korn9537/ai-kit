@@ -5,7 +5,7 @@ description: Move this repo's auto-memory files into repo files the team can rea
 Move auto-memory into the repo (rule: `${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md`, Project knowledge).
 
 1. Dir: `~/.claude/projects/<slug>/memory/`, slug = main worktree path with each non-alphanumeric as `-`
-   (`kit.mjs check` prints it).
+   (`kit.mjs check` prints it, only when the dir holds memory files).
    No `.md` file besides an index-only `MEMORY.md` → say so and stop.
 2. Read every file, `MEMORY.md` included. Each fact → its target in the working conventions (Project knowledge),
    chosen by content (frontmatter `type` is a hint only); a decision gets the project's default status. Already in
