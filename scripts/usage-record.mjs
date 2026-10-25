@@ -7,6 +7,11 @@ export const DEFAULT_PRICES = {
   "claude-sonnet-5-5": 2,
 };
 
+export const DEFAULT_RATIOS = {
+  "claude-opus-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
+  "claude-sonnet-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
+};
+
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
 const NOTICE = ' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)';
 const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", other: "other" };
@@ -64,19 +69,24 @@ export function buildRecord(session, prior, ctx) {
   return rec;
 }
 
-// Input-equivalent tokens: cache reads 0.1x, 5m writes 1.25x, 1h writes 2x, output 5x.
-const units = (a) => (a.input ?? 0) + 0.1 * (a.read ?? 0) + 1.25 * (a.write_5m ?? 0) + 2 * (a.write_1h ?? 0) + 5 * (a.output ?? 0);
+const FALLBACK_RATIOS = { read: 0.1, write_5m: 1.25, write_1h: 2, output: 5 };
 const rawTokens = (a) => (a.input ?? 0) + (a.read ?? 0) + (a.write_5m ?? 0) + (a.write_1h ?? 0) + (a.output ?? 0);
 
-function priceOf(model, prices) {
+function byPrefix(model, table) {
   let best = null;
-  for (const k of Object.keys(prices)) if ((model ?? "").startsWith(k) && (best === null || k.length > best.length)) best = k;
-  return best === null ? null : prices[best];
+  for (const k of Object.keys(table)) if ((model ?? "").startsWith(k) && (best === null || k.length > best.length)) best = k;
+  return best === null ? null : table[best];
 }
 
-export function weight(a, prices) {
-  const price = priceOf(a.model, prices);
-  return price === null ? null : (price * units(a)) / 1e6;
+// Input-equivalent tokens, each token type at its model's ratio to base input.
+function units(a, ratios = DEFAULT_RATIOS) {
+  const r = byPrefix(a.model, ratios) ?? FALLBACK_RATIOS;
+  return (a.input ?? 0) + r.read * (a.read ?? 0) + r.write_5m * (a.write_5m ?? 0) + r.write_1h * (a.write_1h ?? 0) + r.output * (a.output ?? 0);
+}
+
+export function weight(a, prices, ratios = DEFAULT_RATIOS) {
+  const price = byPrefix(a.model, prices);
+  return price === null ? null : (price * units(a, ratios)) / 1e6;
 }
 
 const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)));
