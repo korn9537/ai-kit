@@ -209,18 +209,6 @@ function layoutWarnings() {
         `ai/${e} is not an ai/ category (fix: when next touched, move it into the category that fits, or out of ai/ when humans read it, move-only commit; the plugin's docs/ai-layout.md)`,
     );
 }
-// token records from several branches merge by keeping every line (docs/ai-layout.md)
-const USAGE_ATTR = "ai/usage/** merge=union";
-const hasUsageAttr = (t) =>
-  t.split(/\r?\n/).some((l) => l.trim().split(/\s+/).join(" ") === USAGE_ATTR);
-function attrWarnings() {
-  if (!existsSync(at("ai", "kit"))) return [];
-  return hasUsageAttr(read(at(".gitattributes")) ?? "")
-    ? []
-    : [
-        `.gitattributes lacks "${USAGE_ATTR}", so token records can conflict on a branch merge (fix: run init, or add the line)`,
-      ];
-}
 // warnings, not problems: a UI project before 2.8.0 must keep committing (docs/screen-specs.md)
 function uiWarnings() {
   let conf;
@@ -422,18 +410,6 @@ function initFiles(created = []) {
     console.log("~ .githooks/pre-commit (shim updated)");
   }
 
-  // append only: every other line, and the file's EOL style, stay as they are
-  const ga = read(at(".gitattributes"));
-  if (!hasUsageAttr(ga ?? "")) {
-    const eol = ga ? eolOf(ga) : "\n";
-    writeFileSync(
-      at(".gitattributes"),
-      `${ga ?? ""}${ga && !/\n$/.test(ga) ? eol : ""}${USAGE_ATTR}${eol}`,
-    );
-    if (ga === null) created.push(".gitattributes");
-    console.log(`${ga === null ? "+" : "~"} .gitattributes (${USAGE_ATTR})`);
-  }
-
   // another hooks path (husky) would be switched off silently: leave it to the user
   const hp = tryGit("config", "core.hooksPath") ?? "";
   if (hp && hp !== ".githooks")
@@ -478,7 +454,6 @@ function init() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
-  attrWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
     "restart the Claude Code session so the SessionStart hook injects the working conventions",
@@ -828,7 +803,6 @@ function migrate() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
-  attrWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
   // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
   const changedPaths = [
@@ -942,7 +916,6 @@ else if (cmd === "check") {
   uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
-  attrWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {
   console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>");

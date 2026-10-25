@@ -1,7 +1,7 @@
 // Tests for kit.mjs inventory: a fixture repo, then each wanted line must appear in the output.
 // Usage: node scripts/kit-inventory.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -89,43 +89,25 @@ try {
 } finally {
   rmSync(dir2, { recursive: true, force: true });
 }
-// init adds the union-merge line for the records to .gitattributes and check warns while it is missing
-const ATTR = "ai/usage/** merge=union";
-let extra = 0;
-const attrCase = (desc, before, want, wantCreated) => {
-  extra++;
+// records are never edited once committed (part files), so init needs no .gitattributes entry and check does not ask
+let extra = 1;
+{
   const d = mkdtempSync(join(tmpdir(), "kit-attr-"));
   try {
     mkdirSync(join(d, "ai/kit"), { recursive: true });
     writeFileSync(join(d, "ai/kit/config.json"), "{}");
-    if (before !== null) writeFileSync(join(d, ".gitattributes"), before);
     execFileSync("git", ["init", "-q"], { cwd: d });
-    const warn = () =>
-      spawnSync("node", [SCRIPT, "check"], { cwd: d, encoding: "utf8" })
-        .stdout.split("\n")
-        .some((l) => l.startsWith("! ") && l.includes(ATTR));
-    const warnedBefore = warn();
     const out = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
-    const got = existsSync(join(d, ".gitattributes")) ? readFileSync(join(d, ".gitattributes"), "utf8") : null;
-    const again = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
-    const ok =
-      got === want &&
-      warnedBefore === !(before ?? "").includes(ATTR) &&
-      !warn() &&
-      out.includes("+ .gitattributes") === wantCreated &&
-      !again.includes(".gitattributes");
-    console.log(`${ok ? "ok  " : "FAIL"} - ${desc}`);
+    const chk = spawnSync("node", [SCRIPT, "check"], { cwd: d, encoding: "utf8" }).stdout;
+    const ok = !existsSync(join(d, ".gitattributes")) && !out.includes("gitattributes") && !chk.includes("gitattributes");
+    console.log(`${ok ? "ok  " : "FAIL"} - init writes no .gitattributes and check does not mention it`);
     if (!ok) {
       fail++;
-      console.log(JSON.stringify({ got, warnedBefore, out, again }));
+      console.log(JSON.stringify({ out, chk }));
     }
   } finally {
     rmSync(d, { recursive: true, force: true });
   }
-};
-attrCase("init creates .gitattributes with the records line", null, `${ATTR}\n`, true);
-attrCase("init appends the records line, other lines untouched", "*.png binary", `*.png binary\n${ATTR}\n`, false);
-attrCase("init keeps CRLF in .gitattributes", "* text=auto\r\n", `* text=auto\r\n${ATTR}\r\n`, false);
-attrCase("init leaves .gitattributes alone when the line is there", `${ATTR}\n`, `${ATTR}\n`, false);
+}
 console.log(`\n${WANT.length + 3 + extra - fail} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
