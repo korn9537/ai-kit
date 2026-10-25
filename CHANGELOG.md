@@ -19,6 +19,7 @@
 - `conventions/sql.md` item 11: user-typed search uses `ILIKE`, LIKE input escaped through one helper (#6).
 - Owner decision kind 1 (money) covers any change to an amount a customer pays, a bug fix included;
   `business-analyst` lists it under Owner decisions, never as assumed (#13).
+- `githooks/pre-commit`: no `ai/kit/config.json: No such file` error in a repo without `ai/kit/`.
 
 ## 2.11.0
 

@@ -119,7 +119,7 @@ fi
 
 # Screen specs stay linked to the API and the screen files (the plugin's docs/screen-specs.md); warnings only.
 # Starts node only when ui.platforms looks non-empty; the script itself waits for a guarded staged file.
-if tr -d '[:space:]' < ai/kit/config.json 2>/dev/null | grep -q '"platforms":\["'; then
+if tr -d '[:space:]' 2>/dev/null < ai/kit/config.json | grep -q '"platforms":\["'; then
   quiet node "$ai_kit_plugin/scripts/check-specs.mjs" --staged
 fi
 
