@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.1
+
+- Commit subagents run on sonnet: `docs/plan-batching.md` §Coordinator pipeline has the coordinator pass
+  `model: "sonnet"` on the Agent call, `"opus"` when the batch touches a DB schema or migration, a calculation, a
+  permission or a decision recorded as final (the reviewer and BA rule). `CLAUDE.core.md` Agent model bullet names
+  commit subagents in one clause: `wc -c` 7791 → 7832 bytes. Measured driver: commit subagents were 52-57% of
+  token cost, nearly all on opus; read the effect in the digest's `by kit` section.
+
 ## 2.13.0
 
 - Token records: `hooks/usage-log.sh` (Stop) runs `scripts/usage.mjs record`, which appends each round's per-agent
