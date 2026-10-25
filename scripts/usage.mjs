@@ -136,11 +136,19 @@ function digestCmd(args) {
   const prices = { ...DEFAULT_PRICES, ...(readConfig(root).usage?.prices ?? {}) };
   if (!baseline) {
     const { recs, bad, skipped } = loadRecords(join(root, "ai", "usage"), since);
+    if (since && !recs.length && loadRecords(join(root, "ai", "usage")).recs.length) {
+      process.stdout.write(`no records since ${since}\n`);
+      return;
+    }
     process.stdout.write(`${digest(recs, prices, { bad, skipped })}\n`);
     return;
   }
   const who = { project: basename(root), user: git(root, "config", "user.name") };
   const { recs, skipped } = baselineRecords(root, who, since);
+  if (since && !recs.length && baselineRecords(root, who).recs.length) {
+    process.stdout.write(`no records since ${since}\n`);
+    return;
+  }
   process.stdout.write(`${digest(recs, prices, { sessionsSkipped: skipped, source: "baseline" })}\n`);
 }
 

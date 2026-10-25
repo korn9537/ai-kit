@@ -137,7 +137,7 @@ export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
   const name = (dec(top.desc) || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
   const sessionCost = totals(sessionRecs.flatMap((r) => r.agents), prices);
   const build = (n, withEq) => `tokens this round ≈ ${totals(rec.agents, prices)}${withEq ? ` (in-eq ${fmtTok(total)})` : ""}: ${split}`
-    + ` | context ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
+    + ` | peak ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
     + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${sessionCost}`;
   // Cap at 200 code points: shrink desc first, then drop the in-eq part.
   let line = "";

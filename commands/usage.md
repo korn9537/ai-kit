@@ -6,7 +6,8 @@ Analyse token usage from the digest, never from the records.
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" digest` from the project root. It prints `no usage records` →
    rerun with `--baseline` (the digest then comes from this machine's transcripts and says so). `--since
-   YYYY-MM-DD` limits it. Read only its output: never open, grep or cat `ai/usage/` files, they hold prompts and
+   YYYY-MM-DD` limits it; it prints `no records since <date>` when every record is older → rerun with an earlier
+   date or none. Read only its output: never open, grep or cat `ai/usage/` files, they hold prompts and
    grow without bound.
 2. Name the largest driver: the role with the biggest cost share. Give its evidence from the digest: model, calls,
    peak context, tool mix, cost per agent (drivers section), the agents behind it (outliers, costliest rounds);

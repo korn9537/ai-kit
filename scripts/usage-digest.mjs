@@ -181,7 +181,7 @@ export function digest(recs, prices, meta = {}) {
   }
   if (unpriced.size) {
     const u = top(unpriced, 3);
-    out.push(`unpriced: ${sum([...unpriced.values()])} tok (${u.map(([k]) => k).join(", ")}${unpriced.size > 3 ? ", …" : ""})`);
+    out.push(`unpriced: ${fmtTok(sum([...unpriced.values()]))} tok (${u.map(([k]) => k).join(", ")}${unpriced.size > 3 ? ", …" : ""})`);
   }
 
   // by role: share of cost, split by model within the role

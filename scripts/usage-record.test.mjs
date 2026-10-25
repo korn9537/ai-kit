@@ -70,7 +70,7 @@ eq("weight", weight({ model: "claude-x-1", input: 1e6, read: 1e6, write_5m: 0, w
   { "claude-x": 2 }), 2 * (1 + 0.1 + 0.5));
 eq("5.5 model reads at 0.05 of base input", weight({ model: "claude-opus-5-5-20260101", read: 1e6 }, { "claude-opus-5-5": 4 }), 4 * 0.05);
 eq("unpriced model", weight({ model: "other" }, {}), null);
-match("summary line", summaryLine(r2, [r1, r2], prices, false), /^tokens this round .* \| context \d+k \| top: /);
+match("summary line", summaryLine(r2, [r1, r2], prices, false), /^tokens this round .* \| peak \d+k \| top: /);
 match("first-in-repo notice", summaryLine(r1, [r1], prices, true), /prompts are recorded in ai\/usage.*"none"/);
 
 // several records in one round: durations add up to the round's wall time, only the first carries the prompt

@@ -1,5 +1,6 @@
 // Tests for usage-digest.mjs: usage records to a fixed-size text digest, record loading and the local baseline.
 // Usage: node scripts/usage-digest.test.mjs
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -104,9 +105,10 @@ eq("bounded size", big.length <= 12000, true);
 eq("bounded size keeps the sections", [...big.matchAll(/^## (.+)$/gm)].map((m) => m[1]), SECTIONS);
 
 const unk = digest([rec({ agents: [ag({ model: "mystery-1", read: 1500, output: 10 }), ag({ id: "z", read: 1e6 })] })], P);
-match("unpriced model reported apart", unk, /unpriced: \d+ tok/);
+match("unpriced model reported apart, total through fmtTok", unk, /unpriced: 2k tok/);
+match("unpriced millions read as M", digest([rec({ agents: [ag({ model: "mystery-1", read: 2.5e6 })] })], P), /unpriced: 2.5M tok/);
 const onlyUnk = digest([rec({ agents: [ag({ model: "mystery-1", read: 1500 })] })], P);
-match("only unpriced: no NaN, no cost", onlyUnk, /unpriced: 1500 tok/);
+match("only unpriced: no NaN, no cost", onlyUnk, /unpriced: 2k tok/);
 eq("no NaN or undefined anywhere", [d, big, unk, onlyUnk].some((t) => /NaN|undefined|Infinity/.test(t)), false);
 
 match("meta shown in the header", digest(recs, P, { bad: 2, skipped: 4, sessionsSkipped: 1 }), /^records 3 .* · 2 bad lines · 4 skipped · 1 sessions skipped\n/);
@@ -149,6 +151,17 @@ try {
   ].join("\n"));
   const withBad = loadRecords(join(tmp, "2026-02"));
   eq("records with wrong v or malformed agents are skipped and counted", [withBad.recs.length, withBad.skipped], [3, 6]);
+
+  // the CLI: a --since that leaves nothing says so, apart from a project with no records at all
+  const cli = (project, ...args) => spawnSync("node", [join(import.meta.dirname, "usage.mjs"), "digest", ...args],
+    { env: { ...process.env, CLAUDE_PROJECT_DIR: project }, encoding: "utf8" }).stdout.trim();
+  const withRecs = join(tmp, "withrecs");
+  mkdirSync(join(withRecs, "ai", "usage", "2026-02"), { recursive: true });
+  writeFileSync(join(withRecs, "ai", "usage", "2026-02", "s.1.jsonl"), line({ ts: "2026-02-01T00:00:00Z" }));
+  mkdirSync(join(tmp, "norecs"), { recursive: true });
+  eq("digest --since after every record: says no records since the date", cli(withRecs, "--since", "2099-01-01"), "no records since 2099-01-01");
+  eq("digest on a project with no records still says no usage records", [cli(join(tmp, "norecs")), cli(join(tmp, "norecs"), "--since", "2099-01-01")], ["no usage records", "no usage records"]);
+  match("digest --since before the records prints the digest", cli(withRecs, "--since", "2026-01-01"), /^records 1 /);
 
   // baseline: one in-memory record per transcript, kit "baseline"; a broken one is skipped and counted
   const proj = join(tmp, "proj");
