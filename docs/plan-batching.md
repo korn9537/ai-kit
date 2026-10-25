@@ -37,6 +37,9 @@ A multi-commit plan runs from the main session as coordinator, so its context st
   calculation, a permission or a decision recorded as final (the reviewer and BA rule).
 - Its brief says it is a commit subagent, must not launch a reviewer, and first reads the "Working conventions" of
   the plugin's `CLAUDE.core.md` (give its absolute path; a subagent does not get that text injected).
+- Its brief also sets read discipline: locate with `grep -n` (several patterns in one call), read only the needed
+  line range, send independent reads and searches in one message; never read a whole large file to find one symbol,
+  never one `sed -n` per call when several ranges are known.
 - It returns only hash, files, choices it made and open items (report items 6 and 7 only). An owner decision it hits
   comes back unanswered for the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the

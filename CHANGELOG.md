@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.13.2
+
+- Read discipline for commit subagents: `docs/plan-batching.md` §Coordinator pipeline has the brief say to locate
+  with `grep -n` (several patterns in one call), read only the needed line range, send independent reads and
+  searches in one message, never read a whole large file to find one symbol and never one `sed -n` per call when
+  several ranges are known. Measured driver: one commit subagent ran 250 calls reading code one small `sed -n` or
+  `grep -n` per call. `CLAUDE.core.md` unchanged.
+
 ## 2.13.1
 
 - Commit subagents run on sonnet: `docs/plan-batching.md` §Coordinator pipeline has the coordinator pass
