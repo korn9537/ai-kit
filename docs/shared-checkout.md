@@ -12,9 +12,9 @@ push triggers, is in the project's CLAUDE.md §Git.
   Before `git add <file>` read `git diff <file>` for hunks that are not yours; before committing read
   `git diff --cached --stat`. `git commit -- <path>` commits the whole working-tree file, so it does not leave other
   hunks out.
-- Pre-commit re-adds every staged file whole, so a partially staged file takes the other hunks along. For a file
-  holding someone else's pending hunks: write your version's blob (`git hash-object -w` + `git update-index
---cacheinfo`), `commit --no-verify`, run the checks yourself, and confirm HEAD builds in a worktree.
+- A partially staged file is safe: the ai-kit pre-commit formats only its staged blob and leaves the other hunks
+  unstaged. To stage only your hunks of a file holding someone else's: `git apply --cached` of your hunks, or write
+  your version's blob (`git hash-object -w` + `git update-index --cacheinfo`); confirm HEAD builds in a worktree.
 - A generator that reads the whole tree (codegen, spec export) may pick up another session's work. If it does,
   commit its output through the blob procedure above.
 - Work that changed or vanished unasked: suspect another session (`git log`, `git reflog`,

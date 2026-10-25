@@ -37,29 +37,72 @@ if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | gr
 fi
 
 # Docs are for AI readers (the plugin's docs/ai-docs.md): added lines only, so it runs before prettier reflows
-# them; scope is docs.include in ai/kit/config.json. A partially staged doc: prettier re-stages hunks it did not see.
+# them; scope is docs.include in ai/kit/config.json.
 if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   node "$ai_kit_plugin/scripts/check-docs.mjs" --staged --strict || {
     echo ""
-    echo "Docs rule failed. Drop emoji, bold, filler and dates; quote Thai product copy. To bypass: git commit --no-verify"
+    echo "Docs rule failed. Drop emoji, bold, filler and dates; quote Thai product copy; point at a symbol, not a line. To bypass: git commit --no-verify"
     exit 1
   }
 fi
 
-# Prettier on staged files when package.json declares it, then re-stage them.
-# Re-stages whole files: a partially staged file (git add -p) gets fully staged.
+# A lint suppression names why the rule does not apply; "moved verbatim" is no reason (CLAUDE.core.md, 40 KB split).
+moved="$(git -c core.quotePath=false diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*.md' \
+  | grep -E '^\+' | grep -vE '^\+\+\+ ' | grep -iE 'eslint-disable[^*]*--[[:space:]]*moved verbatim')"
+if [ -n "$moved" ]; then
+  echo "commit blocked: an eslint-disable gives \"moved verbatim\" as its reason:"
+  printf '%s\n' "$moved" | sed 's/^+/   /'
+  echo "Fix the moved code, or name why the rule does not apply. To bypass: git commit --no-verify"
+  exit 1
+fi
+
+# Prettier on staged files when package.json declares it. A fully staged file is formatted and re-staged; a partially
+# staged one (other hunks left in the work tree, maybe another session's) gets only its index blob formatted.
 if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
-  if [ ! -f node_modules/prettier/bin/prettier.cjs ]; then
+  prettier=node_modules/prettier/bin/prettier.cjs
+  if [ ! -f "$prettier" ]; then
     echo "commit blocked: node_modules/prettier is missing — install packages first."
     echo "   To bypass: git commit --no-verify"
     exit 1
   fi
-  git diff --cached --name-only --diff-filter=ACMR -z \
-    | xargs -0 node node_modules/prettier/bin/prettier.cjs --write --ignore-unknown --log-level warn || {
-    echo "prettier failed — fix the error above, or to bypass: git commit --no-verify"
-    exit 1
-  }
-  git diff --cached --name-only --diff-filter=ACMR -z | xargs -0 git add
+  unstaged="$(git -c core.quotePath=false diff --name-only)"
+  # paths are literal below: a Next.js route `app/[id]/page.tsx` is a glob to git
+  whole="" partial=""
+  while IFS= read -r f; do
+    if printf '%s\n' "$unstaged" | grep -qxF -- "$f"; then partial="$partial$f
+"; else whole="$whole$f
+"; fi
+  done <<EOF
+$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR)
+EOF
+  if [ -n "$whole" ]; then
+    printf '%s' "$whole" | tr '\n' '\0' \
+      | xargs -0 node "$prettier" --write --ignore-unknown --log-level warn || {
+      echo "prettier failed — fix the error above, or to bypass: git commit --no-verify"
+      exit 1
+    }
+    printf '%s' "$whole" | tr '\n' '\0' | xargs -0 git --literal-pathspecs add --
+  fi
+  if [ -n "$partial" ]; then
+    tmp="$(mktemp)"
+    while IFS= read -r f; do
+      [ -n "$f" ] || continue
+      # stdin with --ignore-unknown prints nothing for an unknown type: skip those before piping the blob
+      node "$prettier" --file-info "$f" | grep -q '"ignored": false, "inferredParser": "' || continue
+      git show ":$f" | node "$prettier" --stdin-filepath "$f" --log-level warn >"$tmp" || {
+        rm -f "$tmp"
+        echo "prettier failed on the staged $f — fix the error above, or to bypass: git commit --no-verify"
+        exit 1
+      }
+      blob="$(git hash-object -w --path="$f" "$tmp")"
+      [ "$blob" = "$(git rev-parse ":$f")" ] && continue
+      git update-index --cacheinfo "$(git --literal-pathspecs ls-files -s -- "$f" | cut -d' ' -f1),$blob,$f"
+      echo "warn: $f is partially staged: formatted its staged version only, the work tree is unchanged"
+    done <<EOF
+$partial
+EOF
+    rm -f "$tmp"
+  fi
 fi
 
 # shellcheck source=/dev/null

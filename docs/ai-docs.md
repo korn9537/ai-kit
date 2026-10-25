@@ -12,10 +12,12 @@
 - Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):
   emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a
   number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates, Thai outside quotes
-  or code. Scope: `docs.include`/`skip` in `ai/kit/config.json` (default `^ai/.*\.md$`).
-  - Not checked: fenced blocks, frontmatter, code spans, a moved line (same text as a removed line of an in-scope
-    doc, outside fences and frontmatter; one removed line excuses one added line, its own file first). Indented
-    code is checked. Thai exempt in double or curly quotes and in table rows; dates exempt in quotes.
+  or code, a code file pointer in the `a.ts:12` form (code spans included; other spellings unchecked). Scope:
+  `docs.include`/`skip` in `ai/kit/config.json` (default `^ai/.*\.md$`).
+  - Not checked: fenced blocks, frontmatter, code spans (except line pointers), a moved line (same text as a
+    removed line of an in-scope doc, outside fences and frontmatter; one removed line excuses one added line, its
+    own file first). Indented code is checked. Thai exempt in double or curly quotes and in table rows; dates
+    exempt in quotes.
   - Edited line: not reported for a rule when one removed line of the same hunk, outside fences and frontmatter,
     already held at least as many of each fragment (bold: its text; Thai: a run; others: the match). A removed
     table row holds no Thai. Joining two old lines into one is reported.
@@ -33,6 +35,8 @@
 - Fragments, not sentences: drop articles, filler, hedges, politeness.
 - 3+ parallel items → table or `key: value` lines. Rules → bullets. Prose only for a cause chain a list cannot hold.
 - One fact, one place. Elsewhere a pointer (`→ ai/specs/x.md §3`, `→ D3`), never a copy.
+- A pointer into code names the file and a symbol (`orders.service.ts` `approveOrder`), never a line number:
+  code edits shift lines silently.
 - Stable ids on rules, decisions, requirements, screens (`D3`, `REQ-3`, `S-2`) so pointers stay short.
 - Exact values: numbers, units, paths, names, enum strings. No "about", "etc.", "and so on": list all, or name
   the set ("every list endpoint").

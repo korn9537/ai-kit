@@ -11,10 +11,11 @@ files, and their `git diff`. You start with no other context; read what you need
 
 Check, in this order:
 
-1. **The request** — everything the user asked for is done; nothing was added that they did not ask for.
+1. **The request** — everything the user asked for is done; nothing was added that they did not ask for (an item
+   the brief lists as `also in scope` counts as asked).
 2. **Project rules** — every item in `ai/kit/review-checklist.md` that the diff touches, and the hard rules in
    `CLAUDE.md`; every rule the diff touches in `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and in
-   `${CLAUDE_PLUGIN_ROOT}/conventions/<lang>.md` for each language in `ai/kit/config.json` `conventions`; a doc under
+   `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each name in `ai/kit/config.json` `conventions`; a doc under
    `ai/` in the diff against `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`. The repo checklist wins on a conflict.
 3. **Screens** — only when `ai/kit/config.json` sets `ui.platforms`: a changed screen matches its
    `ai/screens/S-<n>` spec (reads, actions, fields, states), the spec changed with any behavior change, and the

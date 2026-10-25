@@ -92,6 +92,22 @@ const CASES = [
     want: ["ai/a.md:2 thai outside quotes"],
   },
   {
+    desc: "line pointer: code file with a line, code spans included; hosts, symbols and doc sections pass",
+    head: { "ai/a.md": "x\n" },
+    work: {
+      "ai/a.md":
+        "x\n`src/a.service.ts:12`\nsee b.dart:3-9.\nredis.local:6379 · 127.0.0.1:5432 · http://x.io:8080/a.ts\n" +
+        "`orders.service.ts` `approveOrder` · → ai/specs/x.md §3\n",
+    },
+    want: ["ai/a.md:2 line pointer", "ai/a.md:3 line pointer"],
+  },
+  {
+    desc: "line pointer kept on an edited line passes",
+    head: { "ai/a.md": "see `a.ts:4` for x\n" },
+    work: { "ai/a.md": "see `a.ts:4` for y\n" },
+    want: [],
+  },
+  {
     desc: "an untracked doc is checked in full, an out-of-scope one not",
     head: { "ai/a.md": "x\n" },
     work: { "ai/new.md": "**n**\n", "README.md": "**n**\n" },

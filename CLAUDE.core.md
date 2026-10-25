@@ -41,9 +41,9 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its
   `ai/screens/S-<n>-*.md`; new screen: `ai/data/` entity → spec → API spec → API → screen; a screen without a
   spec gets one when next changed. Format: `ai-kit/docs/screen-specs.md`.
-- **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<lang>.md` for
-  each language in `ai/kit/config.json` `conventions` that the change touches. When summary item 5 sets a standard:
-  this repo only → `ai/kit/review-checklist.md` in the same commit; cross-repo → a `proposal` issue on
+- **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for
+  each language or framework in `ai/kit/config.json` `conventions` that the change touches. When summary item 5
+  sets a standard: this repo only → `ai/kit/review-checklist.md` in the same commit; cross-repo → a `proposal` issue on
   korn9537/ai-kit, never an edit of the installed plugin. Also for a repeated review finding, a user correction or a
   kit gap. Filing is pre-approved; when, test, format, fallback: `ai-kit/docs/kit-proposals.md`.
 - **Change only what was asked.** Name the files first and stay inside them; a wider change is one sentence the user
@@ -62,6 +62,8 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 - **Comments** are for AI readers: at most two lines, a constraint or a pointer, no history (`comments:check`,
   `ai-kit/docs/code-comments.md`).
 - **A source file over 40 KB that you need to edit** is split first, move-only, in its own commit.
+  A lint error the move surfaces is fixed in a follow-up commit, or its suppression names the real reason the rule
+  does not apply; "moved verbatim" is no reason (pre-commit rejects it).
 - **Verify once per commit**, right before it, only what changed, with the project's verify commands (CLAUDE.md).
   No unprompted tests.
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded).
@@ -76,10 +78,13 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
   a reviewer, and first reads the "Working conventions" of `ai-kit/CLAUDE.core.md` (a subagent does not get this
   text). One commit subagent at a time; the main session keeps talking with the user but does not edit the repo
   while one runs. When it returns, the main session sends in one message that commit's background reviewer on its
-  hash (reading `git show <hash>`, not the work tree) and the next batch's commit subagent, unless that batch waits
+  hash (reading `git show <hash>`, not the work tree; the brief names each item the main session added beyond the
+  user's request, `also in scope: <item> (coordinator)`) and the next batch's commit subagent, unless that batch waits
   on this one; CONFIRMED fixes go back to that commit's own subagent by SendMessage (it holds the context; summary
-  `commit: fix <batch>`, without the word review) once no commit subagent runs, then the one re-check. A plan whose
-  commits share too much context to hand over (one large refactor) says so and runs in the main session.
+  `commit: fix <batch>`, without the word review) once no commit subagent runs, then the one re-check. After the
+  owner's go, every planned commit runs to the end in one run with one report: never stop between commits to ask
+  whether to continue; stop early only for an owner decision or a blocker. A plan whose commits share too much
+  context to hand over (one large refactor) says so and runs in the main session.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a small job, one that skips the
   summary, reports Done, Checked and Git, plus Decided and Open when they hold anything):

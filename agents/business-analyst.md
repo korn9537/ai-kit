@@ -17,8 +17,8 @@ says what the system does today: trust it over a doc that disagrees, and say the
 API spec at `ui.api` are specs: name the screens a change touches, the spec each lacks, and whether its data
 needs a new or changed server read (`${CLAUDE_PLUGIN_ROOT}/docs/screen-specs.md`). Read the
 conventions after the decisions and requirements, before the code:
-`${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and `${CLAUDE_PLUGIN_ROOT}/conventions/<lang>.md` for each
-language in `ai/kit/config.json` `conventions`.
+`${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each
+language or framework in `ai/kit/config.json` `conventions`.
 
 Run only read-only commands (`grep`, `git log`, `git show`). Do not edit files.
 

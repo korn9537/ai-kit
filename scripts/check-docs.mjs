@@ -38,6 +38,10 @@ const SKIP = new RegExp(conf.skip ?? "(^|/)README\\.md$|/(mockups|design)/");
 const MONTH =
   "(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\\.?";
 const THAI = "thai outside quotes";
+// `file.ext:N` with a code extension (code edits shift it); a host whose TLD is one (`x.rs:443`) is reported too
+const LINE = "line pointer";
+const CODE_EXT =
+  "tsx?|jsx?|mjs|cjs|vue|svelte|dart|go|cs|java|kt|swift|py|rb|php|rs|c|cpp|h|sql|prisma|sh|css|scss|html|ya?ml|json";
 const RULES = [
   ["emoji", /\p{Emoji_Presentation}|\p{Extended_Pictographic}️/u],
   ["bold", /(^|[^\w*])\*\*[^*\s]([^*]*[^*\s])?\*\*/],
@@ -53,6 +57,7 @@ const RULES = [
     ),
   ],
   [THAI, /[฀-๿]/],
+  [LINE, new RegExp(`(?<![\\w/.:@-])(?:[\\w.-]+/)*[\\w-]+(?:\\.[\\w-]+)*\\.(${CODE_EXT}):\\d+(?:-\\d+)?(?!\\w)`)],
 ].map(([name, re]) => {
   // re.test on a g or y regex keeps lastIndex between lines
   const one = new RegExp(re.source, re.flags.replace(/[gy]/g, ""));
@@ -61,7 +66,9 @@ const RULES = [
 const noCode = (l) => l.replace(/`[^`]*`/g, "");
 const noQuotes = (l) =>
   l.replace(/"[^"]*"/g, '""').replace(/“[^”]*”/g, '""');
-const prep = (name, l) => (name === THAI || name === "dated" ? noQuotes(noCode(l)) : noCode(l));
+// a line pointer is written in a code span, so that rule reads the raw line
+const prep = (name, l) =>
+  name === LINE ? l : name === THAI || name === "dated" ? noQuotes(noCode(l)) : noCode(l);
 // fragment -> count of what a rule matches on a line: bold without its boundary char, Thai as maximal runs
 const counts = (name, all, t) => {
   const c = new Map();

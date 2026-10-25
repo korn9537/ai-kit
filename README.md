@@ -28,7 +28,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
 | `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
-| `conventions/`                | cross-repo coding rules: `general.md`, one per language                                        |
+| `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`nestjs`, `typeorm`)     |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
 | `templates/ai/`               | one template per `ai/` doc type (`docs/ai-layout.md`); never copied by `init`                  |
 | `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`                         |
@@ -205,7 +205,8 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 ด้วย `scripts/check-docs.mjs` ปิดได้ด้วย `"docs": { "include": "^$" }` ใน `ai/kit/config.json`
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
-`ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
+`ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` หรือ framework เช่น `["typescript", "nestjs", "typeorm"]`
+ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
 `check` จะไม่ผ่าน)
 ข้อยกเว้นของโปรเจกต์เขียนใน `ai/kit/review-checklist.md` พร้อมเหตุผล
 

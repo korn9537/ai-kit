@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.12.0
+
+- `githooks/pre-commit`: a partially staged file gets only its index blob formatted by prettier, its other hunks
+  stay unstaged (was: the whole file re-staged); `docs/shared-checkout.md` updated (#2).
+- `githooks/pre-commit`: blocks an added `eslint-disable ... -- moved verbatim`; `CLAUDE.core.md` 40 KB split rule
+  says a suppression names the real reason (#8).
+- `docs/ai-docs.md`, `scripts/check-docs.mjs`: a pointer into code names a file and symbol, never a line number;
+  an added `a.ts:12` in an `ai/` doc is reported, code spans included (#1).
+- `CLAUDE.core.md`: an approved multi-commit plan runs to the end without asking between commits (#4); a reviewer
+  brief names items the coordinator added beyond the request, `also in scope`, which `change-reviewer` counts as
+  asked (#14; running fix subagents in parallel not taken: shared index).
+- Framework convention files: `conventions/nestjs.md` (splitting a provider over 40 KB, #3; `typescript.md` item 11
+  points to it), `conventions/typeorm.md` (guard nullable where values, #9; rule only, no lint script). Listed in
+  `conventions` like a language; `docs/kit-proposals.md` cross-repo test covers frameworks.
+- `conventions/typescript.md`: every value a `queryFn` reads is in its `queryKey` (#11); item 12 lint baseline
+  (`js.configs.recommended`, `no-floating-promises` in server code, TanStack `exhaustive-deps`) (#10, #11).
+- `conventions/sql.md` item 11: user-typed search uses `ILIKE`, LIKE input escaped through one helper (#6).
+
 ## 2.11.0
 
 - `ai-kit:business-analyst` and `ai-kit:change-reviewer` default to sonnet at medium effort (was opus, high). The
