@@ -28,9 +28,16 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 # Token records (ai/usage, written by the Stop hook) ride along with any commit; names are NUL-split and literal.
-if [ -d ai/usage ]; then
-  git ls-files -m -o --exclude-standard -z -- ai/usage | xargs -0 -r git --literal-pathspecs add --
-fi
+# A path-limited commit (-o, <paths>) runs the hook on a temporary index (next-index-*.lock): staging there would
+# corrupt the real index, so the records wait for a later commit.
+case "${GIT_INDEX_FILE:-}" in
+  *next-index-*.lock) ;;
+  *)
+    if [ -d ai/usage ]; then
+      git ls-files -m -o --exclude-standard -z -- ai/usage | xargs -0 -r git --literal-pathspecs add --
+    fi
+    ;;
+esac
 
 # A backslash is a valid filename char on macOS/Linux, so a Windows-style output path (`-o bin\Debug`) creates a
 # malformed dir that .gitignore misses.
@@ -52,7 +59,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
 fi
 
 # A lint suppression names why the rule does not apply; "moved verbatim" is no reason (conventions/general.md item 12, 40 KB split).
-moved="$(git -c core.quotePath=false diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*.md' \
+moved="$(git -c core.quotePath=false diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*.md' ':(exclude)ai/usage' \
   | grep -E '^\+' | grep -vE '^\+\+\+ ' | grep -iE 'eslint-disable[^*]*--[[:space:]]*moved verbatim')"
 if [ -n "$moved" ]; then
   echo "commit blocked: an eslint-disable gives \"moved verbatim\" as its reason:"

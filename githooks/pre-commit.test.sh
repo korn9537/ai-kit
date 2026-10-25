@@ -56,5 +56,25 @@ git -C "$REPO" add d.txt
 git -C "$REPO" commit -qm "grown usage" 2>&1
 check "an appended ai/usage file rides along" "$(files)" "ai/usage/2030-01/s 1.jsonl d.txt "
 
+# a path-limited commit runs the hook with a temporary index: staging there would corrupt the real index (MM, D)
+echo '{"n":3}' >>"$REPO/ai/usage/2030-01/s 1.jsonl"
+echo '{"n":4}' >"$REPO/ai/usage/2030-01/s 2.jsonl"
+echo more >>"$REPO/a.txt"
+git -C "$REPO" commit -qm "path-limited" -- a.txt 2>&1
+check "path-limited commit carries only its path" "$(files)" "a.txt "
+check "path-limited commit leaves ai/usage out of the index (no MM, no D)" \
+  "$(git -C "$REPO" status --porcelain -- ai/usage | cut -c1-2 | sort | tr '\n' ' ')" " M ?? "
+echo e >"$REPO/e.txt"
+git -C "$REPO" add e.txt
+git -C "$REPO" commit -qm "later" 2>&1
+check "the records wait for a later commit, which carries them" "$(files)" "ai/usage/2030-01/s 1.jsonl ai/usage/2030-01/s 2.jsonl e.txt "
+
+# the "moved verbatim" lint-reason check reads code, not records
+printf '%s\n' '{"prompt":"// eslint-disable-next-line x -- moved verbatim"}' >"$REPO/ai/usage/2030-01/s 3.jsonl"
+echo f >"$REPO/f.txt"
+git -C "$REPO" add f.txt
+git -C "$REPO" commit -qm "record that quotes the phrase" 2>&1
+check "a record quoting 'moved verbatim' does not block the commit" "$(files)" "ai/usage/2030-01/s 3.jsonl f.txt "
+
 echo "$pass passed, $fail failed"
 ((fail == 0))
