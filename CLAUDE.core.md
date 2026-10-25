@@ -39,7 +39,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
   a BA request by the user is always run; unsure → summarize.
 - **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet at medium effort (agent
-  frontmatter), commit subagents on `model: "sonnet"`. Pass `model: "opus"` and `effort: "high"` when the change
+  frontmatter), commit subagents on sonnet via the Agent call. Pass `model: "opus"` and `effort: "high"` when the change
   touches a DB schema or migration, a calculation, a permission, or a decision recorded as final; no other model or
   effort override.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in

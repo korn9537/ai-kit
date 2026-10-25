@@ -7,6 +7,9 @@
   searches in one message, never read a whole large file to find one symbol and never one `sed -n` per call when
   several ranges are known. Measured driver: one commit subagent ran 250 calls reading code one small `sed -n` or
   `grep -n` per call. `CLAUDE.core.md` unchanged.
+- Fix: a risky commit batch gets `model: "opus"` and `effort: "high"` (the reviewer and BA rule), sonnet with no
+  effort override otherwise; core Agent model bullet says commit subagents get sonnet via the Agent call
+  (`wc -c CLAUDE.core.md` 7832 -> 7840 bytes).
 
 ## 2.13.1
 

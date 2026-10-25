@@ -33,8 +33,8 @@ A multi-commit plan runs from the main session as coordinator, so its context st
 
 - Each batch goes to a fresh background subagent (`general-purpose`, description `commit: <batch>`) that implements,
   verifies and commits it.
-- The Agent call passes `model: "sonnet"`; `"opus"` only when the batch touches a DB schema or migration, a
-  calculation, a permission or a decision recorded as final (the reviewer and BA rule).
+- The Agent call passes `model: "sonnet"` and no effort; `model: "opus"` and `effort: "high"` when the batch touches
+  a DB schema or migration, a calculation, a permission or a decision recorded as final (the reviewer and BA rule).
 - Its brief says it is a commit subagent, must not launch a reviewer, and first reads the "Working conventions" of
   the plugin's `CLAUDE.core.md` (give its absolute path; a subagent does not get that text injected).
 - Its brief also sets read discipline: locate with `grep -n` (several patterns in one call), read only the needed
