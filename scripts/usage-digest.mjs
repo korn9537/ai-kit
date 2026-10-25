@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { collectSession, transcriptsDir } from "./usage-collect.mjs";
+import { maskPrompt } from "./usage-mask.mjs";
 import { buildRecord, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
 
 const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
@@ -13,8 +14,21 @@ const TYPES = ["input", "read", "write_5m", "write_1h", "output"];
 
 // ---- loading ----
 
+const NUMERIC = ["calls", "input", "read", "write_5m", "write_1h", "output", "peak", "largest_result"];
+const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
+
+// A record the digest can total without throwing: v 1, string ts, agents are objects with a string model and numeric counts.
+export function validRecord(r) {
+  if (!isObj(r) || r.v !== 1 || typeof r.ts !== "string" || !Array.isArray(r.agents)) return false;
+  if (r.commits !== undefined && !Array.isArray(r.commits)) return false;
+  return r.agents.every((a) => isObj(a) && typeof a.model === "string" && NUMERIC.every((k) => a[k] === undefined || Number.isFinite(a[k]))
+    && (a.tools === undefined || (isObj(a.tools) && Object.values(a.tools).every(Number.isFinite)))
+    && (a.findings === undefined || isObj(a.findings)));
+}
+
+// bad = a line that is not JSON; skipped = JSON that is not a usable record.
 export function loadRecords(usageDir, since = "") {
-  const out = { recs: [], bad: 0 };
+  const out = { recs: [], bad: 0, skipped: 0 };
   let files = [];
   try {
     files = readdirSync(usageDir, { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl")).sort();
@@ -38,8 +52,8 @@ export function loadRecords(usageDir, since = "") {
         out.bad++;
         continue;
       }
-      if (!r || typeof r !== "object" || typeof r.ts !== "string" || !Array.isArray(r.agents)) {
-        out.bad++;
+      if (!validRecord(r)) {
+        out.skipped++;
         continue;
       }
       if (since && !(r.ts >= since)) continue;
@@ -49,7 +63,8 @@ export function loadRecords(usageDir, since = "") {
   return out;
 }
 
-// One in-memory record per local session (whole session as one round-delta, prompts full, kit "baseline"); never written.
+// One in-memory record per local session (whole session, kit "baseline", round = prompt count, prompt = the first
+// prompt); never written.
 export function baselineRecords(repoRoot, who = {}, since = "") {
   const dir = transcriptsDir(repoRoot);
   let names = [];
@@ -61,11 +76,15 @@ export function baselineRecords(repoRoot, who = {}, since = "") {
     const path = join(dir, n);
     try {
       const session = basename(n, ".jsonl");
-      const rec = buildRecord(collectSession(path), [], {
+      const sess = collectSession(path);
+      const rec = buildRecord(sess, [], {
         now: statSync(path).mtime, session, kit: "baseline", prompts: "full",
         project: who.project ?? "", user: who.user ?? "", branch: who.branch ?? "",
       });
-      if (rec && (!since || rec.ts >= since)) out.recs.push(rec);
+      if (!rec || (since && rec.ts < since)) continue;
+      if (sess.prompts.length) rec.prompt = maskPrompt(sess.prompts[0].text);
+      else delete rec.prompt;
+      out.recs.push(rec);
     } catch {
       out.skipped++;
     }
@@ -88,10 +107,17 @@ const bump = (map, k, x) => map.set(k, (map.get(k) ?? 0) + x);
 const bySemver = (a, b) => (a === "baseline" ? -1 : b === "baseline" ? 1 : a.localeCompare(b, "en", { numeric: true }));
 const nameOf = (s, fallback) => one(s, 20).replace(/\s/g, "_") || fallback;
 
+const max = (xs) => xs.reduce((m, x) => Math.max(m, x), 0);
+
+// meta: bad = unparsable lines, skipped = unusable records, sessionsSkipped = baseline sessions that failed, source "baseline".
 export function digest(recs, prices, meta = {}) {
-  const extra = [meta.bad ? `${meta.bad} bad lines` : "", meta.skipped ? `${meta.skipped} sessions skipped` : ""].filter(Boolean);
-  if (!recs.length) return ["no usage records", ...extra].join(" · ");
-  recs = [...recs].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
+  const base = meta.source === "baseline";
+  const usable = recs.filter(validRecord);
+  const skipped = (meta.skipped ?? 0) + recs.length - usable.length;
+  const extra = [meta.bad ? `${meta.bad} bad lines` : "", skipped ? `${skipped} skipped` : "",
+    meta.sessionsSkipped ? `${meta.sessionsSkipped} sessions skipped` : ""].filter(Boolean);
+  if (!usable.length) return ["no usage records", ...extra].join(" · ");
+  recs = [...usable].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));
 
   // One row per agent per record; cost is null for a model with no price.
   const rows = [];
@@ -119,8 +145,9 @@ export function digest(recs, prices, meta = {}) {
 
   const out = [];
   const range = `${recs[0].ts.slice(0, 10)}..${recs[recs.length - 1].ts.slice(0, 10)}`;
-  out.push([`records ${recs.length}`, `sessions ${sessions.size}`, `rounds ${rounds.size}`, `commits ${commits.size}`, range,
-    ...(meta.source ? [meta.source] : []), ...extra].join(" · "));
+  out.push((base
+    ? [`baseline: 1 record = 1 session`, `records ${recs.length}`, `commits ${commits.size}`, range]
+    : [`records ${recs.length}`, `sessions ${sessions.size}`, `rounds ${rounds.size}`, `commits ${commits.size}`, range]).concat(extra).join(" · "));
 
   // totals
   out.push("## totals");
@@ -175,8 +202,8 @@ export function digest(recs, prices, meta = {}) {
 
   // per commit / round / session
   out.push("## per commit");
-  out.push(commits.size ? `per commit ≈ ${fmtUsd(total / commits.size)} (commits ${commits.size}, total ${fmtUsd(total)})` : "per commit: none (commits 0)");
-  out.push(`per round ≈ ${fmtUsd(total / rounds.size)} (rounds ${rounds.size})`);
+  out.push(commits.size ? `all cost / commits ≈ ${fmtUsd(total / commits.size)} (commits ${commits.size}, total ${fmtUsd(total)}, unpriced tokens excluded)` : "all cost / commits: none (commits 0)");
+  if (!base) out.push(`per round ≈ ${fmtUsd(total / rounds.size)} (rounds ${rounds.size})`);
   out.push(`per session ≈ ${fmtUsd(total / sessions.size)} (sessions ${sessions.size})`);
 
   // by kit version
@@ -201,7 +228,8 @@ export function digest(recs, prices, meta = {}) {
     const mine = [...agents.values()].filter((g) => g.kit === k);
     const cAgents = mine.filter((g) => g.role === "commit");
     const mains = mine.filter((g) => g.role === "coordinator");
-    const parts = [`${s.size}s ${rd.size}r`, fmtUsd(cost), `${fmtUsd(cost / rd.size)}/round`, cm.size ? `${fmtUsd(cost / cm.size)}/commit` : "no commits",
+    const parts = [base ? `${s.size}s` : `${s.size}s ${rd.size}r`, fmtUsd(cost), base ? `${fmtUsd(cost / s.size)}/session` : `${fmtUsd(cost / rd.size)}/round`,
+      cm.size ? `cost/commits ${fmtUsd(cost / cm.size)}` : "no commits",
       `commit ${share((x) => x.a.role === "commit")}`, `opus ${share((x) => modelShort(x.a.model) === "opus")}`];
     if (cAgents.length) parts.push(`commit calls ${Math.round(mean(cAgents.map((g) => g.calls)))}`);
     if (mains.length) parts.push(`main peak ${fmtTok(mean(mains.map((g) => g.peak)))}`);
@@ -221,9 +249,9 @@ export function digest(recs, prices, meta = {}) {
   }
   for (const [role, e] of [...byRole].sort((a, b) => b[1].cost - a[1].cost).slice(0, CAP.roles)) {
     const tools = top(e.tools, CAP.tools).map(([t, n]) => `${one(t, 30)} ${n}`).join(", ");
-    out.push(`${one(role, 20)}: ${e.list.length} agents · calls mean ${Math.round(mean(e.list.map((g) => g.calls)))} max ${Math.max(...e.list.map((g) => g.calls))}`
-      + ` · peak mean ${fmtTok(mean(e.list.map((g) => g.peak)))} max ${fmtTok(Math.max(...e.list.map((g) => g.peak)))}`
-      + ` · largest result ${fmtTok(Math.max(...e.list.map((g) => g.largest)))}${tools ? ` · tools ${tools}` : ""}`);
+    out.push(`${one(role, 20)}: ${e.list.length} agents · calls mean ${Math.round(mean(e.list.map((g) => g.calls)))} max ${max(e.list.map((g) => g.calls))}`
+      + ` · peak mean ${fmtTok(mean(e.list.map((g) => g.peak)))} max ${fmtTok(max(e.list.map((g) => g.peak)))}`
+      + ` · ${fmtUsd(e.cost / e.list.length)}/agent · largest result ${fmtTok(max(e.list.map((g) => g.largest)))}${tools ? ` · tools ${tools}` : ""}`);
   }
   const months = new Map();
   for (const r of recs) if (Number.isFinite(r.base_context)) (months.get(r.ts.slice(0, 7)) ?? months.set(r.ts.slice(0, 7), []).get(r.ts.slice(0, 7))).push(r.base_context);
@@ -247,8 +275,8 @@ export function digest(recs, prices, meta = {}) {
     out.push(`${m}: ${e.n} reviews, ${per(e.confirmed)} confirmed/review, ${per(e.plausible)} plausible/review, ${fmtUsd(e.cost / e.n)}/review`);
   }
 
-  // costliest rounds: a round's records are summed
-  out.push("## costliest rounds");
+  // costliest rounds (a round's records are summed); in baseline one record is a whole session
+  out.push(base ? "## costliest sessions" : "## costliest rounds");
   const rds = new Map();
   for (const x of rows) {
     const e = rds.get(x.rk) ?? { cost: 0, round: x.r.round, user: x.r.user, prompt: "", roles: new Map() };
@@ -261,7 +289,7 @@ export function digest(recs, prices, meta = {}) {
   if (!costly.length) out.push("none");
   for (const e of costly) {
     const mix = top(e.roles, CAP.mix).filter(([, v]) => v > 0).map(([k, v]) => `${one(k, 12)} ${pct(v, e.cost)}`).join(" ");
-    out.push(`- ${fmtUsd(e.cost)} r${e.round} ${nameOf(e.user, "anon")}: ${mix} | ${one(e.prompt || "(no prompt)", Math.max(20, EXCERPT - mix.length - 3))}`);
+    out.push(`- ${fmtUsd(e.cost)} ${base ? `${e.round}p` : `r${e.round}`} ${nameOf(e.user, "anon")}: ${mix} | ${one(e.prompt || "(no prompt)", Math.max(20, EXCERPT - mix.length - 3))}`);
   }
 
   // outliers

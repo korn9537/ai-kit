@@ -113,13 +113,13 @@ function digestCmd(args) {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   const prices = { ...DEFAULT_PRICES, ...(readConfig(root).usage?.prices ?? {}) };
   if (!baseline) {
-    const { recs, bad } = loadRecords(join(root, "ai", "usage"), since);
-    process.stdout.write(`${digest(recs, prices, { bad })}\n`);
+    const { recs, bad, skipped } = loadRecords(join(root, "ai", "usage"), since);
+    process.stdout.write(`${digest(recs, prices, { bad, skipped })}\n`);
     return;
   }
   const who = { project: basename(root), user: git(root, "config", "user.name") };
   const { recs, skipped } = baselineRecords(root, who, since);
-  process.stdout.write(`${digest(recs, prices, { skipped, source: "baseline" })}\n`);
+  process.stdout.write(`${digest(recs, prices, { sessionsSkipped: skipped, source: "baseline" })}\n`);
 }
 
 function main() {

@@ -112,8 +112,8 @@ function totals(agents, prices) {
   return [priced ? fmtUsd(usd) : "", unpriced ? `${fmtTok(unpriced)} tok unpriced` : ""].filter(Boolean).join(" + ") || "$0.00";
 }
 
-export const modelShort = (m) => /opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?");
 const clip = (s, n) => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
+export const modelShort = (m) => clip(String(/opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?")), 30);
 
 export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
   const total = rec.agents.reduce((n, a) => n + units(a), 0);

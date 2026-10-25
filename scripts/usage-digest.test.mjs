@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
+import { modelShort } from "./usage-record.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -61,9 +62,13 @@ const d = digest(recs, P);
 
 eq("empty", digest([], P), "no usage records");
 const SECTIONS = ["totals", "by role", "per commit", "by kit", "drivers", "reviews", "costliest rounds", "outliers"];
+const BASE_SECTIONS = SECTIONS.map((s) => (s === "costliest rounds" ? "costliest sessions" : s));
 eq("sections in order", [...d.matchAll(/^## (.+)$/gm)].map((m) => m[1]), SECTIONS);
 match("role share and model within role", d, /commit 6\d% \(opus 9\d%, sonnet \d+%\)/);
-match("cost per commit", d, /per commit ≈ \$\d/);
+match("cost per commit says it is all cost over commits, unpriced excluded", d, /all cost \/ commits ≈ \$\d.*unpriced tokens excluded/);
+match("by kit cost per commit labelled", d, /^2\.13\.0 .* cost\/commits \$\d/m);
+eq("no bare per-commit label left", /\$[\d.]+\/commit\b|per commit ≈/.test(d), false);
+match("drivers: mean cost per agent per role", d, /^commit: 2 agents .* \$[\d.]+\/agent /m);
 match("by kit compares versions", d, /2\.13\.0 .*\n2\.13\.1 /);
 match("drivers name tool mix", d, /commit: .*Bash:sed \d+/);
 match("reviews per model", d, /opus: \d+ reviews, [\d.]+ confirmed\/review/);
@@ -99,8 +104,24 @@ const onlyUnk = digest([rec({ agents: [ag({ model: "mystery-1", read: 1500 })] }
 match("only unpriced: no NaN, no cost", onlyUnk, /unpriced: 1500 tok/);
 eq("no NaN or undefined anywhere", [d, big, unk, onlyUnk].some((t) => /NaN|undefined|Infinity/.test(t)), false);
 
-match("meta shown in the header", digest(recs, P, { bad: 2, skipped: 1, source: "baseline" }), /baseline · 2 bad lines · 1 sessions skipped/);
+match("meta shown in the header", digest(recs, P, { bad: 2, skipped: 4, sessionsSkipped: 1 }), /^records 3 .* · 2 bad lines · 4 skipped · 1 sessions skipped\n/);
 match("empty with meta", digest([], P, { bad: 2 }), /^no usage records · 2 bad lines$/);
+
+// a malformed record handed straight to digest is skipped and counted, never thrown on
+const junk = [recs[0], null, "x", { v: 1, ts: "2026-02-01T00:00:00Z", agents: [null, 3] }, { v: 2, ts: "2026-02-01", agents: [] }, { ...recs[1], agents: [{ model: 5 }] }];
+let threw = false;
+let dj = "";
+try {
+  dj = digest(junk, P);
+} catch {
+  threw = true;
+}
+eq("digest never throws on a malformed record", threw, false);
+match("digest counts what it skipped", dj, /^records 1 .* · 5 skipped\n/);
+eq("digest of only malformed records", digest([null, { v: 9 }], P), "no usage records · 2 skipped");
+const manyTools = rec({ agents: Array.from({ length: 300000 }, (_, i) => ag({ id: `a${i}`, role: "commit", calls: i, peak: i, largest_result: i, read: 1 })) });
+eq("300k agents in one role: no spread overflow", digest([manyTools], P).includes("300000 agents"), true);
+eq("modelShort capped at 30", modelShort(`x${"y".repeat(100)}`).length, 30);
 
 // loading: nested month dirs, bad lines skipped and counted, --since by record ts
 const tmp = mkdtempSync(join(tmpdir(), "usage-digest-"));
@@ -112,10 +133,17 @@ try {
   writeFileSync(join(tmp, "2026-02", "b.jsonl"), line({ ts: "2026-02-01T00:00:00Z" }) + line({ ts: "2026-02-02T00:00:00Z" }));
   writeFileSync(join(tmp, "2026-02", "notes.txt"), "ignored");
   const all = loadRecords(tmp);
-  eq("load: records and bad lines", [all.recs.length, all.bad], [3, 3]);
+  eq("load: records, unparsable lines, unusable records", [all.recs.length, all.bad, all.skipped], [3, 1, 2]);
   const since = loadRecords(tmp, "2026-02-01");
-  eq("since filters by ts, inclusive", [since.recs.map((r) => r.ts.slice(0, 10)), since.bad], [["2026-02-01", "2026-02-02"], 3]);
-  eq("missing dir", loadRecords(join(tmp, "nope")), { recs: [], bad: 0 });
+  eq("since filters by ts, inclusive", [since.recs.map((r) => r.ts.slice(0, 10)), since.bad], [["2026-02-01", "2026-02-02"], 1]);
+  eq("missing dir", loadRecords(join(tmp, "nope")), { recs: [], bad: 0, skipped: 0 });
+  writeFileSync(join(tmp, "2026-02", "c.jsonl"), [
+    JSON.stringify({ ...rec({}), v: 2 }), JSON.stringify(rec({ agents: ["x"] })), JSON.stringify(rec({ agents: [null] })),
+    JSON.stringify(rec({ agents: [ag({ model: 7 })] })), JSON.stringify(rec({ agents: [ag({ read: "9" })] })), JSON.stringify(rec({ agents: [ag({ model: undefined })] })),
+    JSON.stringify(rec({ ts: "2026-02-09T00:00:00Z" })),
+  ].join("\n"));
+  const withBad = loadRecords(join(tmp, "2026-02"));
+  eq("records with wrong v or malformed agents are skipped and counted", [withBad.recs.length, withBad.skipped], [3, 6]);
 
   // baseline: one in-memory record per transcript, kit "baseline"; a broken one is skipped and counted
   const proj = join(tmp, "proj");
@@ -130,13 +158,23 @@ try {
     writeFileSync(join(tdir, "sess-one.jsonl"), [user("2026-02-01T00:00:00Z", "do the thing"), asst("m1", "2026-02-01T00:00:05Z", "done")].join("\n") + "\n");
     writeFileSync(join(tdir, "sess-two.jsonl"), [user("2026-02-02T00:00:00Z", "other"), asst("m2", "2026-02-02T00:00:05Z", "ok")].join("\n") + "\n");
     writeFileSync(join(tdir, "empty.jsonl"), "");
+    writeFileSync(join(tdir, "sess-three.jsonl"), [user("2026-02-03T00:00:00Z", "first ask"), asst("m3", "2026-02-03T00:00:05Z", "ok"),
+      user("2026-02-03T00:01:00Z", "second ask"), asst("m4", "2026-02-03T00:01:05Z", "ok")].join("\n") + "\n");
     mkdirSync(join(tdir, "broken.jsonl"));
     const b = baselineRecords(proj, { user: "me", project: "proj" });
-    eq("baseline: one record per session with usage", b.recs.map((r) => [r.session, r.kit, r.user, r.round, r.prompt]).sort(),
-      [["sess-one", "baseline", "me", 1, "do the thing"], ["sess-two", "baseline", "me", 1, "other"]]);
+    eq("baseline: one record per session with usage, round = prompt count, prompt = the first prompt",
+      b.recs.map((r) => [r.session, r.kit, r.user, r.round, r.prompt]).sort(),
+      [["sess-one", "baseline", "me", 1, "do the thing"], ["sess-three", "baseline", "me", 2, "first ask"], ["sess-two", "baseline", "me", 1, "other"]]);
     eq("baseline: records carry the whole session", b.recs.find((r) => r.session === "sess-one").agents[0].read, 1000);
     eq("baseline: a session that fails to collect is skipped and counted", b.skipped, 1);
-    match("baseline feeds the digest", digest(b.recs, P), /^## by kit\nbaseline /m);
+    const bd = digest(b.recs, P, { source: "baseline", sessionsSkipped: b.skipped });
+    match("baseline feeds the digest", bd, /^## by kit\nbaseline /m);
+    match("baseline header says what a record is", bd, /^baseline: 1 record = 1 session · records 3 · commits 0 · .* · 1 sessions skipped\n/);
+    eq("baseline sections: sessions, not rounds", [...bd.matchAll(/^## (.+)$/gm)].map((m) => m[1]), BASE_SECTIONS);
+    match("baseline session line shows prompt count and first prompt", bd, /^- \$[\d.]+ 2p me: .*\| first ask$/m);
+    eq("baseline: no per-round or r<n> labels", /per round|\br\d+ me|\/round|\dr /.test(bd), false);
+    match("baseline by kit per session", bd, /^baseline · 3s · \$[\d.]+ · \$[\d.]+\/session /m);
+    eq("non-baseline digest keeps rounds", /^## costliest rounds$/m.test(d) && !/costliest sessions/.test(d), true);
   } finally {
     if (prevCfg === undefined) delete process.env.CLAUDE_CONFIG_DIR;
     else process.env.CLAUDE_CONFIG_DIR = prevCfg;
