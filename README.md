@@ -84,10 +84,10 @@ and `.sql`/`.prisma`. The skip applies only before the first review: a fix after
 re-check.
 
 `usage.enabled` (default `true`) turns the token records off with `false`. `usage.prompts` is `"full"` (default) or
-`"none"`: with `"full"` each record holds the round's prompt, secret-looking values masked and cut to 1,000
-characters. `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a
-model with no price is reported apart. Records are committed with the next commit (`githooks/pre-commit` stages
-`ai/usage/` by name), and `init` adds `ai/usage/** merge=union` to `.gitattributes`.
+`"none"`: with `"full"` the first record of each round holds its prompt, secret-looking values masked and cut to
+1,000 characters. `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default
+prices; a model with no price is reported apart. Records are committed with the next commit (`githooks/pre-commit`
+stages `ai/usage/` by name), and `init` adds `ai/usage/** merge=union` to `.gitattributes`.
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns

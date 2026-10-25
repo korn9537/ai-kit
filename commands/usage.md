@@ -4,12 +4,13 @@ description: Find the largest token driver in this project's usage records and t
 
 Analyse token usage from the digest, never from the records.
 
-1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" digest` from the project root; add `--baseline` when `ai/usage/`
-   holds no `.jsonl` (the digest then comes from this machine's transcripts and says so). `--since YYYY-MM-DD`
-   limits it. Read only its output: never open, grep or cat `ai/usage/` files, they hold prompts and grow without
-   bound.
-2. Name the largest driver: the role or agent with the biggest cost share. Give its evidence from the digest: role,
-   model, calls, peak context, tool mix, cost per agent; unpriced models apart.
+1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" digest` from the project root. It prints `no usage records` →
+   rerun with `--baseline` (the digest then comes from this machine's transcripts and says so). `--since
+   YYYY-MM-DD` limits it. Read only its output: never open, grep or cat `ai/usage/` files, they hold prompts and
+   grow without bound.
+2. Name the largest driver: the role with the biggest cost share. Give its evidence from the digest: model, calls,
+   peak context, tool mix, cost per agent (drivers section), the agents behind it (outliers, costliest rounds);
+   unpriced models apart.
 3. Give the one change that would cut it, with the figure it should move (calls, peak, share). One change, not a
    list.
 4. Where the change goes:

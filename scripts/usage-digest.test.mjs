@@ -70,6 +70,8 @@ match("by kit cost per commit labelled", d, /^2\.13\.0 .* cost\/commits \$\d/m);
 eq("no bare per-commit label left", /\$[\d.]+\/commit\b|per commit ≈/.test(d), false);
 match("drivers: mean cost per agent per role", d, /^commit: 2 agents .* \$[\d.]+\/agent /m);
 match("by kit compares versions", d, /2\.13\.0 .*\n2\.13\.1 /);
+match("by kit: reviewer findings per review", d, /^2\.13\.0 .* 1 reviews 2 confirmed\/review 1 plausible\/review/m);
+match("by kit: second kit's findings", d, /^2\.13\.1 .* 1 reviews 1 confirmed\/review 0 plausible\/review/m);
 match("drivers name tool mix", d, /commit: .*Bash:sed \d+/);
 match("reviews per model", d, /opus: \d+ reviews, [\d.]+ confirmed\/review/);
 match("costliest rounds with prompt excerpt ≤ 200 chars", d, /^- \$[\d.]+ r\d+ \w+: .{1,200}$/m);

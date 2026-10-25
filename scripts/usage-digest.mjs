@@ -233,6 +233,11 @@ export function digest(recs, prices, meta = {}) {
       `commit ${share((x) => x.a.role === "commit")}`, `opus ${share((x) => modelShort(x.a.model) === "opus")}`];
     if (cAgents.length) parts.push(`commit calls ${Math.round(mean(cAgents.map((g) => g.calls)))}`);
     if (mains.length) parts.push(`main peak ${fmtTok(mean(mains.map((g) => g.peak)))}`);
+    const revs = mine.filter((g) => g.role === "reviewer" && g.findings);
+    if (revs.length) {
+      const per = (f) => (Math.round((10 * sum(revs.map((g) => g.findings[f] ?? 0))) / revs.length) / 10).toString();
+      parts.push(`${revs.length} reviews ${per("confirmed")} confirmed/review ${per("plausible")} plausible/review`);
+    }
     out.push(`${k} · ${parts.join(" · ")}`);
   }
   if (names.length > shownKits.length) out.push(`+${names.length - shownKits.length} older kits omitted`);
