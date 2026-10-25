@@ -10,8 +10,8 @@ common="$(git -C "$kit_root" rev-parse --path-format=absolute --git-common-dir 2
 if [[ -n "$common" && -d "$common" ]]; then printf '%s\n' "$kit_plugin" >"$common/ai-kit-root" || true; fi
 
 rep="$kit_plugin/"
-core="$(cat "$kit_plugin/CLAUDE.core.md")"
-core=${core//ai-kit\//"$rep"}
+# sed, not ${core//…}: bash 3.2 (macOS) replaces in a UTF-8 string in quadratic time, 2 s for this file
+core="$(sed "s|ai-kit/|$(printf '%s' "$rep" | sed 's/[|&\\]/\\&/g')|g" "$kit_plugin/CLAUDE.core.md")"
 if [[ -s "$kit_root/ai/kit/kit-proposals.md" ]]; then
   core+=$'\n\n'"Unfiled kit proposals in ai/kit/kit-proposals.md: file them per ${rep}docs/kit-proposals.md §Filing, then remove each filed entry (delete the file when empty)."
 fi

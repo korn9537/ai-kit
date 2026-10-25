@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.12.2
+
+- `hooks/session-start.sh`: makes the core paths absolute with `sed`; bash 3.2 (macOS) took 2 s for the
+  `${core//...}` replacement on the UTF-8 text, now 0.05 s for the whole hook. Same output.
+- `hooks/post-edit-check.sh`: `run` starts each check in the background and the hook waits for all, so an edit
+  waits for the slowest check, not the sum; failures are still reported in start order, same format. A `run`
+  inside a subshell (`( cd x && run ... )`) runs in the foreground and its failure now blocks (was: lost); a job
+  `post-edit.sh` starts itself is not waited for. A file reached through a symlinked folder (`/tmp` ->
+  `/private/tmp`) is checked (was: skipped). Tests: `hooks/post-edit-check.test.sh`.
+- `templates/ai-kit-project/post-edit.sh`: the example calls `node_modules/.bin/eslint`, not `npx` (0.2-1 s per
+  edit), and says checks run in parallel, a subshell `run` in the foreground.
+
 ## 2.12.1
 
 - `/ai-kit:harvest`: shows the owner one decision table and waits for a go before editing; a proposal that changes

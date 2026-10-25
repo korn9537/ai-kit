@@ -17,7 +17,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh` and `review-before-stop.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh` and `review-before-stop.sh`: `hooks/<name>.test.sh` |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
@@ -47,8 +47,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   main-session reply with `Review closed: re-checked once` (not quoted).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens, asking
   for a "Next session" prompt when the task ends. It never blocks.
-- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks whose scope holds the file,
-  then `ai/kit/post-edit.sh`.
+- `post-edit-check.sh` (PostToolUse on Edit/Write) runs the comment and doc checks whose scope holds the file
+  and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A` and `git commit -a` (shared checkout).
