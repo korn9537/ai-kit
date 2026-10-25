@@ -31,15 +31,15 @@ export function transcriptsDir(repoRoot) {
 export function loadCache(path) {
   try {
     const c = JSON.parse(readFileSync(path, "utf8"));
-    if (c?.v === 1 && c.files) return { v: 1, files: c.files, bytesRead: 0 };
+    if (c?.v === 2 && c.files) return { v: 2, files: c.files, bytesRead: 0 };
   } catch {}
-  return { v: 1, files: {}, bytesRead: 0 };
+  return { v: 2, files: {}, bytesRead: 0 };
 }
 
 export function saveCache(path, c) {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ v: 1, files: c.files }));
+  writeFileSync(tmp, JSON.stringify({ v: 2, files: c.files }));
   renameSync(tmp, path);
 }
 
@@ -172,7 +172,7 @@ function agentOf(id, role, desc, model, f) {
   return a;
 }
 
-export function collectSession(transcript, cache = { v: 1, files: {}, bytesRead: 0 }) {
+export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead: 0 }) {
   cache.bytesRead = 0;
   const mf = readNew(transcript, cache, true);
   const agents = { main: agentOf("main", "coordinator", "", mf.model, mf) };

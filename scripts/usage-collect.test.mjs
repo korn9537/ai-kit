@@ -1,6 +1,6 @@
 // Tests for usage-collect.mjs: transcript JSONL to cumulative per-agent totals, with an incremental cache.
 // Usage: node scripts/usage-collect.test.mjs
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectSession, loadCache, roleOf, saveCache, transcriptsDir } from "./usage-collect.mjs";
@@ -146,6 +146,10 @@ eq("roleOf", ["commit: x", "Review y", ""].map((d, i) => roleOf(d, ["", "", "ai-
 process.env.CLAUDE_CONFIG_DIR = join(dir, "cfg");
 eq("transcriptsDir slug", transcriptsDir("/Users/a.b/My Repo"), join(dir, "cfg", "projects", "-Users-a-b-My-Repo"));
 eq("unreadable cache file loads empty", Object.keys(loadCache(main).files), []);
+writeFileSync(join(dir, "old-cache.json"), JSON.stringify({ v: 1, files: { x: { offset: 99, prompts: [{ text: "plain prompt" }] } } }));
+eq("a version 1 cache (it kept prompt text) is dropped and rebuilt", [loadCache(join(dir, "old-cache.json")).v, Object.keys(loadCache(join(dir, "old-cache.json")).files)], [2, []]);
+saveCache(join(dir, "new-cache.json"), { files: {} });
+eq("saved cache is version 2", JSON.parse(readFileSync(join(dir, "new-cache.json"), "utf8")).v, 2);
 
 rmSync(dir, { recursive: true, force: true });
 console.log(`${passed} passed, ${failed} failed`);
