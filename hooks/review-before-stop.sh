@@ -2,10 +2,10 @@
 # Stop hook: code edited in this session after the last review → block the stop once and ask for a fresh-eyes
 # review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Working conventions"). A review = an Agent call with
 # that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
-# (fallback). Docs (*.md) and files outside the repo do not count; a Bash command that writes into the repo counts
-# (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a .md-only Bash write does
-# not. Edits by a finished commit subagent (description "commit: ...") count too; one still running is skipped
-# until it ends.
+# (fallback). Docs (*.md), ai/usage records and files outside the repo do not count; a Bash command that writes
+# into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a
+# .md-only Bash write does not. Edits by a finished commit subagent (description "commit: ...") count too; one
+# still running is skipped until it ends.
 #
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
@@ -123,8 +123,8 @@ if ! grep -qxF '(via Bash)' <<<"$files"; then
   while IFS= read -r f; do specs+=(":(literal)$f"); done <<<"$files"
 fi
 code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); prints anything that is not a comment
-  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' | grep -E '^-' || true
-  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' \
+  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' | grep -E '^-' || true
+  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' \
     | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
     | sed -E 's/^[+-][[:space:]]*//' \
     | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
@@ -142,18 +142,18 @@ if [[ -n "$snapshot" ]]; then
   if [[ -n "$now_tree" ]]; then
     changed="$(code_since "$snapshot" "$now_tree")"
     [[ -z "$changed" ]] && exit 0
-    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- . ':(exclude)*.md')"
-    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- . ':(exclude)*.md')"
+    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- . ':(exclude)*.md' ':(exclude)ai/usage')"
+    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- . ':(exclude)*.md' ':(exclude)ai/usage')"
   fi
 else
   since="$(jq -R 'fromjson? // empty | .timestamp // empty' -r "$transcript" | head -1 || true)"
   base="$(git -C "$project" rev-list -1 --before="$since" HEAD 2>/dev/null || true)"
   if [[ -n "$since" && -n "$base" ]]; then
-    new_files="$(git -C "$project" ls-files --others --exclude-standard -- "${specs[@]}" ':(exclude)*.md' || true)"
+    new_files="$(git -C "$project" ls-files --others --exclude-standard -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
     changed="$(code_since "$base")"
     [[ -z "$new_files" && -z "$changed" ]] && exit 0
-    new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md')"
-    paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md')"
+    new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
+    paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
   fi
 fi
 skip_lines="$(kit_conf '.review.skip_lines' 10)"

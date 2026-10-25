@@ -40,8 +40,9 @@ A multi-commit plan runs from the main session as coordinator, so its context st
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
   repo while one runs.
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
-  one, the next batch's commit subagent. Reviewer brief: read `git show <hash>`, not the work tree; name each item
-  the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
+  one, the next batch's commit subagent. Reviewer brief: read `git show <hash> -- . ':(exclude)ai/usage'`, not the
+  work tree; name each item the main session added beyond the user's request,
+  `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check.

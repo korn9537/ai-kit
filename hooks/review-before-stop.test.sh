@@ -112,6 +112,18 @@ run_case "pass: nothing changed since the snapshot" pass - "$reviewer" "$(edit s
 printf '%s\n' '// note' >>"$REPO/src/a.ts"
 run_case "pass: only a comment line added since the snapshot" pass - "$reviewer" "$(edit src/a.ts)"
 reset
+# records under ai/usage are logs, not work
+usage() { mkdir -p "$REPO/ai/usage/2030-01" && seq 1 40 >"$REPO/ai/usage/2030-01/s1.jsonl"; }
+snap
+usage
+run_case "pass: only ai/usage changed since the snapshot" pass - "$reviewer" "$(edit src/a.ts)"
+rm -rf "$REPO/ai/usage"
+reset
+usage
+run_case "pass: only ai/usage changed, no snapshot" pass - \
+  "$(line Bash "{\"command\": \"echo x >> $REPO/ai/usage/2030-01/s1.jsonl\"}")"
+rm -rf "$REPO/ai/usage"
+reset
 
 echo "$pass passed, $fail failed"
 ((fail == 0))

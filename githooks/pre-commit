@@ -27,6 +27,11 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+# Token records (ai/usage, written by the Stop hook) ride along with any commit; names are NUL-split and literal.
+if [ -d ai/usage ]; then
+  git ls-files -m -o --exclude-standard -z -- ai/usage | xargs -0 -r git --literal-pathspecs add --
+fi
+
 # A backslash is a valid filename char on macOS/Linux, so a Windows-style output path (`-o bin\Debug`) creates a
 # malformed dir that .gitignore misses.
 if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -q '\\'; then

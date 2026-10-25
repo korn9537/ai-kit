@@ -1,7 +1,7 @@
 // Tests for kit.mjs inventory: a fixture repo, then each wanted line must appear in the output.
 // Usage: node scripts/kit-inventory.test.mjs
-import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -10,6 +10,7 @@ const FILES = {
   "ai/kit/config.json": "{}",
   "ai/tasks/a.md": "x",
   "ai/notes.md": "x",
+  "ai/usage/2030-01/s1.jsonl": "{}",
   "package.json": JSON.stringify({ dependencies: { next: "15" } }),
   "prisma/schema.prisma": "x",
   "app/orders/page.tsx": "x",
@@ -61,6 +62,9 @@ try {
   const ok = !!re && re.test("app/orders/page.tsx") && !re.test("app/api/orders/route.ts");
   console.log(`${ok ? "ok  " : "FAIL"} - ui.include suggestion matches pages, not routes`);
   if (!ok) fail++;
+  const okUsage = !lines.includes("  ai/usage");
+  console.log(`${okUsage ? "ok  " : "FAIL"} - ai/usage is not reported outside the layout`);
+  if (!okUsage) fail++;
   if (fail) console.log(lines.join("\n"));
 } finally {
   rmSync(dir, { recursive: true, force: true });
@@ -85,5 +89,43 @@ try {
 } finally {
   rmSync(dir2, { recursive: true, force: true });
 }
-console.log(`\n${WANT.length + 2 - fail} passed, ${fail} failed`);
+// init adds the union-merge line for the records to .gitattributes and check warns while it is missing
+const ATTR = "ai/usage/** merge=union";
+let extra = 0;
+const attrCase = (desc, before, want, wantCreated) => {
+  extra++;
+  const d = mkdtempSync(join(tmpdir(), "kit-attr-"));
+  try {
+    mkdirSync(join(d, "ai/kit"), { recursive: true });
+    writeFileSync(join(d, "ai/kit/config.json"), "{}");
+    if (before !== null) writeFileSync(join(d, ".gitattributes"), before);
+    execFileSync("git", ["init", "-q"], { cwd: d });
+    const warn = () =>
+      spawnSync("node", [SCRIPT, "check"], { cwd: d, encoding: "utf8" })
+        .stdout.split("\n")
+        .some((l) => l.startsWith("! ") && l.includes(ATTR));
+    const warnedBefore = warn();
+    const out = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
+    const got = existsSync(join(d, ".gitattributes")) ? readFileSync(join(d, ".gitattributes"), "utf8") : null;
+    const again = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
+    const ok =
+      got === want &&
+      warnedBefore === !(before ?? "").includes(ATTR) &&
+      !warn() &&
+      out.includes("+ .gitattributes") === wantCreated &&
+      !again.includes(".gitattributes");
+    console.log(`${ok ? "ok  " : "FAIL"} - ${desc}`);
+    if (!ok) {
+      fail++;
+      console.log(JSON.stringify({ got, warnedBefore, out, again }));
+    }
+  } finally {
+    rmSync(d, { recursive: true, force: true });
+  }
+};
+attrCase("init creates .gitattributes with the records line", null, `${ATTR}\n`, true);
+attrCase("init appends the records line, other lines untouched", "*.png binary", `*.png binary\n${ATTR}\n`, false);
+attrCase("init keeps CRLF in .gitattributes", "* text=auto\r\n", `* text=auto\r\n${ATTR}\r\n`, false);
+attrCase("init leaves .gitattributes alone when the line is there", `${ATTR}\n`, `${ATTR}\n`, false);
+console.log(`\n${WANT.length + 3 + extra - fail} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
