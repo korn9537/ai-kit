@@ -74,7 +74,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   summary reports Done, Checked and Git, plus Decided and Open when they hold anything):
   1. **Done** — what changed, 1–3 lines. 2. **Files** — links. 3. **Checked** — each command run and its result, the
      `ai-kit:change-reviewer` findings, and what was not checked. Any change outside `*.md` goes through it, except
-     what the Stop hook lets pass (`ai-kit/README.md` §Hooks: comment-only or small). For a calculation, permission or
+     what the Stop hook lets pass (`ai-kit/README.md`, Stop: comment-only or small). For a calculation, permission or
      final-decision change, launch the reviewer yourself even when small. Findings on code you just changed are
      fixed and re-checked once by the same reviewer (fix diff only), with a fresh background reviewer per commit. No
      third pass: the report says, as plain text with no quotes or backticks, Review closed: re-checked once, no

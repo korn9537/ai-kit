@@ -37,7 +37,7 @@
 - `docs/ai-docs.md`: dropped the line repeating core's rule for where a doc goes; human-doc lines folded into one.
 - `commands/harvest.md`: framework placement points to `docs/kit-proposals.md` §Cross-repo test (which now says to
   create the file when missing). `templates/ai-kit-project/review-checklist.md`: items 2 and 3 dropped (the reviewer
-  already checks CLAUDE.md hard rules and `general.md` item 4). `README.md` §Hooks: "skip review" covers earlier
+  already checks CLAUDE.md hard rules and `general.md` item 4). `README.md` Stop bullet: "skip review" covers earlier
   edits. `githooks/pre-commit`: comment points to `general.md` item 12.
 
 ## 2.12.2
