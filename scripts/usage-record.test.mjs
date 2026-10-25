@@ -69,5 +69,30 @@ eq("unpriced model", weight({ model: "other" }, {}), null);
 match("summary line", summaryLine(r2, [r1, r2], prices, false), /^tokens this round .* \| context \d+k \| top: /);
 match("first-in-repo notice", summaryLine(r1, [r1], prices, true), /prompts are recorded in ai\/usage.*"none"/);
 
+// several records in one round: durations add up to the round's wall time, only the first carries the prompt
+const sessionMore = { ...session, agents: { main: { ...main1, read: 1000 }, x1: sub } };
+const rA = buildRecord(session, [], ctx);
+const rB = buildRecord(sessionMore, [rA], { ...ctx, now: new Date("2026-01-01T00:03:00Z") });
+eq("same round: durations sum to the round's wall time", [rA.round, rB.round, rA.duration_s + rB.duration_s], [1, 1, 180]);
+eq("prompt only on the first record of a round", ["prompt" in rA, "prompt" in rB], [true, false]);
+
+const long = { ...agent({ desc: `a long\n   description ${"x".repeat(100)}`, calls: 99999, read: 9e12, output: 9e12, peak: 9e8 }) };
+const opus = { ...long, model: "claude-opus-5-5" };
+const big = { agents: [opus, { ...opus, id: "c", role: "commit", model: "q" }, { ...opus, id: "r", role: "reviewer" }, { ...opus, id: "b", role: "ba", model: "q" }] };
+const capped = summaryLine(big, [big, big, big], { "claude-opus-5-5": 4 }, false);
+eq("summary part capped at 200 characters; in-eq dropped when desc shrink is not enough", [[...capped].length <= 200, capped.includes("in-eq")], [true, false]);
+eq("notice appended whole after the cap", summaryLine(big, [big], { "claude-x": 2 }, true).endsWith(' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)'), true);
+eq("desc collapsed to one line", [capped.includes("\n"), summaryLine({ agents: [agent({ desc: "a\n\nb", calls: 1, read: 5 })] }, [], prices, false).includes("top: a b ")], [false, true]);
+
+let threw = false;
+try {
+  buildRecord(session, [], { ...ctx, session: undefined });
+} catch {
+  threw = true;
+}
+eq("no session id throws", threw, true);
+eq("session id taken from a prior record", buildRecord(sessionMore, [rA], { ...ctx, session: undefined }).session, "s1");
+eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -12,6 +12,7 @@ export const DEFAULT_RATIOS = {
   "claude-sonnet-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
 };
 
+const LIMIT = 200;
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
 const NOTICE = ' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)';
 const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", other: "other" };
@@ -49,21 +50,25 @@ export function buildRecord(session, prior, ctx) {
   if (!agents.length) return null;
   const round = session.prompts.length;
   const p = session.prompts[round - 1];
-  const since = Date.parse(p?.ts || session.firstTs);
+  const last = prior[prior.length - 1];
+  const sameRound = last?.round === round;
+  const since = Date.parse(sameRound ? last.ts : p?.ts || session.firstTs);
   const seen = new Set(prior.flatMap((r) => r.commits ?? []));
+  const sessionId = ctx.session ?? prior[0]?.session;
+  if (!sessionId) throw new Error("buildRecord: no session id in ctx or prior records");
   const rec = {
     v: 1,
     ts: ctx.now.toISOString(),
-    session: ctx.session ?? prior[0]?.session ?? "",
+    session: sessionId,
     round,
     kit: ctx.kit,
     project: ctx.project,
     user: ctx.user,
     branch: ctx.branch,
   };
-  if (p && ctx.prompts !== "none") rec.prompt = maskPrompt(p.text);
+  if (p && ctx.prompts !== "none" && !prior.some((r) => r.round === round)) rec.prompt = maskPrompt(p.text);
   rec.duration_s = Number.isFinite(since) ? Math.max(0, Math.round((ctx.now.getTime() - since) / 1000)) : 0;
-  rec.commits = session.commits.map((c) => c.hash).filter((h) => !seen.has(h));
+  rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h) => !seen.has(h));
   if (!prior.length && session.baseContext != null) rec.base_context = session.baseContext;
   rec.agents = agents;
   return rec;
@@ -124,9 +129,15 @@ export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
   const cost = (a) => weight(a, prices) ?? 0;
   const anyPriced = rec.agents.some((a) => weight(a, prices) !== null);
   const top = [...rec.agents].sort((x, y) => (anyPriced ? cost(y) - cost(x) : units(y) - units(x)))[0];
-  const desc = clip(top.desc || ROLE_LABEL[top.role] || top.id, 24);
-  const line = `tokens this round ≈ ${totals(rec.agents, prices)} (in-eq ${fmtTok(total)}): ${split} | context ${Math.round(mainPeak / 1000)}k`
-    + ` | top: ${desc} (${modelShort(top.model)}, ${top.calls} calls, peak ${Math.round(top.peak / 1000)}k)`
-    + ` | session ≈ ${totals(sessionRecs.flatMap((r) => r.agents), prices)}`;
+  const name = (top.desc || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
+  const sessionCost = totals(sessionRecs.flatMap((r) => r.agents), prices);
+  const build = (n, withEq) => `tokens this round ≈ ${totals(rec.agents, prices)}${withEq ? ` (in-eq ${fmtTok(total)})` : ""}: ${split}`
+    + ` | context ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
+    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${sessionCost}`;
+  // Cap at 200 code points: shrink desc first, then drop the in-eq part.
+  let line = "";
+  for (const [min, withEq] of [[8, true], [1, false]])
+    for (let n = 24; n >= min && !line; n--) if ([...build(n, withEq)].length <= LIMIT) line = build(n, withEq);
+  line ||= clip(build(1, false), LIMIT);
   return firstInRepo ? line + NOTICE : line;
 }
