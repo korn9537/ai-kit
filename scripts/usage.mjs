@@ -112,14 +112,12 @@ function record(input) {
     project: basename(root),
     user: git(root, "config", "user.name"),
     branch: git(root, "rev-parse", "--abbrev-ref", "HEAD"),
-    prompts: conf.prompts === "none" ? "none" : "full",
   });
   if (!rec) return;
-  const firstInRepo = !existsSync(usageDir);
   mkdirSync(dirname(file), { recursive: true });
   appendFileSync(file, `${JSON.stringify(rec)}\n`);
   const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
-  process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, firstInRepo) })}\n`);
+  process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices) })}\n`);
 }
 
 // digest [--since YYYY-MM-DD] [--baseline]: prints the fixed-size digest of ai/usage/** (or of the local transcripts

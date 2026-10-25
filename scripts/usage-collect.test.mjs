@@ -81,7 +81,8 @@ writeFileSync(base, lines(asst("z1", "t", text("a"), usage(20, 90, 10, 0, 1)), a
 eq("base context = first main call", collectSession(base).baseContext, 120);
 eq("tools: Bash by first word after a leading cd", s.agents.main.tools, { "Bash:sed": 1, "Bash:git": 1, Read: 1 });
 eq("largest tool result in chars", s.agents.main.largest_result, 5000);
-eq("prompts: real user text only", s.prompts.map((p) => p.text), ["first ask", "second ask"]);
+eq("prompts: real user text only, kept as a length (the text is never stored)",
+  [s.prompts.map((p) => p.chars), JSON.stringify(s.prompts).includes("first ask")], [[9, 10], false]);
 eq("commit hashes from git commit output", s.commits.map((c) => c.hash), ["a1b2c3d"]);
 eq("subagent role from meta", s.agents.x1.role, "commit");
 eq("reviewer findings from its last reply", s.agents.x2.findings, { confirmed: 2, plausible: 1 });
@@ -109,8 +110,10 @@ writeFileSync(pm, lines(
   asst("p1", "2026-01-01T00:00:01Z", text("ok"), usage(1, 1, 1, 1, 1)),
 ));
 eq("prompts: injected text, interrupts, compact summaries and empty entries are not rounds",
-  collectSession(pm).prompts.map((p) => p.text),
-  ["real one", "ask after ide", "string ask after tags", "block ask", "<pasted_content>my own paste</pasted_content>"]);
+  collectSession(pm).prompts.map((p) => p.chars),
+  ["real one", "ask after ide", "string ask after tags", "block ask", "<pasted_content>my own paste</pasted_content>"].map((t) => [...t].length));
+writeFileSync(join(dir, "proj", "thai.jsonl"), lines(user("2026-01-01T00:00:00Z", "<ide_opened_file>x</ide_opened_file>แก้ราคา ✓ 😀")));
+eq("Thai and emoji counted by code point, injected tag not counted", collectSession(join(dir, "proj", "thai.jsonl")).prompts.map((p) => p.chars), [11]);
 
 // a <synthetic> assistant message is no call: no usage, no model, no base context
 const syn = join(dir, "proj", "syn.jsonl");

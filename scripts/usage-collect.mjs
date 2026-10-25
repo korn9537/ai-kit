@@ -117,7 +117,7 @@ function absorb(f, e, isMain) {
       && !blocks.some((b) => b?.type === "tool_result");
     const t = isPrompt ? (typeof msg.content === "string" ? promptText(msg.content)
       : blocks.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => promptText(b.text)).filter(Boolean).join("\n")) : "";
-    if (t) f.prompts.push({ ts: e.timestamp ?? "", text: t });
+    if (t) f.prompts.push({ ts: e.timestamp ?? "", chars: [...t].length });
   }
 }
 

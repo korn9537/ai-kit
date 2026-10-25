@@ -3,13 +3,11 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { collectSession, transcriptsDir } from "./usage-collect.mjs";
-import { maskPrompt } from "./usage-mask.mjs";
-import { buildRecord, dec, enc, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
+import { buildRecord, dec, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
 
 const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
 const PEAK_OUTLIER = 150000;
 const CALLS_OUTLIER = 150;
-const EXCERPT = 200;
 const TYPES = ["input", "read", "write_5m", "write_1h", "output"];
 
 // ---- loading ----
@@ -63,8 +61,8 @@ export function loadRecords(usageDir, since = "") {
   return out;
 }
 
-// One in-memory record per local session (whole session, kit "baseline", round = prompt count, prompt = the first
-// prompt); never written.
+// One in-memory record per local session (whole session, kit "baseline", round = prompt count, prompt_chars = the
+// first prompt's length); never written.
 export function baselineRecords(repoRoot, who = {}, since = "") {
   const dir = transcriptsDir(repoRoot);
   let names = [];
@@ -78,12 +76,12 @@ export function baselineRecords(repoRoot, who = {}, since = "") {
       const session = basename(n, ".jsonl");
       const sess = collectSession(path);
       const rec = buildRecord(sess, [], {
-        now: statSync(path).mtime, session, kit: "baseline", prompts: "full",
+        now: statSync(path).mtime, session, kit: "baseline",
         project: who.project ?? "", user: who.user ?? "", branch: who.branch ?? "",
       });
       if (!rec || (since && rec.ts < since)) continue;
-      if (sess.prompts.length) rec.prompt = enc(maskPrompt(sess.prompts[0].text));
-      else delete rec.prompt;
+      if (sess.prompts.length) rec.prompt_chars = sess.prompts[0].chars;
+      else delete rec.prompt_chars;
       out.recs.push(rec);
     } catch {
       out.skipped++;
@@ -284,9 +282,9 @@ export function digest(recs, prices, meta = {}) {
   out.push(base ? "## costliest sessions" : "## costliest rounds");
   const rds = new Map();
   for (const x of rows) {
-    const e = rds.get(x.rk) ?? { cost: 0, round: x.r.round, user: x.r.user, prompt: "", roles: new Map() };
+    const e = rds.get(x.rk) ?? { cost: 0, session: x.r.session, round: x.r.round, user: x.r.user, chars: null, roles: new Map() };
     e.cost += c(x);
-    e.prompt ||= dec(x.r.prompt);
+    e.chars ??= Number.isFinite(x.r.prompt_chars) ? x.r.prompt_chars : null;
     bump(e.roles, x.role, c(x));
     rds.set(x.rk, e);
   }
@@ -294,7 +292,7 @@ export function digest(recs, prices, meta = {}) {
   if (!costly.length) out.push("none");
   for (const e of costly) {
     const mix = top(e.roles, CAP.mix).filter(([, v]) => v > 0).map(([k, v]) => `${one(k, 12)} ${pct(v, e.cost)}`).join(" ");
-    out.push(`- ${fmtUsd(e.cost)} ${base ? `${e.round}p` : `r${e.round}`} ${nameOf(e.user, "anon")}: ${mix} | ${one(e.prompt || "(no prompt)", Math.max(20, EXCERPT - mix.length - 3))}`);
+    out.push(`- ${fmtUsd(e.cost)} ${String(e.session).slice(0, 8)} ${base ? `${e.round}p` : `r${e.round}`}${e.chars === null ? "" : ` ${e.chars} chars`} ${nameOf(e.user, "anon")}: ${mix}`);
   }
 
   // outliers

@@ -1,6 +1,5 @@
 // Turns cumulative session totals into a per-round delta record and the one-line summary shown to the user.
 // Prices are base input $/MTok by model id prefix; records carry no cost, so a price change re-prices old records.
-import { maskPrompt } from "./usage-mask.mjs";
 
 export const DEFAULT_PRICES = {
   "claude-opus-5-5": 4,
@@ -12,14 +11,13 @@ export const DEFAULT_RATIOS = {
   "claude-sonnet-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
 };
 
-// prompt and desc are stored base64 (UTF-8), so a grep of the repo for a word does not hit a record.
+// A record holds no prompt text, only its length; desc is stored base64 (UTF-8) so a grep does not hit it.
 export const enc = (s) => Buffer.from(String(s ?? ""), "utf8").toString("base64");
 export const dec = (s) => (typeof s === "string" ? Buffer.from(s, "base64").toString("utf8") : "");
 
 const LIMIT = 200;
 const DESC_MAX = 200;
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
-const NOTICE = ' · prompts are recorded in ai/usage/ (set "usage": {"prompts": "none"} in ai/kit/config.json to stop)';
 const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", other: "other" };
 
 // Delta of every agent against the sum of its fields in prior records; peak and largest_result stay cumulative maxima.
@@ -35,7 +33,7 @@ function deltaAgents(session, prior) {
         for (const [t, n] of Object.entries(p.tools ?? {})) wasTools[t] = (wasTools[t] ?? 0) + n;
       }
     }
-    const d = { id: a.id, role: a.role, desc: enc(maskPrompt(a.desc ?? "", DESC_MAX)), model: a.model };
+    const d = { id: a.id, role: a.role, desc: enc([...String(a.desc ?? "")].slice(0, DESC_MAX).join("")), model: a.model };
     for (const k of COUNTED) d[k] = Math.max(0, (a[k] ?? 0) - was[k]);
     d.peak = a.peak ?? 0;
     d.tools = {};
@@ -71,7 +69,7 @@ export function buildRecord(session, prior, ctx) {
     user: ctx.user,
     branch: ctx.branch,
   };
-  if (p && ctx.prompts !== "none" && !prior.some((r) => r.round === round)) rec.prompt = enc(maskPrompt(p.text));
+  if (p && !prior.some((r) => r.round === round)) rec.prompt_chars = p.chars;
   rec.duration_s = Number.isFinite(since) ? Math.max(0, Math.round((ctx.now.getTime() - since) / 1000)) : 0;
   rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h) => !seen.has(h));
   if (!prior.length && session.baseContext != null) rec.base_context = session.baseContext;
@@ -120,7 +118,7 @@ function totals(agents, prices) {
 const clip = (s, n) => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
 export const modelShort = (m) => clip(String(/opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?")), 30);
 
-export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
+export function summaryLine(rec, sessionRecs, prices) {
   const total = rec.agents.reduce((n, a) => n + units(a), 0);
   const byRole = new Map();
   for (const a of rec.agents) {
@@ -144,5 +142,5 @@ export function summaryLine(rec, sessionRecs, prices, firstInRepo) {
   for (const [min, withEq] of [[8, true], [1, false]])
     for (let n = 24; n >= min && !line; n--) if ([...build(n, withEq)].length <= LIMIT) line = build(n, withEq);
   line ||= clip(build(1, false), LIMIT);
-  return firstInRepo ? line + NOTICE : line;
+  return line;
 }

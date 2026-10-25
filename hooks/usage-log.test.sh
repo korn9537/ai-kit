@@ -57,10 +57,10 @@ check "record: first stop writes one line under ai/usage/<YYYY-MM>/<session>.<n>
 check "record: stdout is {\"systemMessage\": ...} and exit 0" \
   "$(t bash -c '[[ "$1" == 0 ]] && jq -e ".systemMessage | startswith(\"tokens this round\")" <<<"$2" >/dev/null' _ "$RC" "$OUT")" \
   "rc=$RC out=$OUT"
-check "record: the prompt is stored base64, not as plain text, and the digest shows it" \
-  "$(t bash -c '! grep -q "fix the login bug" "$1" && [[ "$(jq -r .prompt "$1" | base64 -d)" == "fix the login bug" ]] &&
-    CLAUDE_PROJECT_DIR="$2" node "$3" digest | grep -q "| fix the login bug"' _ "$file" "$REPO" "$PWD/../scripts/usage.mjs")"
-check "record: the first record in a repo carries the prompts notice" "$(t test "$OUT" != "${OUT%prompts are recorded in ai/usage*}")"
+check "record: no prompt text anywhere in ai/usage or the summary; the record has prompt_chars; the digest shows it" \
+  "$(t bash -c '! grep -rq "fix the login bug" "$1/ai/usage" && ! grep -q "fix the login bug" <<<"$4" &&
+    jq -e "(has(\"prompt\") | not) and .prompt_chars == 17" "$2" >/dev/null &&
+    CLAUDE_PROJECT_DIR="$1" node "$3" digest | grep -q " r1 17 chars "' _ "$REPO" "$file" "$PWD/../scripts/usage.mjs" "$OUT")"
 check "record: user, project and branch come from git" \
   "$(t jq -e --arg p "$(basename "$REPO")" '.user == "tester" and .project == $p and (.branch | length > 0)' "$file")"
 check "record: the kit version is the plugin's" "$(t test "$(jq -r .kit "$file")" == "$(jq -r .version "$PLUGIN_JSON")")"
@@ -81,9 +81,7 @@ jq -cn '{type: "assistant", timestamp: "2030-02-01T10:01:00Z", message: {id: "m2
 stop_hook s1 "$T"
 check "record: later stop appends to the session's file, even in a later month" \
   "$(t bash -c '[[ "$1" == 2 && ! -e "$2/ai/usage/2030-02" ]]' _ "$(lines "$file")" "$REPO")" "err=$ERR"
-check "record: the notice appears only on the repo's first record" \
-  "$(t bash -c '[[ -n "$1" && "$1" != *"prompts are recorded"* ]]' _ "$OUT")" "$OUT"
-check "record: a later record in the same round has no prompt" "$(sed -n 2p "$file" | t jq -e 'has("prompt") | not')"
+check "record: a later record in the same round has no prompt_chars" "$(sed -n 2p "$file" | t jq -e 'has("prompt_chars") | not')"
 
 stop_hook s2 "$T"
 check "record: a second session writes its own file" "$(t test -f "$REPO/ai/usage/2030-01/s2.1.jsonl")"
@@ -100,7 +98,7 @@ part2="$REPO/ai/usage/2030-01/s1.2.jsonl"
 check "parts: a record after a commit of part 1 goes to part 2, part 1 is untouched" \
   "$(t bash -c '[[ -f "$1" && "$(wc -l <"$1" | tr -d " ")" == 1 && "$(shasum "$2" | cut -d" " -f1)" == "$3" ]]' _ "$part2" "$file" "$before")" "err=$ERR"
 check "parts: part 2 delta ignores part 1 (round 1 continues, no prompt)" \
-  "$(t jq -e '.round == 1 and has("prompt") == false and (.agents[0].read == 3000)' "$part2")"
+  "$(t jq -e '.round == 1 and has("prompt_chars") == false and (.agents[0].read == 3000)' "$part2")"
 check "parts: git status shows only untracked files for ai/usage" \
   "$(t bash -c '[[ -n "$1" && -z "$(grep -v "^?? " <<<"$1")" ]]' _ "$(git -C "$REPO" status --porcelain -- ai/usage)")"
 git -C "$REPO" switch -q other 2>"$TMP/switch-err"
@@ -128,11 +126,6 @@ echo '{"transcript_path": "/nope"}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PR
 rc=$?
 check "skip: no session id → exit 0, one stderr line" \
   "$(t bash -c '[[ "$1" == 0 && "$(cat "$2")" == usage-log:* ]]' _ "$rc" "$TMP/err")"
-
-echo '{"usage": {"prompts": "none"}}' >"$REPO/ai/kit/config.json"
-stop_hook s4 "$T"
-check "prompts none → record has no prompt key" \
-  "$(t jq -e 'has("prompt") | not' "$REPO/ai/usage/2030-01/s4.1.jsonl")" "err=$ERR"
 
 echo '{"usage": {"prices": {"claude-opus-5-5": 100}}}' >"$REPO/ai/kit/config.json"
 stop_hook s5 "$T"
