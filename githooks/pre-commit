@@ -27,7 +27,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-# Token records (ai/usage, written by the Stop hook) ride along with any commit; names are NUL-split and literal.
+# Token records (ai/usage, written by the SessionEnd and idle flush) ride along with any commit; names are NUL-split and literal.
 # A path-limited commit (-o, <paths>) runs the hook on a temporary index (next-index-*.lock): staging there would
 # corrupt the real index, so the records wait for a later commit.
 case "${GIT_INDEX_FILE:-}" in

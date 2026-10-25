@@ -12,7 +12,13 @@ if [[ -n "$common" && -d "$common" ]]; then printf '%s\n' "$kit_plugin" >"$commo
 
 # a session that ended without SessionEnd (crash, kill) left its buffer behind; never blocks, never prints
 sid=""
-if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then sid="$(jq -r '.session_id // empty' 2>/dev/null || true)"; fi
+if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
+  # each read waits 1 s at most (stdin left open by the caller), so the session id costs at most that
+  input="" line="" rc=0
+  while IFS= read -r -t 1 line; do input+="$line"$'\n'; done || rc=$?
+  if ((rc < 128)); then input+="$line"; fi
+  sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
+fi
 if command -v node >/dev/null 2>&1; then
   CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/usage.mjs" flush --idle ${sid:+--except "$sid"} >/dev/null 2>&1 || true
 fi

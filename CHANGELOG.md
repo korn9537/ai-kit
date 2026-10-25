@@ -21,6 +21,10 @@ Whole-branch review fixes for the token records.
   round.
 - `githooks/pre-commit` skips staging `ai/usage/` in a path-limited commit (temporary index), which left `MM` and
   `D` entries; its "moved verbatim" check skips `ai/usage`.
+- `scripts/test-all.mjs`: one command runs every hook, githook and script test plus `check-wrap.mjs` in parallel,
+  one line per suite, full output only for a failing one.
+- `hooks/session-start.sh` reads the session id from stdin with a 1 s bounded wait per read, so a caller that leaves
+  stdin open no longer hangs the hook (`hooks/session-start.test.sh`).
 - Review gate block message and `agents/change-reviewer.md`: the brief reads diffs and commits with
   `-- . ':(exclude)ai/usage'`; the reviewer skips `ai/usage/`.
 - Summary label `context` is now `peak`; the digest's unpriced total reads through `fmtTok`.

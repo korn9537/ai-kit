@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Stop: append this round's token usage to ai/usage/ and show a one-line summary to the user only (systemMessage).
-# Never blocks: any failure is one stderr line and exit 0.
+# Stop: buffer this round's token usage in the git common dir (SessionEnd flushes it to ai/usage/), show a one-line
+# summary to the user only (systemMessage). Never blocks: any failure is one stderr line and exit 0.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
