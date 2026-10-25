@@ -17,11 +17,11 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh` and `usage-log.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `usage-log.sh` and `usage-flush.sh`: `hooks/<name>.test.sh` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
-| `scripts/usage.mjs`           | `record` (Stop hook) / `digest` (§Commands), over `usage-mask`, `usage-collect`, `usage-record`, `usage-digest` |
+| `scripts/usage.mjs`           | `record` (Stop hook) / `flush` (SessionEnd, SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `scripts/usage-*.test.mjs`    | fixture tests for the usage modules: `node scripts/usage-<name>.test.mjs`                      |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
@@ -56,8 +56,12 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   for a "Next session" prompt when the task ends. It never blocks.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
-- `usage-log.sh` (Stop) records each round's token use to a part file `ai/usage/<YYYY-MM>/<session>.<n>.jsonl` (the
-  next commit carries it) and shows a one-line summary to the user only; it never blocks.
+- `usage-log.sh` (Stop) appends each round's token use to a buffer in the git common dir
+  (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
+  summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks.
+- `usage-flush.sh` (SessionEnd) writes the buffer's new records to a new file `ai/usage/<YYYY-MM>/<session>.jsonl`
+  (`<session>.2.jsonl`, `.3`, ... after a resume; an existing file is never modified). `session-start.sh` does the
+  same for other sessions' buffers idle over 6 hours (a crashed session). The next commit carries the files.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
@@ -69,7 +73,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prompts`/`prices`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -83,13 +87,12 @@ reviews every change); `review.always` (a JS-style regex) to migration, schema, 
 and `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its
 re-check.
 
-`usage.enabled` (default `true`) turns the token records off with `false`. `usage.prompts` is `"full"` (default) or
-`"none"`: with `"full"` the first record of each round holds its prompt, secret-looking values masked, cut to
-1,000 characters and stored base64. `usage.prices` (`{"<model id prefix>": <base input $ per MTok>}`) overrides the
-kit's default prices; a model with no price is reported apart. Records are committed with the next commit
-(`githooks/pre-commit` stages `ai/usage/` by name, except in a path-limited commit). A record never modifies a tracked
-file: it appends to the session's newest part file while that part is not in the index, else it starts part `n+1`,
-so a branch switch or rebase is never blocked.
+`usage.enabled` (default `true`) turns the token records off with `false`. A record holds no prompt text, only the
+prompt's length (`prompt_chars`); an agent's description is stored base64. `usage.prices`
+(`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a model with no price is
+reported apart. Records are committed with the next commit (`githooks/pre-commit` stages new files under `ai/usage/`
+by name, except in a path-limited commit). A tracked file under `ai/usage/` is never modified, so a branch switch,
+merge or rebase is never blocked.
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns
@@ -248,9 +251,10 @@ screen spec และ API spec ชี้ถึง ของที่ไม่อ
 จากนั้นสั่งทีละหมวด (`config`, `move`, `data`, `decisions`, `requirements`, `screens`, `api`) หมวดละ commit เขียนจากโค้ดและเอกสาร
 ที่มีอยู่เท่านั้น ส่วนที่หาที่มาไม่ได้ลงเป็นคำถามในแผน decision ที่ต้นทางมีสถานะ final อยู่แล้วเป็น `Confirmed` ที่เหลือเป็น `Default`
 
-kit บันทึกการใช้ token ของทุก round ลง `ai/usage/` (ค่า default เปิดอยู่ รวมข้อความ prompt ที่ปิดบังค่าที่ดูเป็น
-ความลับแล้วและตัดที่ 1,000 ตัวอักษร) แล้ว commit ไปกับ commit ถัดไปเอง สรุปหนึ่งบรรทัดแสดงให้ผู้ใช้เห็นอย่างเดียว
-ปิดทั้งหมดด้วย `"usage": { "enabled": false }` หรือไม่เก็บ prompt ด้วย `"usage": { "prompts": "none" }`
+kit บันทึกการใช้ token ของทุก round (ค่า default เปิดอยู่ ไม่เก็บข้อความ prompt เก็บแค่ความยาว)
+ระหว่าง session เก็บไว้ใน `.git` ก่อน แล้วเขียนเป็นไฟล์ใหม่ใน `ai/usage/` ตอน session จบ
+และ commit ไปกับ commit ถัดไปเอง ไม่แก้ไฟล์ที่ commit แล้ว จึงไม่ขวางการสลับ branch
+สรุปหนึ่งบรรทัดแสดงให้ผู้ใช้เห็นอย่างเดียว ปิดทั้งหมดด้วย `"usage": { "enabled": false }`
 ใน `ai/kit/config.json` สั่ง `/ai-kit:usage` เพื่อดูว่าอะไรใช้ token มากที่สุด
 
 ต้องมี `jq` และ Node 22 ขึ้นไป

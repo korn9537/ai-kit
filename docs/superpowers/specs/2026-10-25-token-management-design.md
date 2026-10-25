@@ -43,16 +43,17 @@ A manual analysis of local transcripts (scripts referenced under §Evidence) fou
 - The summary or the recording adds tokens to the model's context. It must be shown to the user only.
 - A record makes the Stop hook slow or flaky (over 2 s on a large session), or blocks a stop on error.
 - Recording a usage file triggers the review gate, appears as "code changed", or pollutes reviewer diffs.
-- A secret pasted into a prompt lands in git.
+- A prompt's text, or a secret pasted into it, lands in git.
 - A cost cut that lowers review quality without the records showing it.
 
 ## Decided
 
 Owner decisions (from the conversation):
 
-- Records are committed in the project repo, prompts included, so the team's prompts can be analysed.
-- On by default in every kit project on update, prompts included (`usage.enabled: true`, `usage.prompts: "full"`):
-  the owner is the main developer of these repos. A project opts out in `ai/kit/config.json`.
+- Records are committed in the project repo. No prompt text is stored anywhere (owner decision): a record holds the
+  prompt's length only.
+- On by default in every kit project on update (`usage.enabled: true`): the owner is the main developer of these
+  repos. A project opts out in `ai/kit/config.json`.
 - The summary is shown after every round, and every round is recorded.
 - The levers below are approved in principle; each lands as its own kit version after the baseline exists.
 
@@ -65,23 +66,28 @@ Builder's calls made in this design (the owner may overrule):
   build time, a model with no price reported apart. Valid for API billing and a fair proxy for subscription limits.
 - Reader of the records: ai-kit only (`/ai-kit:usage`), never a person. No agent reads raw records either: a script
   reduces them to a fixed-size digest first (part 4), so analysing usage stays cheap however large the logs grow.
-- Prompt text: stored up to 1,000 characters (enough for an agent to classify the request), after masking
-  secret-looking values and base64-encoded (UTF-8), so a grep of the repo does not hit it; only the digest and the
-  summary decode it. Config
-  `usage.prompts`: `"full"` (default) or `"none"`. The first record in a repo prints a one-time notice in the
-  summary line that prompts are recorded and how to opt out.
-- Storage: part files `ai/usage/<YYYY-MM>/<session-id>.<n>.jsonl` (n from 1), append-only: no two sessions write the
-  same file, so shared checkouts and branches do not conflict. A record never modifies a tracked file (that blocks
-  `git switch` and rebase): it appends to the session's newest part only while that part is not in the index
-  (`git ls-files --error-unmatch`), else it starts part `n+1`. A session's prior records are all its parts in part
-  order; the month folder is that of the session's existing parts, else the month of its first transcript
-  timestamp. `ai/usage` becomes an allowed `ai/` entry (`kit.mjs` `AI_LAYOUT`, `docs/ai-layout.md`).
-- Commit: the kit's `githooks/pre-commit` stages new or changed files under `ai/usage/` by name on every commit.
-  No separate commit, no agent action. Best effort: records ride on whatever commit comes next, on whichever branch;
-  a path-limited commit (`--only`, `<paths>`, which runs the hook on a temporary `next-index-*.lock` index) skips the
+- Prompt text: not stored. A record has `prompt_chars`, the length in code points of the round's cleaned prompt (see
+  Prompt detection), on the round's first record. An agent's `desc` is stored base64 (UTF-8, cut to 200 code points),
+  so a grep of the repo does not hit it; only the digest and the summary decode it. There is no `usage.prompts`
+  config, no first-record notice and no masking.
+- Storage: during a session the Stop hook appends records to a buffer `<git-common-dir>/claude-usage/<session>.jsonl`
+  (`git rev-parse --path-format=absolute --git-common-dir`: shared by all branches and worktrees); the buffer is the
+  session's state (prior = its records) and nothing under `ai/usage/` is written. A flush
+  (`usage.mjs flush --session <id>`, `flush --idle`) writes the buffer's not-yet-flushed records to
+  `ai/usage/<YYYY-MM>/<session-id>.jsonl` (month of the first record), or `<session>.2.jsonl`, `.3`, ... for a
+  resumed session, with only the new records; a small sidecar `<session>.flushed` keeps the flushed line count and
+  file count (the file count names the next file, so two branches never pick the same name). An existing file under
+  `ai/usage/` is never modified, so branch switches, merges and rebases are never blocked. A buffer lost on this
+  machine is seeded from the session's files in `ai/usage/`. `ai/usage` becomes an allowed `ai/` entry (`kit.mjs`
+  `AI_LAYOUT`, `docs/ai-layout.md`).
+- Flush triggers: `hooks/usage-flush.sh` on `SessionEnd` (silent without `ai/kit/` or when `usage.enabled` is
+  `false`; never blocks) flushes the ending session; `hooks/session-start.sh` flushes every other session's buffer
+  whose last write is over 6 hours old (a session that never reached SessionEnd).
+- Commit: the kit's `githooks/pre-commit` stages new files under `ai/usage/` by name on every commit. No separate
+  commit, no agent action. Best effort: records ride on whatever commit comes next, on whichever branch; a
+  path-limited commit (`--only`, `<paths>`, which runs the hook on a temporary `next-index-*.lock` index) skips the
   staging and leaves the records for a later commit. Other sessions' usage files may ride along (they are logs, not
-  work). A part already in the index is never appended to, so branch switches and rebases are never blocked and no
-  merge driver is needed.
+  work). No merge driver is needed.
 
 ## Parts
 
@@ -94,19 +100,20 @@ Builder's calls made in this design (the owner may overrule):
 - Counting: one usage per assistant message id (streamed blocks repeat the usage; keep the last). Main session =
   lines without `isSidechain`. Each subagent counted from its own file.
 - Records hold deltas: what was used since the session's previous record. Delta = the session's cumulative totals
-  now minus the sum of the deltas already in its `ai/usage` file, so the file is the state: a session resumed on
-  another machine or with a lost cache is not counted twice, and summing any set of records gives a correct total.
+  now minus the sum of the deltas already in its buffer, so the buffer is the state: a session resumed on another
+  machine (seeded from `ai/usage/`) or with a lost cache is not counted twice, and summing any set of records gives
+  a correct total.
   A round can produce several records (the review gate blocks a stop, the turn continues); a background agent that
   finishes in a later round lands in that round's record.
-- Incremental parsing (speed only, not correctness): a cache in the git dir (`<git-dir>/claude-usage/<session>.json`)
-  keeps each transcript's byte offset and running totals, so a Stop parses only new lines. Target under 300 ms per
-  Stop on a 30 MB transcript; without the cache the recorder parses in full.
+- Incremental parsing (speed only, not correctness): a cache in the git dir (`<git-dir>/claude-usage/<session>.json`,
+  version 2) keeps each transcript's byte offset and running totals, so a Stop parses only new lines. Target under
+  300 ms per Stop on a 30 MB transcript; without the cache the recorder parses in full.
 - Record, one JSON line per Stop (JSONL; key names as here, `v` bumps on any change of shape):
   `v`, `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin version), `project` (repo folder
-  name), `user` (`git config user.name`), `branch`, `prompt` (this round's prompt, masked, cut, base64; absent
-  when `usage.prompts` is `none`), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
+  name), `user` (`git config user.name`), `branch`, `prompt_chars` (length of this round's prompt, on the
+  round's first record), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
   `base_context` (the main session's first call context, on the session's first record), and `agents`: one entry per
-  agent with usage in this delta, with `id`, `role`, `desc` (base64, masked and cut to 200), `model`, `calls`,
+  agent with usage in this delta, with `id`, `role`, `desc` (base64, cut to 200), `model`, `calls`,
   `input`, `read`, `write_5m`, `write_1h`, `output`, `peak` (largest context of one call), `tools` (call count per
   tool; Bash keyed by its first command word, `Bash:sed`), `largest_result` (largest tool result in characters),
   and for reviewers `findings` (`confirmed`, `plausible`). No cost or price in a record: prices apply at analysis,
@@ -115,15 +122,10 @@ Builder's calls made in this design (the owner may overrule):
   "review" → reviewer; `business-analyst` type → BA; else other subagent; main session → coordinator.
 - Reviewer quality signal: for each reviewer agent, count `CONFIRMED` and `PLAUSIBLE` in its last reply (`findings`
   in the record), so a cheaper model's effect on review quality shows in the data.
-- Masking before write (the input is first capped at 20,000 code points, backing off to a word edge):
-  private key blocks, `sk-`/`ghp_`/`gho_`/`github_pat_`/`xox[bp]-`/`AKIA`/`AIza`/`glpat-`/`npm_`/`sk_live_`/
-  `rk_live_` tokens, Telegram bot tokens, Discord webhook tokens, JWTs, `Authorization: Basic` and `Bearer` values,
-  `password=`/`secret=`/`token=`/`api key`/`access key` values, URLs with credentials, long base64/hex runs →
-  `[masked]`.
-- Prompt detection: a user entry that is a compact summary, transcript-only, a tool result or `isMeta` is no prompt;
-  neither is a `[Request interrupted` text. Browser, IDE, system-reminder, command and local-command blocks are
-  dropped from the text; `<pasted_content>` stays. A prompt empty after that is not a round. Assistant messages
-  with model `<synthetic>` are no call.
+- Prompt detection (it decides what a round is and its length): a user entry that is a compact summary,
+  transcript-only, a tool result or `isMeta` is no prompt; neither is a `[Request interrupted` text. Browser, IDE,
+  system-reminder, command and local-command blocks are dropped from the text; `<pasted_content>`
+  stays. A prompt empty after that is not a round. Assistant messages with model `<synthetic>` are no call.
 
 ### 2. Summary line (every round)
 
@@ -148,8 +150,8 @@ Builder's calls made in this design (the owner may overrule):
   most 3,000 tokens however many records), per `docs/ai-docs.md` form. Sections: totals and cost per model; shares
   by role and by model within each role; cost per commit and per round; per kit version the same figures (a
   lever's effect); driver signals per role (mean calls, mean and max `peak`, top tool counts, largest results,
-  `base_context` trend); reviewer findings per model; the 10 costliest rounds with prompt excerpt (200 characters),
-  user and the role mix; outliers (an agent over 150k peak or 150 calls).
+  `base_context` trend); reviewer findings per model; the 10 costliest rounds with session (8 characters), round,
+  prompt length, user and the role mix (no prompt text); outliers (an agent over 150k peak or 150 calls).
 - `scripts/usage.mjs digest --baseline` builds the same digest from this repo's local transcripts
   (`~/.claude/projects/<slug>/`, slug as in `hooks/lib.sh` `kit_memory_dir`) without writing records: the
   before-picture.
@@ -180,12 +182,11 @@ reviewer findings per change is reverted.
 - Kit rules: project files in `ai/kit/` are never overwritten; patch/minor/major per README §Editing the kit (parts
   1–4 are minor: new hook, command and config keys with defaults).
 - Tests: fixture tests like the existing `hooks/*.test.sh` and `scripts/*.test.mjs`: counting with repeated usage
-  lines, incremental offsets, masking, role mapping, review-gate exclusion, pre-commit staging.
+  lines, incremental offsets, buffer and flush, role mapping, review-gate exclusion, pre-commit staging.
 
 ## Left to the builder
 
 - Internal structure of `usage.mjs`, state-file format, exact summary wording within the anti-goals.
-- Masking patterns beyond the list, if tests show gaps.
 - Whether L2's nudge is feasible as a hook; if not, rule plus batch cap.
 
 ## Evidence

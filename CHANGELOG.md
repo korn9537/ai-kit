@@ -4,17 +4,21 @@
 
 Whole-branch review fixes for the token records.
 
-- Records never modify a tracked file (it blocked `git switch` and rebase): a record goes to
-  `ai/usage/<YYYY-MM>/<session>.<n>.jsonl`, appending to the session's newest part only while that part is not in the
-  index, else starting part `n+1`; a session's prior records are all its parts in order.
+- Records never modify a tracked file (it blocked `git switch`, merge and rebase): the Stop hook appends to a buffer
+  `<git-common-dir>/claude-usage/<session>.jsonl` (shared by all branches and worktrees, the session's state) and
+  writes nothing under `ai/usage/`; `usage.mjs flush` (new `hooks/usage-flush.sh` on SessionEnd; the SessionStart hook
+  flushes other sessions' buffers idle over 6 hours) writes the not-yet-flushed records to a new file
+  `ai/usage/<YYYY-MM>/<session>.jsonl`, or `.2.jsonl`, `.3`, ... after a resume, never touching an existing file. A
+  buffer lost on this machine is seeded from the session's files in `ai/usage/`.
 - `init`, `check` and `migrate` no longer write or ask for `ai/usage/** merge=union` in `.gitattributes`.
-- Record `prompt` and each agent's `desc` are stored base64 (UTF-8, after masking and cutting); the digest and the
-  summary decode.
+- No prompt text is stored anywhere: a record carries `prompt_chars` (length in code points of the round's cleaned
+  prompt, on the round's first record) instead of `prompt`; `usage.prompts`, the first-record notice and
+  `scripts/usage-mask.mjs` are removed. An agent's `desc` is stored base64 (UTF-8, cut to 200). The digest's costliest
+  rounds show session, round, prompt length and role mix, no excerpt; `--baseline` reads prompt lengths only. The
+  transcript cache is version 2 (version 1 kept prompt text and is rebuilt).
 - Prompt detection skips compact summaries, transcript-only entries and `[Request interrupted` texts, and drops
   browser, IDE, system-reminder, command and local-command blocks; `<pasted_content>` stays; an empty result is no
   round.
-- Masking adds Google, GitLab, npm, Stripe live, Telegram and Discord webhook tokens, `Authorization: Basic` and
-  `api key` / `access key` assignments; the input is capped at 20,000 code points before masking.
 - `githooks/pre-commit` skips staging `ai/usage/` in a path-limited commit (temporary index), which left `MM` and
   `D` entries; its "moved verbatim" check skips `ai/usage`.
 - Review gate block message and `agents/change-reviewer.md`: the brief reads diffs and commits with
