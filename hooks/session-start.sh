@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart: records the plugin path for the git pre-commit shim (<git-common-dir>/ai-kit-root) and injects
-# CLAUDE.core.md with its ai-kit/ paths made absolute (plain text without jq). Silent without ai/kit/.
+# CLAUDE.core.md with its ai-kit/ paths made absolute (plain text without jq), and flushes other sessions' token
+# buffers idle for 6 hours into ai/usage/. Silent without ai/kit/.
 set -euo pipefail
 
 . "$(dirname "$0")/lib.sh"
@@ -8,6 +9,13 @@ kit_enabled || exit 0
 
 common="$(git -C "$kit_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 if [[ -n "$common" && -d "$common" ]]; then printf '%s\n' "$kit_plugin" >"$common/ai-kit-root" || true; fi
+
+# a session that ended without SessionEnd (crash, kill) left its buffer behind; never blocks, never prints
+sid=""
+if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then sid="$(jq -r '.session_id // empty' 2>/dev/null || true)"; fi
+if command -v node >/dev/null 2>&1; then
+  CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/usage.mjs" flush --idle ${sid:+--except "$sid"} >/dev/null 2>&1 || true
+fi
 
 rep="$kit_plugin/"
 # sed, not ${core//…}: bash 3.2 (macOS) replaces in a UTF-8 string in quadratic time, 2 s for this file

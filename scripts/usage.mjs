@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// Token usage CLI. `record` is the Stop hook: reads the hook JSON on stdin, appends this round's delta record to
-// the newest part file <root>/ai/usage/<YYYY-MM>/<session>.<n>.jsonl and prints the one-line summary. It never fails
-// a stop: exit 0 always.
+// Token usage CLI. `record` is the Stop hook: reads the hook JSON on stdin, appends this round's delta record to the
+// buffer <git-common-dir>/claude-usage/<session>.jsonl and prints the one-line summary; nothing is written under
+// ai/usage/. `flush` (SessionEnd, SessionStart) moves buffered records into new files there. Neither ever fails.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, dirname, join, relative } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectSession, loadCache, saveCache } from "./usage-collect.mjs";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
+import { flushIdle, flushSession, seedBuffer } from "./usage-flush.mjs";
 import { DEFAULT_PRICES, DEFAULT_RATIOS, buildRecord, summaryLine } from "./usage-record.mjs";
 
 const git = (cwd, ...args) => {
@@ -32,41 +33,6 @@ function readConfig(root) {
     return JSON.parse(readFileSync(join(root, "ai", "kit", "config.json"), "utf8"));
   } catch {
     return {};
-  }
-}
-
-// A tracked file is never modified (it would block git switch/rebase): a record appends to the session's newest part
-// only while that part is not in the index, else it starts part n+1. Month = folder of the session's first part.
-function partTarget(usageDir, session, firstTs, root) {
-  const parts = [];
-  let months = [];
-  try {
-    months = readdirSync(usageDir).sort();
-  } catch {}
-  for (const m of months) {
-    let names = [];
-    try {
-      names = readdirSync(join(usageDir, m));
-    } catch {}
-    for (const f of names) {
-      const mid = f.startsWith(`${session}.`) && f.endsWith(".jsonl") ? f.slice(session.length + 1, -".jsonl".length) : "";
-      if (/^\d+$/.test(mid)) parts.push({ n: Number(mid), path: join(usageDir, m, f), month: m });
-    }
-  }
-  parts.sort((x, y) => x.n - y.n);
-  const month = parts[0]?.month ?? (/^\d{4}-\d{2}/.test(firstTs) ? firstTs.slice(0, 7) : new Date().toISOString().slice(0, 7));
-  const newest = parts[parts.length - 1];
-  let n = 1;
-  if (newest) n = inIndex(root, newest.path) ? newest.n + 1 : newest.n;
-  return { prior: parts.map((p) => p.path), file: join(usageDir, month, `${session}.${n}.jsonl`) };
-}
-
-function inIndex(root, path) {
-  try {
-    execFileSync("git", ["--literal-pathspecs", "ls-files", "--error-unmatch", "--", relative(root, path)], { cwd: root, stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -96,14 +62,17 @@ function record(input) {
   if (!statSync(transcript, { throwIfNoEntry: false })?.isFile()) throw new Error(`cannot read transcript ${transcript}`);
 
   const gitDir = git(root, "rev-parse", "--absolute-git-dir");
-  const cachePath = gitDir ? join(gitDir, "claude-usage", `${session}.json`) : "";
-  const cache = cachePath ? loadCache(cachePath) : undefined;
+  const common = git(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
+  if (!gitDir || !common) throw new Error("not a git repository, usage not recorded");
+  const cachePath = join(gitDir, "claude-usage", `${session}.json`);
+  const cache = loadCache(cachePath);
   const sess = collectSession(transcript, cache);
-  if (cachePath) saveCache(cachePath, cache);
+  saveCache(cachePath, cache);
 
-  const usageDir = join(root, "ai", "usage");
-  const { prior: partPaths, file } = partTarget(usageDir, session, sess.firstTs, root);
-  const prior = partPaths.flatMap(readLines);
+  const bufDir = join(common, "claude-usage");
+  seedBuffer(root, bufDir, session);
+  const buffer = join(bufDir, `${session}.jsonl`);
+  const prior = readLines(buffer);
   const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
   const rec = buildRecord(sess, prior, {
     now: new Date(),
@@ -114,10 +83,23 @@ function record(input) {
     branch: git(root, "rev-parse", "--abbrev-ref", "HEAD"),
   });
   if (!rec) return;
-  mkdirSync(dirname(file), { recursive: true });
-  appendFileSync(file, `${JSON.stringify(rec)}\n`);
+  mkdirSync(bufDir, { recursive: true });
+  appendFileSync(buffer, `${JSON.stringify(rec)}\n`);
   const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
   process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices) })}\n`);
+}
+
+// flush --session <id> | flush --idle [--except <id>]: moves buffered records into ai/usage/ (never modifies a file there).
+function flushCmd(args) {
+  const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
+  const common = git(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
+  if (!common) return;
+  const bufDir = join(common, "claude-usage");
+  const val = (flag) => (args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "") : "");
+  if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"));
+  else if (args[0] === "--idle") flushIdle(root, bufDir, val("--except"));
+  else throw new Error("usage: usage.mjs flush --session <id> | --idle [--except <id>]");
 }
 
 // digest [--since YYYY-MM-DD] [--baseline]: prints the fixed-size digest of ai/usage/** (or of the local transcripts
@@ -160,6 +142,14 @@ function main() {
     }
     return;
   }
+  if (cmd === "flush") {
+    try {
+      flushCmd(process.argv.slice(3));
+    } catch (e) {
+      process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+    }
+    return;
+  }
   if (cmd === "digest") {
     try {
       digestCmd(process.argv.slice(3));
@@ -169,7 +159,7 @@ function main() {
     }
     return;
   }
-  process.stderr.write("usage: usage.mjs record | digest [--since YYYY-MM-DD] [--baseline]\n");
+  process.stderr.write("usage: usage.mjs record | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline]\n");
   process.exitCode = 2;
 }
 
