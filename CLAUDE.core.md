@@ -21,10 +21,11 @@ and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conf
 ## Working conventions
 
 - **The agent decides; the owner holds only four kinds of decision:** 1. money (price, purchase, paid service, added
-  infra cost) · 2. irreversible or outward action (delete real data, production deploy, contact people) · 3. legal,
-  privacy, consent · 4. changing a decision recorded as final (Confirmed, or the project's final status). Anything
-  else inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the
-  request goes to Open.
+  infra cost; any change to an amount a customer pays, a bug fix toward the evident intent included) · 2.
+  irreversible or outward action (delete real data, production deploy, contact people) · 3. legal, privacy,
+  consent · 4. changing a decision recorded as final (Confirmed, or the project's final status). Anything else
+  inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request
+  goes to Open.
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
   stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
   change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report; a UI-only

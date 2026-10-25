@@ -37,5 +37,6 @@ Reply with exactly these sections, terse, every claim with its source (path:line
    change the recommendation.
 7. **Owner decisions** — only questions of the four owner kinds in `CLAUDE.core.md` (money, irreversible or
    outward action, legal/privacy/consent, changing a decision recorded as final, by its final status label in
-   `ai/kit/analysis-sources.md`, default `Confirmed`). Any other unknown → the assumption you recommend, marked
-   "assumed". None → say "None".
+   `ai/kit/analysis-sources.md`, default `Confirmed`). A change to a price, fee, discount or any amount a customer
+   pays is money even as a bug fix toward the evident intent: list it with the recommendation, never as
+   "assumed". Any other unknown → the assumption you recommend, marked "assumed". None → say "None".

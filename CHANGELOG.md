@@ -17,6 +17,8 @@
 - `conventions/typescript.md`: every value a `queryFn` reads is in its `queryKey` (#11); item 12 lint baseline
   (`js.configs.recommended`, `no-floating-promises` in server code, TanStack `exhaustive-deps`) (#10, #11).
 - `conventions/sql.md` item 11: user-typed search uses `ILIKE`, LIKE input escaped through one helper (#6).
+- Owner decision kind 1 (money) covers any change to an amount a customer pays, a bug fix included;
+  `business-analyst` lists it under Owner decisions, never as assumed (#13).
 
 ## 2.11.0
 
