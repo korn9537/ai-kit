@@ -150,9 +150,9 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected
-by the user in a way that holds in any repo, or hits a kit gap. Run `/ai-kit:harvest` in this clone to accept,
-merge or reject them; accepted ones land in one commit that closes them on push, and reach every project through
-`autoUpdate`.
+by the user in a way that holds in any repo, or hits a kit gap. Run `/ai-kit:harvest` in this clone: it shows one
+table to accept, merge, reject or leave each for the owner, and edits after your go; accepted ones land in one
+commit that closes them on push, and reach every project through `autoUpdate`.
 
 ## Migrating a repo from 1.x
 
@@ -255,7 +255,8 @@ screen spec และ API spec ชี้ถึง ของที่ไม่อ
 
 กฎหรือข้อบกพร่องที่เจอระหว่างทำงานในโปรเจกต์ agent จะเปิดเป็น GitHub issue label `proposal` ใน repo นี้
 (เกณฑ์และรูปแบบอยู่ใน `docs/kit-proposals.md`: ต้องเขียนกฎได้โดยไม่อ้างชื่อโปรเจกต์ code หรือ path จริง ไม่อย่างนั้นลง
-`ai/kit/review-checklist.md` ของโปรเจกต์แทน) จากนั้นสั่ง `/ai-kit:harvest` ใน clone นี้ agent จะรับ รวม หรือปฏิเสธแต่ละข้อ
+`ai/kit/review-checklist.md` ของโปรเจกต์แทน) จากนั้นสั่ง `/ai-kit:harvest` ใน clone นี้ agent จะแสดงตาราง
+ว่ารับ รวม ปฏิเสธ หรือส่งให้เจ้าของตัดสินแต่ละข้อ แล้วรอให้สั่งก่อนแก้ไฟล์
 ข้อที่รับจะอยู่ใน commit เดียวที่ปิด issue ตอน push แล้วไปถึงทุกโปรเจกต์ผ่าน `autoUpdate`
 
 ### ย้าย repo จาก 1.x

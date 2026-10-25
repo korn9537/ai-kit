@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.12.1
+
+- `/ai-kit:harvest`: shows the owner one decision table and waits for a go before editing; a proposal that changes
+  the owner kinds, a review gate or what the agent decides alone goes to Open; the author name no longer counts as
+  owner approval (sessions file under the owner's account). Before accepting: framework rules go in their own
+  `conventions/<name>.md`, a proposed script must catch the failure in the evidence, existing hooks and commands
+  count as duplicates. Lands only what the issue proposes, with fresh neutral examples; a partial accept is
+  commented on the issue.
+
 ## 2.12.0
 
 - `githooks/pre-commit`: a partially staged file gets only its index blob formatted by prettier, its other hunks
