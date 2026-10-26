@@ -10,7 +10,7 @@ const INJECTED = /^<((?:browser_instruction|ide_|system-reminder|task-notificati
 const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
 
 export function roleOf(desc, type) {
-  if (/^\s*commit:/i.test(desc ?? "")) return "commit";
+  if (/committer/.test(type ?? "") || /^\s*commit:/i.test(desc ?? "")) return "commit";
   if (/change-reviewer/.test(type ?? "") || /review/i.test(desc ?? "")) return "reviewer";
   if (/business-analyst/.test(type ?? "")) return "ba";
   return "other";

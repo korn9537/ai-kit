@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.14.0
+
+Commit subagents get their own agent type (lever L2 from the first project trial: commit subagents were 40% of a
+session's cost, each starting at about 35k tokens of context as `general-purpose` and growing to 199k on one sweep).
+
+- New `ai-kit:committer` (`agents/committer.md`: Read, Edit, Write, Grep, Glob, Bash; sonnet): starts at about 9k
+  tokens of context against about 32k for `general-purpose` (measured in one headless run). Its prompt carries the
+  commit-subagent rules, read discipline, verify-output discipline (`tail` a passing run, rerun only the failing test,
+  filter a whole-app lint to the changed files), the commit form (`git add <files>`, `git commit` with no paths) and
+  the four-item report, so the coordinator's brief holds only the batch.
+- `docs/plan-batching.md` §Coordinator pipeline launches `ai-kit:committer`; a batch is one commit, and a sweep over
+  many modules is one batch per module or about ten files.
+- `review-before-stop.sh` counts a finished `ai-kit:committer`'s edits by its agent type too, not only a `commit:`
+  description; the usage records give it the commit role the same way.
+
 ## 2.13.4
 
 Fixes from the first project trial (rem-saas) of the token records.

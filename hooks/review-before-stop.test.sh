@@ -89,8 +89,18 @@ run_case "pass: skip review after the edit" pass - "$(edit src/c.ts)" \
   "$(jq -cn '{type: "user", timestamp: "2030-01-01T00:01:00Z", message: {content: "skip review"}}')"
 run_case "block: a commit batch named review fixes is not a review" block "no review yet" "$(edit src/c.ts)" \
   "$(line Agent '{"subagent_type": "general-purpose", "description": "commit: review fixes"}')"
+run_case "block: an ai-kit:committer is not a review" block "no review yet" "$(edit src/c.ts)" \
+  "$(line Agent '{"subagent_type": "ai-kit:committer", "description": "commit: review fixes"}')"
 run_case "pass: general-purpose review fallback" pass - "$(edit src/c.ts)" \
   "$(line Agent '{"subagent_type": "general-purpose", "description": "review commit"}')"
+# a finished ai-kit:committer's edits count even when its description lacks "commit:"
+mkdir -p "$REPO/.git/t/subagents"
+sed -i.bak '1,20s/$/z/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
+jq -cn '{agentType: "ai-kit:committer", description: "transfer rows"}' >"$REPO/.git/t/subagents/agent-c1.meta.json"
+{ edit src/c.ts | jq -c '.isSidechain = true'; jq -cn '{type: "assistant", isSidechain: true,
+  timestamp: "2030-01-01T00:00:59Z", message: {stop_reason: "end_turn", content: [{type: "text", text: "Hash abc1234"}]}}'; } >"$REPO/.git/t/subagents/agent-c1.jsonl"
+run_case "block: edits by a finished ai-kit:committer count" block "no review yet" "$(line Read '{"file_path": "x"}')"
+rm -rf "$REPO/.git/t"
 reset
 
 sed -i.bak '1s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"

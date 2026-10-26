@@ -4,8 +4,8 @@
 # that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
 # (fallback). Docs (*.md), ai/usage records and files outside the repo do not count; a Bash command that writes
 # into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a
-# .md-only Bash write does not. Edits by a finished commit subagent (description "commit: ...") count too; one
-# still running is skipped until it ends.
+# .md-only Bash write does not. Edits by a finished commit subagent (ai-kit:committer or description "commit: ...")
+# count too; one still running is skipped until it ends.
 #
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
@@ -99,7 +99,8 @@ events="$(jq -R --arg root "$project/" --arg dirs "$dirs" --argjson side false "
 # <session>/subagents/agent-*.jsonl + .meta.json; reviewers and analysts never count (their greps look like writes)
 for sub in "${transcript%.jsonl}"/subagents/agent-*.jsonl; do
   [[ -f "$sub" ]] || continue
-  jq -e '.description // "" | test("^\\s*commit:"; "i")' "${sub%.jsonl}.meta.json" >/dev/null 2>&1 || continue
+  jq -e '(.agentType // "" | test("committer")) or (.description // "" | test("^\\s*commit:"; "i"))' \
+    "${sub%.jsonl}.meta.json" >/dev/null 2>&1 || continue
   # finished = last assistant line is the handback call, or an end_turn reply with no tool call (null = still writing)
   done_="$(jq -R 'fromjson? // empty | select(.type == "assistant")
     | ([.message.content[]? | select(.type == "tool_use") | .name]) as $t

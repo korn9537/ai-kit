@@ -41,7 +41,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
   a BA request by the user is always run; unsure → summarize.
 - **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet at medium effort (agent
-  frontmatter), commit subagents on sonnet via the Agent call. Pass `model: "opus"` and `effort: "high"` when the change
+  frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"` when the change
   touches a DB schema or migration, a calculation, a permission, or a decision recorded as final; no other model or
   effort override.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
@@ -70,7 +70,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - Independent reads, searches and checks go out together in one message.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `ai-kit/docs/plan-batching.md`.
-- **A multi-commit plan runs from the main session as coordinator**, one commit subagent per batch; read
+- **A multi-commit plan runs from the main session as coordinator**, one `ai-kit:committer` per batch; read
   `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the

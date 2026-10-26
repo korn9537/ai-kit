@@ -31,17 +31,18 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 
 A multi-commit plan runs from the main session as coordinator, so its context stays small.
 
-- Each batch goes to a fresh background subagent (`general-purpose`, description `commit: <batch>`) that implements,
-  verifies and commits it.
+- Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
+  implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for
+  `general-purpose`, and its own prompt carries the commit-subagent rules, read and verify-output discipline and
+  report shape, so the brief holds only the batch.
+- A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
+  module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes `model: "sonnet"` and no effort; `model: "opus"` and `effort: "high"` when the batch touches
   a DB schema or migration, a calculation, a permission or a decision recorded as final (the reviewer and BA rule).
-- Its brief says it is a commit subagent, must not launch a reviewer, and first reads the "Working conventions" of
-  the plugin's `CLAUDE.core.md` (give its absolute path; a subagent does not get that text injected).
-- Its brief also sets read discipline: locate with `grep -n` (several patterns in one call), read only the needed
-  line range, send independent reads and searches in one message; never read a whole large file to find one symbol,
-  never one `sed -n` per call when several ranges are known.
-- It returns only hash, files, choices it made and open items (report items 6 and 7 only). An owner decision it hits
-  comes back unanswered for the main session to ask.
+- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands and
+  anything the coordinator already found (paths, line numbers), so the subagent does not search for it again.
+- It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for
+  the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
   repo while one runs.
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
