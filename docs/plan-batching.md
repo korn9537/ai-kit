@@ -34,11 +34,13 @@ A multi-commit plan runs from the main session as coordinator, so its context st
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
   implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for
   `general-purpose`, and its own prompt carries the commit-subagent rules, read and verify-output discipline and
-  report shape, so the brief holds only the batch.
+  report shape, so the brief holds only the batch. When that type is not loaded (plugin enabled mid-session), launch
+  `general-purpose` with the same description, told first to read and follow `<plugin root>/agents/committer.md`.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
-- The Agent call passes `model: "sonnet"` and no effort; `model: "opus"` and `effort: "high"` when the batch touches
-  a DB schema or migration, a calculation, a permission or a decision recorded as final (the reviewer and BA rule).
+- The Agent call passes no model or effort (the agent runs on sonnet); `model: "opus"` and `effort: "high"` when the
+  batch touches a DB schema or migration, a calculation, a permission or a decision recorded as final (the
+  reviewer and BA rule).
 - The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands and
   anything the coordinator already found (paths, line numbers), so the subagent does not search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for

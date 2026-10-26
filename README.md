@@ -13,7 +13,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
 | `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                                           |
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
-| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`                       |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`                        |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
