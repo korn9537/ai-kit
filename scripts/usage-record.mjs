@@ -50,9 +50,16 @@ function deltaAgents(session, prior) {
 
 // Hash spellings of one commit differ in length (git's abbreviation grows with the repo): a prefix is the same commit.
 export const sameCommit = (a, b) => a.startsWith(b) || b.startsWith(a);
+// Hashes are at least 7 characters (git's shortest abbreviation), so only one 7-character bucket is compared.
 export function uniqueCommits(hashes) {
   const out = [];
-  for (const h of [...hashes].sort((a, b) => b.length - a.length)) if (!out.some((x) => sameCommit(x, h))) out.push(h);
+  const byStem = new Map();
+  for (const h of [...hashes].sort((a, b) => b.length - a.length)) {
+    const kept = byStem.get(h.slice(0, 7)) ?? [];
+    if (kept.some((x) => sameCommit(x, h))) continue;
+    byStem.set(h.slice(0, 7), [...kept, h]);
+    out.push(h);
+  }
   return out;
 }
 

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
+import { baselineRecords, digest, loadRecords, validRecord } from "./usage-digest.mjs";
 import { enc, modelShort } from "./usage-record.mjs";
 
 let passed = 0;
@@ -199,6 +199,10 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
+
+const okRec = { v: 1, ts: "t", agents: [] };
+eq("a record whose commits hold a non-string or a too-short hash is invalid",
+  [["abc1234"], [123], [null], [""], ["abc"]].map((commits) => validRecord({ ...okRec, commits })), [true, false, false, false, false]);
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

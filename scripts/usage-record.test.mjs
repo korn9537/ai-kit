@@ -93,6 +93,8 @@ eq("no session id throws", threw, true);
 eq("session id taken from a prior record", buildRecord(sessionMore, [rA], { ...ctx, session: undefined }).session, "s1");
 eq("a commit a prior record spelled shorter is not counted again",
   buildRecord({ ...session, commits: [{ ts: "t", hash: "abc12345" }, { ts: "t", hash: "def5678" }] }, [{ ...r1, agents: [], commits: ["abc1234"] }], ctx).commits, ["def5678"]);
+eq("uniqueCommits: 20000 distinct hashes stay distinct, quickly", (() => { const t = Date.now();
+  const n = uniqueCommits(Array.from({ length: 20000 }, (_, i) => i.toString(16).padStart(10, "0"))).length; return [n, Date.now() - t < 2000]; })(), [20000, true]);
 eq("uniqueCommits: one commit per prefix family, the longest spelling kept", uniqueCommits(["abc1234", "abc12345", "def5678"]), ["abc12345", "def5678"]);
 eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
 

@@ -18,7 +18,7 @@ const isObj = (x) => x !== null && typeof x === "object" && !Array.isArray(x);
 // A record the digest can total without throwing: v 1, string ts, agents are objects with a string model and numeric counts.
 export function validRecord(r) {
   if (!isObj(r) || r.v !== 1 || typeof r.ts !== "string" || !Array.isArray(r.agents)) return false;
-  if (r.commits !== undefined && !Array.isArray(r.commits)) return false;
+  if (r.commits !== undefined && !(Array.isArray(r.commits) && r.commits.every((h) => typeof h === "string" && h.length >= 7))) return false;
   return r.agents.every((a) => isObj(a) && typeof a.model === "string" && NUMERIC.every((k) => a[k] === undefined || Number.isFinite(a[k]))
     && (a.tools === undefined || (isObj(a.tools) && Object.values(a.tools).every(Number.isFinite)))
     && (a.findings === undefined || isObj(a.findings)));
