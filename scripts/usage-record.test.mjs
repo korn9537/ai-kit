@@ -68,6 +68,9 @@ eq("weight", weight({ model: "claude-x-1", input: 1e6, read: 1e6, write_5m: 0, w
 eq("5.5 model reads at 0.05 of base input", weight({ model: "claude-opus-5-5-20260101", read: 1e6 }, { "claude-opus-5-5": 4 }), 4 * 0.05);
 eq("unpriced model", weight({ model: "other" }, {}), null);
 match("summary line", summaryLine(r2, [r1, r2], prices), /^tokens this round .* \| peak \d+k \| top: /);
+match("summary line: the session's input-equivalent tokens next to its cost", summaryLine(r2, [r1, r2], prices), /\| session ≈ \$[^|]* \(in-eq [\d.]+[kM]?\)$/);
+eq("summary line with money false: tokens only, no $", (() => { const l = summaryLine(r2, [r1, r2], prices, { money: false });
+  return [/^tokens this round ≈ in-eq [\d.]+[kM]?: /.test(l), /session ≈ in-eq [\d.]+[kM]?$/.test(l), l.includes("$")]; })(), [true, true, false]);
 
 // several records in one round: durations add up to the round's wall time, only the first carries the prompt
 const sessionMore = { ...session, agents: { main: { ...main1, read: 1000 }, x1: sub } };

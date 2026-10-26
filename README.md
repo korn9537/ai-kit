@@ -79,7 +79,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -93,8 +93,10 @@ reviews every change); `review.always` (a JS-style regex) to migration, schema, 
 and `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its
 re-check.
 
-`usage.enabled` (default `true`) turns the token records off with `false`. A record holds no prompt text, only the
-prompt's length (`prompt_chars`); an agent's description is stored base64. `usage.prices`
+`usage.enabled` (default `true`) turns the token records off with `false`; `usage.money: false` (a
+subscription, where dollars are not billed) shows the round and session summary in input-equivalent tokens only. A
+record holds no prompt text, only the prompt's length (`prompt_chars`); an agent's description is stored base64.
+`usage.prices`
 (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a model with no price is
 reported apart. Records are committed with the next commit (`githooks/pre-commit` stages new files under `ai/usage/`
 by name, except in a path-limited commit, so commit with `git add` then `git commit` with no paths; `check` warns

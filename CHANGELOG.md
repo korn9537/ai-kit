@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.15.1
+
+- The Stop summary line shows the session's input-equivalent tokens next to its cost:
+  `session ≈ $4.61 (in-eq 1.2M)`.
+- `usage.money: false` in `ai/kit/config.json` (a subscription, where dollars are not billed) shows the round and
+  the session in input-equivalent tokens only: `tokens this round ≈ in-eq 79k: ...` and `session ≈ in-eq 1.2M`.
+
 ## 2.15.0
 
 Levers 3 and 4 from the first project trial: the coordinator's context grew from 88k to 250k over one 24-commit plan

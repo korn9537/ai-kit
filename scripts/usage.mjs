@@ -90,7 +90,7 @@ function record(input) {
   mkdirSync(bufDir, { recursive: true });
   appendFileSync(buffer, `${JSON.stringify(rec)}\n`);
   const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
-  process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices) })}\n`);
+  process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, { money: conf.money !== false }) })}\n`);
 }
 
 // flush --session <id> | flush --idle [--except <id>]: moves buffered records into ai/usage/ (never modifies a file there).

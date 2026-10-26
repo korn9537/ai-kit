@@ -134,7 +134,8 @@ function totals(agents, prices) {
 const clip = (s, n) => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
 export const modelShort = (m) => clip(String(/opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?")), 30);
 
-export function summaryLine(rec, sessionRecs, prices) {
+// money false (config usage.money; a subscription bills no tokens) shows input-equivalent tokens only.
+export function summaryLine(rec, sessionRecs, prices, { money = true } = {}) {
   const total = rec.agents.reduce((n, a) => n + units(a), 0);
   const byRole = new Map();
   for (const a of rec.agents) {
@@ -149,10 +150,12 @@ export function summaryLine(rec, sessionRecs, prices) {
   const anyPriced = rec.agents.some((a) => weight(a, prices) !== null);
   const top = [...rec.agents].sort((x, y) => (anyPriced ? cost(y) - cost(x) : units(y) - units(x)))[0];
   const name = (dec(top.desc) || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
-  const sessionCost = totals(sessionRecs.flatMap((r) => r.agents), prices);
-  const build = (n, withEq) => `tokens this round ≈ ${totals(rec.agents, prices)}${withEq ? ` (in-eq ${fmtTok(total)})` : ""}: ${split}`
+  const sessionAgents = sessionRecs.flatMap((r) => r.agents);
+  const sessionEq = fmtTok(sessionAgents.reduce((n, a) => n + units(a), 0));
+  const amount = (agents, eq, withEq) => (money ? `${totals(agents, prices)}${withEq ? ` (in-eq ${eq})` : ""}` : `in-eq ${eq}`);
+  const build = (n, withEq) => `tokens this round ≈ ${amount(rec.agents, fmtTok(total), withEq)}: ${split}`
     + ` | peak ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
-    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${sessionCost}`;
+    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${amount(sessionAgents, sessionEq, withEq)}`;
   // Cap at 200 code points: shrink desc first, then drop the in-eq part.
   let line = "";
   for (const [min, withEq] of [[8, true], [1, false]])
