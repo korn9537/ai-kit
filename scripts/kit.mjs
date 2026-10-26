@@ -191,10 +191,10 @@ function usageWarnings() {
     .flatMap((a) => (tryGitIn(root, [...a.split(" "), "-z", "--", "ai/usage"]) ?? "").split("\0"))
     .filter(Boolean);
   const day = Date.now() - 864e5;
-  const old = [...new Set(names)].filter((n) => (statSync(at(n), { throwIfNoEntry: false })?.mtimeMs ?? Infinity) < day);
+  const old = [...new Set(names)].filter((n) => (statSync(at(n), { throwIfNoEntry: false })?.mtimeMs ?? day) < day);
   return old.length
     ? [
-        `${old.length} token record file(s) under ai/usage/ uncommitted for over a day (fix: git commit -m "usage records" -- ai/usage; then commit with git add <files> and git commit with no paths, CLAUDE.core.md)`,
+        `${old.length} token record file(s) under ai/usage/ uncommitted for over a day (fix: commit with git add <files> then git commit with no paths, and the pre-commit takes them along; a path-limited commit leaves them, CLAUDE.core.md)`,
       ]
     : [];
 }

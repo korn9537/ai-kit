@@ -160,6 +160,8 @@ eq("tools: assignments before the command are skipped, their paths never kept",
 eq("tools: a command substitution counts as its command, a path as its basename, a function as function",
   ["A=apps/api; f=$(find $A -name x)", "F=(ai/a.md src/b.ts); grep x ${F[@]}", "(time npx tsc)", "./scripts/run.sh a", "p(){ echo; }; p", 'F="ai/unclosed', ""].map(bk),
   ["Bash:find", "Bash:grep", "Bash:time", "Bash:run.sh", "Bash:function", "Bash", "Bash"]);
+eq("tools: a quoted path is bare Bash, env options and a comment line are skipped",
+  ['"/Users/me/My Docs/run.sh" a', "env -i X=1 npm test", "# look\ngrep x f"].map(bk), ["Bash", "Bash:npm", "Bash:grep"]);
 
 // commits: git log joins what the transcript saw (git commit -q prints no hash)
 const log = "a1b2c3d4e5f6 a1b2c3d4 2026-01-01T00:02:00+07:00\nffff0000aaaa ffff0000 2026-01-01T00:01:00+07:00";

@@ -68,13 +68,15 @@ function record(input) {
   const cache = loadCache(cachePath);
   const sess = collectSession(transcript, cache);
   saveCache(cachePath, cache);
-  // `git commit -q` prints no hash, so HEAD's commits since the session began count too
-  if (sess.firstTs) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${sess.firstTs}`, "--format=%H %h %cI", "HEAD"));
 
   const bufDir = join(common, "claude-usage");
   seedBuffer(root, bufDir, session);
   const buffer = join(bufDir, `${session}.jsonl`);
   const prior = readLines(buffer);
+  // `git commit -q` prints no hash, so HEAD's commits since the last record (first record: since this round's prompt,
+  // not the transcript's start, which a fork or resume carries over) count too
+  const since = prior.length ? prior[prior.length - 1].ts : sess.prompts[sess.prompts.length - 1]?.ts || sess.firstTs;
+  if (since) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${since}`, "--format=%H %h %cI", "HEAD"));
   const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
   const rec = buildRecord(sess, prior, {
     now: new Date(),

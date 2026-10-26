@@ -112,7 +112,7 @@ Builder's calls made in this design (the owner may overrule):
   `v`, `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin version), `project` (repo folder
   name), `user` (`git config user.name`), `branch`, `prompt_chars` (length of this round's prompt, on the
   round's first record), `duration_s` (since the round's prompt), `commits` (hashes committed in the round: from
-  git's commit output and from `git log` on HEAD since the session began), `base_context` (the main session's first
+  git's commit output and from `git log` on HEAD since the previous record), `base_context` (the main session's first
   call context, on the session's first record), and `agents`: one entry per agent with usage in this delta, with
   `id`, `role`, `desc` (base64, cut to 200), `model`, `calls`, `input`, `read`, `write_5m`, `write_1h`, `output`,
   `peak` (largest context of one call), `tools` (call count per tool; Bash keyed by its first command word after a

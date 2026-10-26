@@ -48,6 +48,14 @@ function deltaAgents(session, prior) {
   return out;
 }
 
+// Hash spellings of one commit differ in length (git's abbreviation grows with the repo): a prefix is the same commit.
+export const sameCommit = (a, b) => a.startsWith(b) || b.startsWith(a);
+export function uniqueCommits(hashes) {
+  const out = [];
+  for (const h of [...hashes].sort((a, b) => b.length - a.length)) if (!out.some((x) => sameCommit(x, h))) out.push(h);
+  return out;
+}
+
 export function buildRecord(session, prior, ctx) {
   const agents = deltaAgents(session, prior);
   if (!agents.length) return null;
@@ -56,7 +64,7 @@ export function buildRecord(session, prior, ctx) {
   const last = prior[prior.length - 1];
   const sameRound = last?.round === round;
   const since = Date.parse(sameRound ? last.ts : p?.ts || session.firstTs);
-  const seen = new Set(prior.flatMap((r) => r.commits ?? []));
+  const seen = prior.flatMap((r) => r.commits ?? []);
   const sessionId = ctx.session ?? prior[0]?.session;
   if (!sessionId) throw new Error("buildRecord: no session id in ctx or prior records");
   const rec = {
@@ -71,7 +79,8 @@ export function buildRecord(session, prior, ctx) {
   };
   if (p && !prior.some((r) => r.round === round)) rec.prompt_chars = p.chars;
   rec.duration_s = Number.isFinite(since) ? Math.max(0, Math.round((ctx.now.getTime() - since) / 1000)) : 0;
-  rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h) => !seen.has(h));
+  rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h, i, a) => !seen.some((s) => sameCommit(s, h))
+    && !a.slice(0, i).some((x) => sameCommit(x, h)));
   if (!prior.length && session.baseContext != null) rec.base_context = session.baseContext;
   rec.agents = agents;
   return rec;

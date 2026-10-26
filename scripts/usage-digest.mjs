@@ -3,7 +3,7 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { collectSession, transcriptsDir } from "./usage-collect.mjs";
-import { buildRecord, dec, fmtTok, fmtUsd, modelShort, weight } from "./usage-record.mjs";
+import { buildRecord, dec, fmtTok, fmtUsd, modelShort, uniqueCommits, weight } from "./usage-record.mjs";
 
 const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
 const PEAK_OUTLIER = 150000;
@@ -126,7 +126,7 @@ export function digest(recs, prices, meta = {}) {
   const total = sum(rows.map(c));
   const sessions = new Set(recs.map((r) => r.session));
   const rounds = new Set(recs.map((r) => `${r.session}#${r.round}`));
-  const commits = new Set(recs.flatMap((r) => r.commits ?? []));
+  const commits = new Set(uniqueCommits(recs.flatMap((r) => r.commits ?? [])));
 
   // Distinct agents: calls and tools add up across records, peak and largest result are maxima.
   const agents = new Map();
@@ -221,7 +221,7 @@ export function digest(recs, prices, meta = {}) {
     const cost = sum(kr.map((x) => x.cost));
     const s = new Set(rr.map((r) => r.session));
     const rd = new Set(rr.map((r) => `${r.session}#${r.round}`));
-    const cm = new Set(rr.flatMap((r) => r.commits ?? []));
+    const cm = new Set(uniqueCommits(rr.flatMap((r) => r.commits ?? [])));
     const share = (f) => pct(sum(kr.filter(f).map((x) => x.cost)), cost);
     const mine = [...agents.values()].filter((g) => g.kit === k);
     const cAgents = mine.filter((g) => g.role === "commit");

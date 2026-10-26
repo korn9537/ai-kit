@@ -70,17 +70,18 @@ const LEAD_CD = /^\s*cd\s+[^&;]*(?:&&|;)\s*/;
 const LEAD_SUBST = /^\s*(?:export\s+)?[A-Za-z_]\w*=\$\(/;
 const LEAD_ASSIGN = /^\s*(?:export\s+)?[A-Za-z_]\w*=(?:\([^)]*\)|'[^']*'|"(?:[^"\\]|\\.)*"|\S*?)(?=\s|;|&&|$)\s*(?:;|&&)?\s*/;
 
-// Bash by its command word: a leading cd, assignments (arrays too), env and ( or { are skipped (`f=$(find` counts as find); a function
-// definition is `function`; a path keeps its basename, and a word that is still no plain name is bare `Bash`.
+// Bash by its command word: a leading cd, comment line, assignments (arrays too), env and ( or { are skipped (`f=$(find` counts as find); a function
+// definition is `function`; a path keeps its basename, and a quoted word or one that is still no plain name is bare `Bash`.
 export function toolKey(b) {
   if (b.name !== "Bash") return b.name;
   let cmd = String(b.input?.command ?? "");
   for (let prev = ""; prev !== cmd; ) {
     prev = cmd;
-    cmd = cmd.replace(LEAD_CD, "").replace(LEAD_SUBST, "").replace(LEAD_ASSIGN, "").replace(/^\s*(?:env\s+|[({]\s*)/, "");
+    cmd = cmd.replace(LEAD_CD, "").replace(LEAD_SUBST, "").replace(LEAD_ASSIGN, "").replace(/^\s*(?:#[^\n]*\n|env(?:\s+-\S+)*\s+|[({]\s*)/, "");
   }
   const word = cmd.trim().split(/[\s;|&]+/)[0] ?? "";
   if (/^[A-Za-z_][\w-]*\(\)/.test(word)) return "Bash:function";
+  if (/["'`$\\]/.test(word)) return "Bash";
   const name = word.replace(/^.*\//, "");
   return /^[\w.+-]+$/.test(name) ? `Bash:${name}` : "Bash";
 }

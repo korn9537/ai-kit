@@ -1,6 +1,6 @@
 // Tests for usage-record.mjs: cumulative session totals to a per-round delta record, and the summary line.
 // Usage: node scripts/usage-record.test.mjs
-import { buildRecord, dec, enc, summaryLine, weight } from "./usage-record.mjs";
+import { buildRecord, dec, enc, summaryLine, uniqueCommits, weight } from "./usage-record.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -91,6 +91,9 @@ try {
 }
 eq("no session id throws", threw, true);
 eq("session id taken from a prior record", buildRecord(sessionMore, [rA], { ...ctx, session: undefined }).session, "s1");
+eq("a commit a prior record spelled shorter is not counted again",
+  buildRecord({ ...session, commits: [{ ts: "t", hash: "abc12345" }, { ts: "t", hash: "def5678" }] }, [{ ...r1, agents: [], commits: ["abc1234"] }], ctx).commits, ["def5678"]);
+eq("uniqueCommits: one commit per prefix family, the longest spelling kept", uniqueCommits(["abc1234", "abc12345", "def5678"]), ["abc12345", "def5678"]);
 eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
 
 console.log(`${passed} passed, ${failed} failed`);

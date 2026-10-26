@@ -5,8 +5,9 @@
 Fixes from the first project trial (rem-saas) of the token records.
 
 - `commits` was empty when commits ran as `git commit -q` (no `[branch hash]` line to read): a record also takes the
-  commits on HEAD since the session began (`git log --since`), spelled as git log abbreviates them, each once. A
-  commit another session makes on the same HEAD in that time counts too.
+  commits on HEAD since the previous record (the first record: since the round's prompt), spelled as git log
+  abbreviates them. A commit another session makes on the same HEAD in that time counts too. Hashes that are
+  prefixes of one another are one commit, in records and in the digest.
 - Bash tool keys skip leading assignments (arrays too), `env`, `(` or `{` and a command substitution's `NAME=$(`,
   keep a path's basename and key a function definition as `Bash:function`, so no scratchpad, plugin-cache or file
   path lands in a record.
