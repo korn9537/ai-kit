@@ -4,6 +4,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 HOOK="$PWD/review-skip-guard.sh"
+NEEDED="$PWD/../scripts/review-needed.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 REPO="$(cd "$TMP" && pwd -P)" || exit 1
@@ -78,6 +79,24 @@ run_case "pass: no commit named (a work-tree review)" 0 "$(rev "the changed file
 run_case "pass: a hex word that is no commit" 0 "$(rev "id deadbeef12")"
 run_case "pass: not a reviewer" 0 "$(rev "git show $moved" ai-kit:committer "commit: review fixes")"
 run_case "block: general-purpose review fallback" 2 "$(rev "git show $moved" general-purpose "review split")"
+
+# scripts/review-needed.sh shares the check: skip for a move-only commit, review otherwise
+needed() {
+  local got
+  got="$(cd "$REPO" && env -i PATH="$PATH" HOME="$HOME" bash "$NEEDED" "$3" 2>&1)"
+  if [[ "$got" == "$2" ]]; then
+    echo "ok   - $1"
+    pass=$((pass + 1))
+  else
+    echo "FAIL - $1 (want $2, got $got)"
+    fail=$((fail + 1))
+  fi
+}
+needed "review-needed: a move-only commit" skip "$moved"
+needed "review-needed: a code commit" review "$code"
+needed "review-needed: a move under a review.always path" review "$migration"
+needed "review-needed: no commit given" review ""
+needed "review-needed: an unknown commit" review deadbeef12
 rm -rf "$REPO/ai/kit"
 run_case "pass: a project without ai/kit" 0 "$(rev "git show $moved")"
 

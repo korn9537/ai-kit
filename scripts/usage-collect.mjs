@@ -191,17 +191,26 @@ export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead:
   const agents = { main: agentOf("main", "coordinator", "", mf.model, mf) };
   const commits = [...mf.commits];
   const subDir = join(dirname(transcript), basename(transcript, ".jsonl"), "subagents");
-  let names = [];
+  const agentFiles = (dir) => {
+    try {
+      return readdirSync(dir).filter((n) => n.startsWith("agent-") && n.endsWith(".jsonl")).sort().map((n) => [dir, n]);
+    } catch {
+      return [];
+    }
+  };
+  // Agent tool subagents, then each workflow run's agents (subagents/workflows/<run>/)
+  let runs = [];
   try {
-    names = readdirSync(subDir).filter((n) => n.startsWith("agent-") && n.endsWith(".jsonl")).sort();
+    runs = readdirSync(join(subDir, "workflows")).sort();
   } catch {}
-  for (const name of names) {
+  const files = [...agentFiles(subDir), ...runs.flatMap((r) => agentFiles(join(subDir, "workflows", r)))];
+  for (const [dir, name] of files) {
     const id = name.slice("agent-".length, -".jsonl".length);
     let meta = {};
     try {
-      meta = JSON.parse(readFileSync(join(subDir, `agent-${id}.meta.json`), "utf8"));
+      meta = JSON.parse(readFileSync(join(dir, `agent-${id}.meta.json`), "utf8"));
     } catch {}
-    const f = readNew(join(subDir, name), cache, false);
+    const f = readNew(join(dir, name), cache, false);
     agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f);
     for (const c of f.commits) if (!commits.some((x) => x.hash === c.hash)) commits.push(c);
   }

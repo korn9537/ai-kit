@@ -29,7 +29,12 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 
 ## Coordinator pipeline
 
-A multi-commit plan runs from the main session as coordinator, so its context stays small.
+A plan of four batches or more runs as the run-plan workflow (`/ai-kit:run-plan`, `workflows/run-plan.js`): a
+script applies the rules below, so no batch report enters the main session's context and the plan runs to its end
+in one go, with no context limit to hand over at. The main session plans, passes the batches as args and writes the
+one report. Fewer batches (their reports cost little, and the main session can still answer between them), no
+Workflow tool, or the call refused: the main session is the coordinator and applies these rules itself, its context
+kept small. The user naming a runner wins.
 
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
   implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for
@@ -54,15 +59,16 @@ A multi-commit plan runs from the main session as coordinator, so its context st
   user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
-  runs, then the one re-check.
+  runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and
+  its findings and makes a `fix: <batch>` commit; a fresh reviewer re-checks the fix commit only, or reviews both
+  commits whole when a finding was about data or rule correctness.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
-- Past `handoff.max_context` (default 150k) the coordinator launches no new batch: `handoff-nudge.sh` notes it on
-  the next Agent or SendMessage call; the running batches finish, with their reviews, fixes and re-checks, and the
-  final report's "Next session"
-  item holds the batches left so the plan continues in a fresh session. This is the one stop the next bullet allows
-  besides an owner decision or a blocker.
+- Main session as coordinator only: past `handoff.max_context` (default 150k) it launches no new batch;
+  `handoff-nudge.sh` notes it on the next Agent or SendMessage call. The running batches finish, with their
+  reviews, fixes and re-checks, and the final report's "Next session" item holds the batches left so the plan
+  continues in a fresh session. This is the one stop the next bullet allows besides an owner decision or a blocker.
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every
   planned commit then runs to the end in one run with one report: never stop between commits to ask whether to
   continue; stop early only for an owner decision, a blocker or the context limit above.

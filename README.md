@@ -23,6 +23,9 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `flush` (SessionEnd, SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
+| `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
+| `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check |
+| `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage-*.test.mjs`    | fixture tests for the usage modules: `node scripts/usage-<name>.test.mjs`                      |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite and `check-wrap.mjs` in parallel: `node scripts/test-all.mjs` |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
@@ -59,7 +62,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   file, a merge, a root commit or a `review.always` path is reviewed as usual.
 - `handoff-nudge.sh` (UserPromptSubmit, and PostToolUse on Agent, Task and SendMessage for a coordinator) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
-  coordinator launches no new batch. It never blocks.
+  coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the
+  workflow's batches stay out of the main session's context.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
 - `usage-log.sh` (Stop) appends each round's token use to a buffer in the git common dir

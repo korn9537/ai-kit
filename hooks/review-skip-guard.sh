@@ -17,24 +17,14 @@ jq -e '.tool_input | (.subagent_type // "") as $t | (.description // "") as $d
   | ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose")
     and ($d | test("review"; "i")) and ($d | test("^\\s*commit:"; "i") | not))' <<<"$input" >/dev/null 2>&1 || exit 0
 
-always="$(kit_conf '.review.always' '(^|/)(migrations?|schema|auth|permissions?|polic(y|ies))([/._-]|$)|\.(sql|prisma)$')"
 brief="$(jq -r '.tool_input | "\(.description // "") \(.prompt // "")"' <<<"$input")"
 grep -q 'git show' <<<"$brief" || exit 0
-hashes="$(grep -owE '[0-9a-f]{7,40}' <<<"$brief" | grep '[a-f]' | sort -u || true)"
+hashes="$(grep -owE '[0-9a-f]{7,40}' <<<"$brief" | sort -u || true)"
 skipped=()
 while IFS= read -r h; do
   [[ -n "$h" ]] || continue
-  full="$(git -C "$kit_root" rev-parse --verify -q "$h^{commit}" 2>/dev/null)" || continue
-  # one parent only: a root commit or a merge is reviewed as usual
-  [[ "$(git -C "$kit_root" rev-list --parents -n 1 "$full" | wc -w)" -eq 2 ]] || exit 0
-  [[ -z "$(kit_code_lines "$kit_root" "$full^" "$full" --)" ]] || exit 0
-  # a mode change or an empty new file has no +/- line; a numstat row of 0 0 shows it
-  stat="$(git -C "$kit_root" diff --no-ext-diff --numstat --no-renames "$full^" "$full" 2>/dev/null)" || exit 0
-  LC_ALL=C grep -qE '^0[[:space:]]+0[[:space:]]' <<<"$stat" && exit 0
-  paths="$(cut -f3- <<<"$stat")"
-  rc=0
-  jq -Rse --arg re "$always" 'split("\n") | any(.[]; length > 0 and test($re; "i"))' <<<"$paths" >/dev/null 2>&1 || rc=$?
-  ((rc == 1)) || exit 0
+  git -C "$kit_root" rev-parse --verify -q "$h^{commit}" >/dev/null 2>&1 || continue
+  kit_review_skippable "$kit_root" "$h" || exit 0
   skipped+=("$h")
 done <<<"$hashes"
 ((${#skipped[@]})) || exit 0

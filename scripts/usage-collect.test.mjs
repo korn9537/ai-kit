@@ -69,6 +69,11 @@ writeFileSync(
 );
 writeFileSync(join(sub, "agent-x2.meta.json"), JSON.stringify({ description: "Review the change", agentType: "ai-kit:change-reviewer" }));
 writeFileSync(join(sub, "agent-x3.jsonl"), lines(asst("c1", "2026-01-01T00:00:04Z", text("hi"), usage(1, 1, 1, 1, 1), { isSidechain: true })));
+const wf = join(sub, "workflows", "wf_1");
+mkdirSync(wf, { recursive: true });
+writeFileSync(join(wf, "agent-w1.jsonl"), lines(asst("w1", "2026-01-01T00:00:04Z", text("done"), usage(1, 1, 1, 1, 7), { isSidechain: true })));
+writeFileSync(join(wf, "agent-w1.meta.json"), JSON.stringify({ description: "commit: bar", agentType: "ai-kit:committer" }));
+writeFileSync(join(wf, "journal.jsonl"), "{}\n");
 
 const s = collectSession(main);
 eq("streamed blocks counted once, last usage wins", s.agents.main.output, 30);
@@ -87,6 +92,7 @@ eq("commit hashes from git commit output", s.commits.map((c) => c.hash), ["a1b2c
 eq("subagent role from meta", s.agents.x1.role, "commit");
 eq("reviewer findings from its last reply", s.agents.x2.findings, { confirmed: 2, plausible: 1 });
 eq("no meta → other, still counted", [s.agents.x3.role, s.agents.x3.calls], ["other", 1]);
+eq("a workflow run's agent is counted with its role", [s.agents.w1?.role, s.agents.w1?.output], ["commit", 7]);
 
 // prompt detection: what the harness or an IDE adds is not the user's ask
 const pm = join(dir, "proj", "prompts.jsonl");

@@ -69,6 +69,23 @@ kit_code_lines() {
     | LC_ALL=C grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
 }
 
+# kit_review_skippable <repo> <commit>: succeeds when the commit changes no code line (kit_code_lines) and so needs no
+# reviewer. A missing commit, a merge, a root commit, a mode change, an empty new file or a review.always path (old or
+# new name; an invalid pattern counts as a match) fails: reviewed as usual.
+kit_review_skippable() {
+  local repo="$1" full stat paths always rc=0
+  full="$(git -C "$repo" rev-parse --verify -q "$2^{commit}" 2>/dev/null)" || return 1
+  [[ "$(git -C "$repo" rev-list --parents -n 1 "$full" | wc -w)" -eq 2 ]] || return 1
+  [[ -z "$(kit_code_lines "$repo" "$full^" "$full" --)" ]] || return 1
+  # a mode change or an empty new file has no +/- line; a numstat row of 0 0 shows it
+  stat="$(git -C "$repo" diff --no-ext-diff --numstat --no-renames "$full^" "$full" 2>/dev/null)" || return 1
+  LC_ALL=C grep -qE '^0[[:space:]]+0[[:space:]]' <<<"$stat" && return 1
+  paths="$(cut -f3- <<<"$stat")"
+  always="$(kit_conf '.review.always' '(^|/)(migrations?|schema|auth|permissions?|polic(y|ies))([/._-]|$)|\.(sql|prisma)$')"
+  jq -Rse --arg re "$always" 'split("\n") | any(.[]; length > 0 and test($re; "i"))' <<<"$paths" >/dev/null 2>&1 || rc=$?
+  ((rc == 1))
+}
+
 # kit_memory_dir: Claude Code's auto-memory dir for this repo (main worktree path, non-alphanumerics -> '-'; a long
 # path's hashed slug is not followed, so a miss only skips the nudge).
 kit_memory_dir() {

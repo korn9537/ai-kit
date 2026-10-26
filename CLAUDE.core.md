@@ -70,8 +70,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - Independent reads, searches and checks go out together in one message.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `ai-kit/docs/plan-batching.md`.
-- **A multi-commit plan runs from the main session as coordinator**, one `ai-kit:committer` per batch; read
-  `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch.
+- **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read
+  `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch. Four batches or more → the run-plan
+  workflow per `ai-kit/commands/run-plan.md` (the owner's standing opt-in to it); fewer, or the Workflow call
+  refused → the main session as coordinator.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the
   summary reports Done, Checked and Git, plus Decided and Open when they hold anything):

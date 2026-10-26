@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.16.0
+
+A multi-commit plan no longer stops at the coordinator's context limit for the user to start a fresh session: it
+runs as a workflow, whose batch reports stay out of the main session's context.
+
+- New `/ai-kit:run-plan` (`commands/run-plan.md`) and `workflows/run-plan.js`: the main session plans and passes the
+  batches as Workflow args; the script runs one `ai-kit:committer` per batch, one at a time in plan order, a
+  `ai-kit:change-reviewer` per commit beside the next batch, a fresh committer for CONFIRMED findings
+  (`fix: <batch>` commit) and one re-check (a whole fresh review after a data or rule fix). An owner decision or a
+  blocker stops only the batches that wait on it. `CLAUDE.core.md` and `docs/plan-batching.md` pick it for four
+  batches or more; fewer, or no Workflow tool, keep the main-session coordinator.
+- `scripts/review-needed.sh` and `hooks/lib.sh` `kit_review_skippable`: the no-code-line test of
+  `review-skip-guard.sh`, shared with the workflow (a workflow agent is no Agent call, so the guard never sees it).
+- `usage-collect.mjs` also reads workflow agents (`<session>/subagents/workflows/<run>/agent-*.jsonl`).
+- `review-skip-guard.sh`: a short hash of digits only counts as a commit too; it was dropped, so a code commit with
+  such a hash went unseen and the review of a move-only commit named with it was blocked.
+
 ## 2.15.1
 
 - The Stop summary line shows the session's input-equivalent tokens next to its cost:
