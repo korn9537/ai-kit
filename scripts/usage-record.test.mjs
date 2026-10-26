@@ -69,6 +69,11 @@ eq("5.5 model reads at 0.05 of base input", weight({ model: "claude-opus-5-5-202
 eq("unpriced model", weight({ model: "other" }, {}), null);
 match("summary line", summaryLine(r2, [r1, r2], prices), /^tokens this round .* \| peak \d+k \| top: /);
 match("summary line: the session's input-equivalent tokens next to its cost", summaryLine(r2, [r1, r2], prices), /\| session ≈ \$[^|]* \(in-eq [\d.]+[kM]?\)$/);
+const longRec = { agents: [agent({ desc: enc("x".repeat(80)), model: "claude-x-1", calls: 3, read: 5e6, output: 1e5 }),
+  agent({ id: "m", role: "coordinator", model: "claude-opus-5-5", calls: 2, read: 9e6, output: 3e5 }),
+  ...["commit", "reviewer", "ba"].map((role, i) => agent({ id: `s${i}`, role, model: "claude-y-2", calls: 1, read: 4e6 * (i + 1) }))] };
+match("a long line drops the round's in-eq before the session's", summaryLine(longRec, [longRec], prices),
+  /^tokens this round ≈ \$[^(|]*: .*\| session ≈ \$[^|]* \(in-eq [\d.]+[kM]?\)$/);
 eq("summary line with money false: tokens only, no $", (() => { const l = summaryLine(r2, [r1, r2], prices, { money: false });
   return [/^tokens this round ≈ in-eq [\d.]+[kM]?: /.test(l), /session ≈ in-eq [\d.]+[kM]?$/.test(l), l.includes("$")]; })(), [true, true, false]);
 

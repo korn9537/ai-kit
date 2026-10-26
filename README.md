@@ -93,8 +93,9 @@ reviews every change); `review.always` (a JS-style regex) to migration, schema, 
 and `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its
 re-check.
 
-`usage.enabled` (default `true`) turns the token records off with `false`; `usage.money: false` (a
-subscription, where dollars are not billed) shows the round and session summary in input-equivalent tokens only. A
+`usage.enabled` (default `true`) turns the token records off with `false`; `usage.money` (default `true`)
+set to `false` (a subscription, where dollars are not billed) shows the round and session summary in
+input-equivalent tokens only; a model without a ratio entry counts at fallback ratios, so the figure is approximate. A
 record holds no prompt text, only the prompt's length (`prompt_chars`); an agent's description is stored base64.
 `usage.prices`
 (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a model with no price is

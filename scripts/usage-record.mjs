@@ -152,14 +152,15 @@ export function summaryLine(rec, sessionRecs, prices, { money = true } = {}) {
   const name = (dec(top.desc) || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
   const sessionAgents = sessionRecs.flatMap((r) => r.agents);
   const sessionEq = fmtTok(sessionAgents.reduce((n, a) => n + units(a), 0));
+  // money false: tokens are the amount and always shown; money true: the in-eq is a droppable note after the cost
   const amount = (agents, eq, withEq) => (money ? `${totals(agents, prices)}${withEq ? ` (in-eq ${eq})` : ""}` : `in-eq ${eq}`);
-  const build = (n, withEq) => `tokens this round ≈ ${amount(rec.agents, fmtTok(total), withEq)}: ${split}`
+  const build = (n, roundEq, sessionEq_) => `tokens this round ≈ ${amount(rec.agents, fmtTok(total), roundEq)}: ${split}`
     + ` | peak ${Math.round(mainPeak / 1000)}k | top: ${clip(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
-    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${amount(sessionAgents, sessionEq, withEq)}`;
-  // Cap at 200 code points: shrink desc first, then drop the in-eq part.
+    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${amount(sessionAgents, sessionEq, sessionEq_)}`;
+  // Cap at 200 code points: shrink desc first, then drop the round's in-eq, the session's last.
   let line = "";
-  for (const [min, withEq] of [[8, true], [1, false]])
-    for (let n = 24; n >= min && !line; n--) if ([...build(n, withEq)].length <= LIMIT) line = build(n, withEq);
-  line ||= clip(build(1, false), LIMIT);
+  for (const [min, roundEq, sessEq] of [[8, true, true], [1, false, true], [1, false, false]])
+    for (let n = 24; n >= min && !line; n--) if ([...build(n, roundEq, sessEq)].length <= LIMIT) line = build(n, roundEq, sessEq);
+  line ||= clip(build(1, false, false), LIMIT);
   return line;
 }

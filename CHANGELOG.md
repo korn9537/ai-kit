@@ -3,7 +3,7 @@
 ## 2.15.1
 
 - The Stop summary line shows the session's input-equivalent tokens next to its cost:
-  `session ≈ $4.61 (in-eq 1.2M)`.
+  `session ≈ $4.61 (in-eq 1.2M)`. A line over 200 code points drops the round's in-eq first, the session's last.
 - `usage.money: false` in `ai/kit/config.json` (a subscription, where dollars are not billed) shows the round and
   the session in input-equivalent tokens only: `tokens this round ≈ in-eq 79k: ...` and `session ≈ in-eq 1.2M`.
 
