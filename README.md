@@ -52,10 +52,11 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   comments or blank lines since the last review (or since the session began when none) passes too. Edits by a finished
   commit subagent count too; one still running is skipped. Also counted as a review: a user message starting with
   "skip review" or "ไม่ต้อง review" after the last edit (earlier edits included), and, right after a re-check, a
-  main-session reply with `Review closed: re-checked once` (not quoted). A block moved within or between files counts
-  as no change (`git diff --color-moved`).
-- `review-skip-guard.sh` (PreToolUse on Agent and Task) blocks a reviewer launch whose brief names only commits that
-  change no code line (moved blocks, comments, docs, `ai/usage`) and no `review.always` path.
+  main-session reply with `Review closed: re-checked once` (not quoted). A block moved to another file counts as no
+  change (`git diff --color-moved`, re-indenting allowed); a reorder or re-indent within one file still counts.
+- `review-skip-guard.sh` (PreToolUse on Agent and Task) blocks a commit review (a brief with `git show`) whose named
+  commits change no code line (blocks moved to another file, comments, docs, `ai/usage`); a mode change, an empty new
+  file, a merge, a root commit or a `review.always` path is reviewed as usual.
 - `handoff-nudge.sh` (UserPromptSubmit, and PostToolUse on Agent, Task and SendMessage for a coordinator) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
   coordinator launches no new batch. It never blocks.

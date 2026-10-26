@@ -27,7 +27,8 @@ T="$REPO/.git/t.jsonl"
 ctx() { jq -cn --argjson n "$1" '{type: "assistant", message: {usage: {input_tokens: 0, cache_read_input_tokens: $n, cache_creation_input_tokens: 0}}}' >>"$T"; }
 # run <event> → stdout in $OUT
 run() {
-  OUT="$(jq -n --arg t "$T" --arg e "$1" '{transcript_path: $t, session_id: "s1", hook_event_name: $e, cwd: "x"}' |
+  OUT="$(jq -n --arg t "$T" --arg e "$1" --arg a "${2:-}" '{transcript_path: $t, session_id: "s1", hook_event_name: $e,
+    cwd: "x"} + (if $a == "" then {} else {agent_id: $a} end)' |
     env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>&1)"
 }
 
@@ -35,6 +36,10 @@ ctx 90000
 run PostToolUse
 check "below the limit: no note" "$(t test -z "$OUT")" "$OUT"
 ctx 160000
+run PostToolUse sub1
+check "a subagent's own Agent call: nothing" "$(t test -z "$OUT")" "$OUT"
+run UserPromptSubmit
+check "a prompt past the limit: the finish-the-task note" "$(t jq -e '.hookSpecificOutput.additionalContext | test("Do not stop")' <<<"$OUT")" "$OUT"
 run PostToolUse
 check "coordinator past the limit: PostToolUse note says launch no new batch" \
   "$(t jq -e '.hookSpecificOutput.hookEventName == "PostToolUse" and (.hookSpecificOutput.additionalContext | test("Launch no new commit batch"))' <<<"$OUT")" "$OUT"
@@ -42,7 +47,7 @@ run PostToolUse
 check "same step: no repeat" "$(t test -z "$OUT")" "$OUT"
 ctx 215000
 run UserPromptSubmit
-check "50k further, on a prompt: the finish-the-task note under UserPromptSubmit" \
+check "50k further, on a prompt: the note again under UserPromptSubmit" \
   "$(t jq -e '.hookSpecificOutput.hookEventName == "UserPromptSubmit" and (.hookSpecificOutput.additionalContext | test("Do not stop"))' <<<"$OUT")" "$OUT"
 ctx 300000
 run Stop

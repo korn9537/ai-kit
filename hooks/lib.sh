@@ -25,20 +25,48 @@ kit_conf() {
 }
 
 # kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line, none in
-# ai/usage, and none moved as a block (--color-moved marks moved lines "ul" so they drop out), plus a numstat row per
-# binary file. A move-only or comment-only change prints nothing.
+# ai/usage, and none that moved to another file (--color-moved marks moved lines "ul"; a line counts as moved only
+# when its counterpart, leading whitespace aside, is in a different file, so a reorder or re-indent within a file
+# still counts), plus a numstat row per binary file. A failing git diff prints a line too, so a caller never reads it as
+# "no change". Byte-safe (LC_ALL=C): non-UTF-8 text must not end the pipeline early.
 kit_code_lines() {
-  local repo="$1"
+  local repo="$1" rc=0
   shift
-  git -C "$repo" -c core.quotePath=false diff --numstat "$@" ':(exclude)*.md' ':(exclude)ai/usage' | grep -E '^-' || true
-  git -C "$repo" -c core.quotePath=false -c color.diff.oldMoved='ul red' -c color.diff.newMoved='ul green' \
-    -c color.diff.old=red -c color.diff.new=green -c color.diff.meta=bold -c color.diff.frag=cyan \
-    diff -U0 --color=always --color-moved=plain --color-moved-ws=allow-indentation-change "$@" \
-    ':(exclude)*.md' ':(exclude)ai/usage' \
-    | grep -v $'^\e\\[4;3[12]m' | sed $'s/\e\\[[0-9;]*m//g' \
-    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
-    | sed -E 's/^[+-][[:space:]]*//' \
-    | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
+  local -a g=(git -C "$repo" -c core.quotePath=false -c diff.noprefix=false -c diff.mnemonicPrefix=false)
+  local -a ex=(':(exclude)*.md' ':(exclude)ai/usage')
+  "${g[@]}" diff --no-ext-diff --quiet "$@" "${ex[@]}" >/dev/null 2>&1 || rc=$?
+  if ((rc > 1)); then
+    echo "(git diff failed)"
+    return 0
+  fi
+  "${g[@]}" diff --no-ext-diff --numstat "$@" "${ex[@]}" | LC_ALL=C grep -E '^-' || true
+  "${g[@]}" -c color.diff.oldMoved='ul red' -c color.diff.newMoved='ul green' -c color.diff.old=red \
+    -c color.diff.new=green -c color.diff.meta=bold -c color.diff.frag=cyan \
+    diff --no-ext-diff -U0 --color=always --color-moved=plain --color-moved-ws=allow-indentation-change "$@" "${ex[@]}" \
+    | LC_ALL=C awk '
+      function strip(s) { gsub(/\033\[[0-9;]*m/, "", s); return s }
+      { line = strip($0) }
+      line ~ /^diff --git / { file = line; next }
+      line ~ /^(\+\+\+|---) "?(a\/|b\/|\/dev\/null)/ || line !~ /^[+-]/ { next }
+      {
+        n++; f[n] = file; l[n] = line; m[n] = ($0 ~ /^\033\[4;3[12]m/)
+        if (m[n]) { k = line; sub(/^[+-][ \t]*/, substr(line, 1, 1), k); at[k] = at[k] SUBSEP file }
+      }
+      END {
+        for (i = 1; i <= n; i++) {
+          if (m[i]) {
+            other = l[i]; sub(/^[+-][ \t]*/, "", other)
+            other = (substr(l[i], 1, 1) == "+" ? "-" : "+") other
+            cnt = split(at[other], fs, SUBSEP)
+            cross = 0
+            for (k = 1; k <= cnt; k++) if (fs[k] != "" && fs[k] != f[i]) cross = 1
+            if (cross) continue
+          }
+          print l[i]
+        }
+      }' \
+    | LC_ALL=C sed -E 's/^[+-][[:space:]]*//' \
+    | LC_ALL=C grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
 }
 
 # kit_memory_dir: Claude Code's auto-memory dir for this repo (main worktree path, non-alphanumerics -> '-'; a long

@@ -59,7 +59,8 @@ A multi-commit plan runs from the main session as coordinator, so its context st
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
 - Past `handoff.max_context` (default 150k) the coordinator launches no new batch: `handoff-nudge.sh` notes it on
-  the next Agent or SendMessage call; the running batches and reviews finish, and the final report's "Next session"
+  the next Agent or SendMessage call; the running batches finish, with their reviews, fixes and re-checks, and the
+  final report's "Next session"
   item holds the batches left so the plan continues in a fresh session. This is the one stop the next bullet allows
   besides an owner decision or a blocker.
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every

@@ -11,11 +11,15 @@ Levers 3 and 4 from the first project trial: the coordinator's context grew from
 - `docs/plan-batching.md`: the coordinator reads large docs by `grep -n` and line range only (one whole read of
   `ai/decisions.md` cost 11k tokens on every later call), stops launching batches at the context limit, and gives no
   reviewer to a commit that changes no code line.
-- New `review-skip-guard.sh` (PreToolUse on Agent and Task): blocks a reviewer launch whose brief names only commits
-  with no code line (moved blocks, comments, docs, `ai/usage`) and no `review.always` path.
-- `hooks/lib.sh` `kit_code_lines`: the changed code lines with moved blocks dropped (`git diff --color-moved`,
-  indentation changes allowed); `review-before-stop.sh` uses it, so a block moved between files no longer counts as
-  a change that needs a review.
+- New `review-skip-guard.sh` (PreToolUse on Agent and Task): blocks a commit review (a brief with `git show`) whose
+  named commits change no code line; a mode change, an empty new file, a merge, a root commit or a `review.always`
+  path (old or new name; an invalid pattern counts as a match) is reviewed as usual.
+- `hooks/lib.sh` `kit_code_lines`: the changed code lines without lines moved to another file
+  (`git diff --color-moved`; re-indenting allowed across files, while a reorder or re-indent within one file
+  counts), byte-safe on non-UTF-8 text, independent of `diff.noprefix` and external diff drivers, and a failing
+  `git diff` prints a line so it never reads as no change. `review-before-stop.sh` uses it, so splitting a file no
+  longer needs a review for the moved code.
+- `handoff-nudge.sh` keeps a separate mark for the coordinator note and skips a subagent's own calls.
 
 ## 2.14.0
 
