@@ -92,7 +92,8 @@ re-check.
 prompt's length (`prompt_chars`); an agent's description is stored base64. `usage.prices`
 (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a model with no price is
 reported apart. Records are committed with the next commit (`githooks/pre-commit` stages new files under `ai/usage/`
-by name, except in a path-limited commit). A tracked file under `ai/usage/` is never modified, so a branch switch,
+by name, except in a path-limited commit, so commit with `git add` then `git commit` with no paths; `check` warns
+about record files uncommitted for over a day). A tracked file under `ai/usage/` is never modified, so a branch switch,
 merge or rebase is never blocked.
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in

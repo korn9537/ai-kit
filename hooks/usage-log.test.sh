@@ -120,5 +120,12 @@ echo '{"usage": {"prices": {"claude-opus-5-5": 100}}}' >"$REPO/ai/kit/config.jso
 stop_hook s5 "$T"
 check "config usage.prices overrides the default price" "$(t test "$OUT" != "${OUT%\$0.08*}")" "$OUT"
 
+# git commit -q prints no hash: the record still names commits made on HEAD since the session began
+GIT_COMMITTER_DATE="2030-01-15T10:00:10Z" git -C "$REPO" -c user.email=t@t commit -q --allow-empty -m quiet
+quiet="$(git -C "$REPO" log -1 --format=%h)"
+stop_hook s9 "$T"
+check "record: a quiet commit after the session began is in commits" \
+  "$(t jq -e --arg h "$quiet" '.commits == [$h]' "$(buf s9)")" "$(cat "$(buf s9)" 2>/dev/null)"
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

@@ -66,11 +66,23 @@ export function promptText(raw) {
   return t.startsWith("[Request interrupted") ? "" : t;
 }
 
-function toolKey(b) {
+const LEAD_CD = /^\s*cd\s+[^&;]*(?:&&|;)\s*/;
+const LEAD_SUBST = /^\s*(?:export\s+)?[A-Za-z_]\w*=\$\(/;
+const LEAD_ASSIGN = /^\s*(?:export\s+)?[A-Za-z_]\w*=(?:\([^)]*\)|'[^']*'|"(?:[^"\\]|\\.)*"|\S*?)(?=\s|;|&&|$)\s*(?:;|&&)?\s*/;
+
+// Bash by its command word: a leading cd, assignments (arrays too), env and ( or { are skipped (`f=$(find` counts as find); a function
+// definition is `function`; a path keeps its basename, and a word that is still no plain name is bare `Bash`.
+export function toolKey(b) {
   if (b.name !== "Bash") return b.name;
-  const cmd = String(b.input?.command ?? "").replace(/^\s*cd\s+[^&;]*(?:&&|;)\s*/, "");
-  const word = cmd.trim().split(/\s+/)[0];
-  return word ? `Bash:${word}` : "Bash";
+  let cmd = String(b.input?.command ?? "");
+  for (let prev = ""; prev !== cmd; ) {
+    prev = cmd;
+    cmd = cmd.replace(LEAD_CD, "").replace(LEAD_SUBST, "").replace(LEAD_ASSIGN, "").replace(/^\s*(?:env\s+|[({]\s*)/, "");
+  }
+  const word = cmd.trim().split(/[\s;|&]+/)[0] ?? "";
+  if (/^[A-Za-z_][\w-]*\(\)/.test(word)) return "Bash:function";
+  const name = word.replace(/^.*\//, "");
+  return /^[\w.+-]+$/.test(name) ? `Bash:${name}` : "Bash";
 }
 
 function absorb(f, e, isMain) {
@@ -200,4 +212,17 @@ export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead:
     prompts: mf.prompts.map((p, i) => ({ round: i + 1, ...p })),
     commits,
   };
+}
+
+// Transcript hashes (as git printed them) joined with `git log --format='%H %h %cI'` lines; each commit appears once,
+// spelled as git log abbreviates it, oldest first.
+export function mergeCommits(fromTranscript, logText) {
+  const logged = String(logText ?? "").split("\n").map((l) => l.trim().split(" ")).filter((p) => p.length === 3)
+    .map(([full, hash, ts]) => ({ full, hash, ts }));
+  const out = logged.map(({ hash, ts }) => ({ ts, hash }));
+  for (const c of fromTranscript) {
+    const hit = logged.find((l) => l.full.startsWith(c.hash));
+    if (!hit && !out.some((x) => x.hash === c.hash)) out.push(c);
+  }
+  return out.sort((a, b) => (Date.parse(a.ts) || 0) - (Date.parse(b.ts) || 0));
 }

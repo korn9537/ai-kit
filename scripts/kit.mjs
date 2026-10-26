@@ -11,6 +11,7 @@ import {
   readdirSync,
   rmSync,
   rmdirSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -181,6 +182,19 @@ function docsWarnings() {
   return conf?.docs?.include === OLD_DOCS_INCLUDE
     ? [
         `ai/kit/config.json docs.include still checks docs/ and CLAUDE.md, which the AI-only doc rule no longer governs (fix: set "include": ${JSON.stringify("^ai/.*\\.md$")})`,
+      ]
+    : [];
+}
+// token records still out of a commit a day after their flush: every commit since was path-limited
+function usageWarnings() {
+  const names = ["ls-files --others --modified --exclude-standard", "diff --cached --name-only"]
+    .flatMap((a) => (tryGitIn(root, [...a.split(" "), "-z", "--", "ai/usage"]) ?? "").split("\0"))
+    .filter(Boolean);
+  const day = Date.now() - 864e5;
+  const old = [...new Set(names)].filter((n) => (statSync(at(n), { throwIfNoEntry: false })?.mtimeMs ?? Infinity) < day);
+  return old.length
+    ? [
+        `${old.length} token record file(s) under ai/usage/ uncommitted for over a day (fix: git commit -m "usage records" -- ai/usage; then commit with git add <files> and git commit with no paths, CLAUDE.core.md)`,
       ]
     : [];
 }
@@ -454,6 +468,7 @@ function init() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
+  usageWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
     "restart the Claude Code session so the SessionStart hook injects the working conventions",
@@ -803,6 +818,7 @@ function migrate() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
+  usageWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
   // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
   const changedPaths = [
@@ -916,6 +932,7 @@ else if (cmd === "check") {
   uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  usageWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {
   console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>");

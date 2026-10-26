@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectSession, loadCache, saveCache } from "./usage-collect.mjs";
+import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
 import { flushIdle, flushSession, seedBuffer } from "./usage-flush.mjs";
 import { DEFAULT_PRICES, DEFAULT_RATIOS, buildRecord, summaryLine } from "./usage-record.mjs";
@@ -68,6 +68,8 @@ function record(input) {
   const cache = loadCache(cachePath);
   const sess = collectSession(transcript, cache);
   saveCache(cachePath, cache);
+  // `git commit -q` prints no hash, so HEAD's commits since the session began count too
+  if (sess.firstTs) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${sess.firstTs}`, "--format=%H %h %cI", "HEAD"));
 
   const bufDir = join(common, "claude-usage");
   seedBuffer(root, bufDir, session);

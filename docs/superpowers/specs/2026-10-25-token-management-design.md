@@ -111,11 +111,13 @@ Builder's calls made in this design (the owner may overrule):
 - Record, one JSON line per Stop (JSONL; key names as here, `v` bumps on any change of shape):
   `v`, `ts`, `session`, `round` (count of real user prompts so far), `kit` (plugin version), `project` (repo folder
   name), `user` (`git config user.name`), `branch`, `prompt_chars` (length of this round's prompt, on the
-  round's first record), `duration_s` (since the round's prompt), `commits` (hashes committed in the round),
-  `base_context` (the main session's first call context, on the session's first record), and `agents`: one entry per
-  agent with usage in this delta, with `id`, `role`, `desc` (base64, cut to 200), `model`, `calls`,
-  `input`, `read`, `write_5m`, `write_1h`, `output`, `peak` (largest context of one call), `tools` (call count per
-  tool; Bash keyed by its first command word, `Bash:sed`), `largest_result` (largest tool result in characters),
+  round's first record), `duration_s` (since the round's prompt), `commits` (hashes committed in the round: from
+  git's commit output and from `git log` on HEAD since the session began), `base_context` (the main session's first
+  call context, on the session's first record), and `agents`: one entry per agent with usage in this delta, with
+  `id`, `role`, `desc` (base64, cut to 200), `model`, `calls`, `input`, `read`, `write_5m`, `write_1h`, `output`,
+  `peak` (largest context of one call), `tools` (call count per tool; Bash keyed by its first command word after a
+  `cd`, assignments and `env`, a path cut to its basename, `Bash:sed`), `largest_result` (largest tool result in
+  characters),
   and for reviewers `findings` (`confirmed`, `plausible`). No cost or price in a record: prices apply at analysis,
   so a price change re-prices old records.
 - Roles: description starting `commit:` → commit subagent; `change-reviewer` type, or description containing

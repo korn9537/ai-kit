@@ -3,7 +3,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectSession, loadCache, roleOf, saveCache, transcriptsDir } from "./usage-collect.mjs";
+import { collectSession, loadCache, mergeCommits, roleOf, saveCache, toolKey, transcriptsDir } from "./usage-collect.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -150,6 +150,23 @@ writeFileSync(join(dir, "old-cache.json"), JSON.stringify({ v: 1, files: { x: { 
 eq("a version 1 cache (it kept prompt text) is dropped and rebuilt", [loadCache(join(dir, "old-cache.json")).v, Object.keys(loadCache(join(dir, "old-cache.json")).files)], [2, []]);
 saveCache(join(dir, "new-cache.json"), { files: {} });
 eq("saved cache is version 2", JSON.parse(readFileSync(join(dir, "new-cache.json"), "utf8")).v, 2);
+
+// tool keys never carry a path or a value: assignments, env and function definitions are skipped
+const bk = (command) => toolKey({ name: "Bash", input: { command } });
+eq("tools: assignments before the command are skipped, their paths never kept",
+  ["S=/private/tmp/x/scratchpad; ls", "K=/Users/u/.claude/plugins/cache/k; node $K/a.mjs", "env FOO=1 npm test",
+    "f='apps/web/[site_code]/x.tsx'; wc -l \"$f\"", 'F="ai/a b.md"; grep x $F'].map(bk),
+  ["Bash:ls", "Bash:node", "Bash:npm", "Bash:wc", "Bash:grep"]);
+eq("tools: a command substitution counts as its command, a path as its basename, a function as function",
+  ["A=apps/api; f=$(find $A -name x)", "F=(ai/a.md src/b.ts); grep x ${F[@]}", "(time npx tsc)", "./scripts/run.sh a", "p(){ echo; }; p", 'F="ai/unclosed', ""].map(bk),
+  ["Bash:find", "Bash:grep", "Bash:time", "Bash:run.sh", "Bash:function", "Bash", "Bash"]);
+
+// commits: git log joins what the transcript saw (git commit -q prints no hash)
+const log = "a1b2c3d4e5f6 a1b2c3d4 2026-01-01T00:02:00+07:00\nffff0000aaaa ffff0000 2026-01-01T00:01:00+07:00";
+eq("commits: git log adds quiet commits, a transcript hash of a logged commit appears once in git log spelling",
+  mergeCommits([{ ts: "2025-12-31T17:01:30Z", hash: "a1b2c3d" }, { ts: "2025-12-31T17:03:00Z", hash: "0000abc" }], log).map((c) => c.hash),
+  ["ffff0000", "a1b2c3d4", "0000abc"]);
+eq("commits: no git log output keeps the transcript ones", mergeCommits([{ ts: "t", hash: "abc1234" }], "").map((c) => c.hash), ["abc1234"]);
 
 rmSync(dir, { recursive: true, force: true });
 console.log(`${passed} passed, ${failed} failed`);

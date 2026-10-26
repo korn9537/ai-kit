@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.13.4
+
+Fixes from the first project trial (rem-saas) of the token records.
+
+- `commits` was empty when commits ran as `git commit -q` (no `[branch hash]` line to read): a record also takes the
+  commits on HEAD since the session began (`git log --since`), spelled as git log abbreviates them, each once. A
+  commit another session makes on the same HEAD in that time counts too.
+- Bash tool keys skip leading assignments (arrays too), `env`, `(` or `{` and a command substitution's `NAME=$(`,
+  keep a path's basename and key a function definition as `Bash:function`, so no scratchpad, plugin-cache or file
+  path lands in a record.
+- Records never reached a commit when every commit was path-limited (`git commit -- <paths>`, which the pre-commit
+  cannot stage into): `CLAUDE.core.md` says to commit with `git add <files>` then `git commit` with no paths, and
+  `check`, `init` and `migrate` warn about record files uncommitted for over a day.
+
 ## 2.13.3
 
 Whole-branch review fixes for the token records.
