@@ -24,6 +24,23 @@ kit_conf() {
   printf '%s' "${v:-$2}"
 }
 
+# kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line, none in
+# ai/usage, and none moved as a block (--color-moved marks moved lines "ul" so they drop out), plus a numstat row per
+# binary file. A move-only or comment-only change prints nothing.
+kit_code_lines() {
+  local repo="$1"
+  shift
+  git -C "$repo" -c core.quotePath=false diff --numstat "$@" ':(exclude)*.md' ':(exclude)ai/usage' | grep -E '^-' || true
+  git -C "$repo" -c core.quotePath=false -c color.diff.oldMoved='ul red' -c color.diff.newMoved='ul green' \
+    -c color.diff.old=red -c color.diff.new=green -c color.diff.meta=bold -c color.diff.frag=cyan \
+    diff -U0 --color=always --color-moved=plain --color-moved-ws=allow-indentation-change "$@" \
+    ':(exclude)*.md' ':(exclude)ai/usage' \
+    | grep -v $'^\e\\[4;3[12]m' | sed $'s/\e\\[[0-9;]*m//g' \
+    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
+    | sed -E 's/^[+-][[:space:]]*//' \
+    | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
+}
+
 # kit_memory_dir: Claude Code's auto-memory dir for this repo (main worktree path, non-alphanumerics -> '-'; a long
 # path's hashed slug is not followed, so a miss only skips the nudge).
 kit_memory_dir() {

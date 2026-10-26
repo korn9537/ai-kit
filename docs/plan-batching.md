@@ -48,14 +48,22 @@ A multi-commit plan runs from the main session as coordinator, so its context st
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
   repo while one runs.
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
-  one, the next batch's commit subagent. Reviewer brief: read `git show <hash> -- . ':(exclude)ai/usage'`, not the
-  work tree; name each item the main session added beyond the user's request,
-  `also in scope: <item> (coordinator)`.
+  one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
+  `ai/usage`) gets no reviewer; `review-skip-guard.sh` blocks such a launch. Reviewer brief: read
+  `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; name each item the main session added beyond the
+  user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check.
+- The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
+  (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
+  code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
+- Past `handoff.max_context` (default 150k) the coordinator launches no new batch: `handoff-nudge.sh` notes it on
+  the next Agent or SendMessage call; the running batches and reviews finish, and the final report's "Next session"
+  item holds the batches left so the plan continues in a fresh session. This is the one stop the next bullet allows
+  besides an owner decision or a blocker.
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every
   planned commit then runs to the end in one run with one report: never stop between commits to ask whether to
-  continue; stop early only for an owner decision or a blocker.
+  continue; stop early only for an owner decision, a blocker or the context limit above.
 - Exception: commits that share too much context to hand over (one large refactor) → say so and run in the main
   session.

@@ -53,6 +53,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-skip-guard.sh\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Stop": [
@@ -89,6 +99,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-snapshot.sh\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-nudge.sh\"",
+            "timeout": 5
           }
         ]
       }

@@ -89,6 +89,12 @@ run_case "pass: skip review after the edit" pass - "$(edit src/c.ts)" \
   "$(jq -cn '{type: "user", timestamp: "2030-01-01T00:01:00Z", message: {content: "skip review"}}')"
 run_case "block: a commit batch named review fixes is not a review" block "no review yet" "$(edit src/c.ts)" \
   "$(line Agent '{"subagent_type": "general-purpose", "description": "commit: review fixes"}')"
+for i in $(seq 1 20); do echo "export const value$i = computeSomethingLong($i, 'argument');"; done >"$REPO/src/a.ts"
+git -C "$REPO" add src/a.ts && git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm wide
+sed -n '1,20p' "$REPO/src/a.ts" | sed 's/^/  /' >>"$REPO/src/b.ts"
+: >"$REPO/src/a.ts"
+run_case "pass: a block moved to another file is no code change" pass - "$(edit src/a.ts)" "$(edit src/b.ts)"
+git -C "$REPO" checkout -q HEAD~1 -- src/a.ts src/b.ts && git -C "$REPO" reset -q HEAD~1
 run_case "block: an ai-kit:committer is not a review" block "no review yet" "$(edit src/c.ts)" \
   "$(line Agent '{"subagent_type": "ai-kit:committer", "description": "commit: review fixes"}')"
 run_case "pass: general-purpose review fallback" pass - "$(edit src/c.ts)" \

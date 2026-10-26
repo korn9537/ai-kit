@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# UserPromptSubmit: once the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a
-# note asking for a "Next session" prompt when the task ends. Never blocks; repeats only every further 50k.
+# UserPromptSubmit, and PostToolUse on Agent|Task|SendMessage (a coordinator gets no new prompt between batches): once
+# the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a note asking for a "Next
+# session" prompt; a coordinator launches no new batch. Never blocks; repeats only every further 50k.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -10,6 +11,8 @@ input="$(cat)"
 transcript="$(jq -r '.transcript_path // empty' <<<"$input")"
 session="$(jq -r '.session_id // empty' <<<"$input")"
 [[ -n "$transcript" && -f "$transcript" && -n "$session" ]] || exit 0
+event="$(jq -r '.hook_event_name // "UserPromptSubmit"' <<<"$input")"
+[[ "$event" == UserPromptSubmit || "$event" == PostToolUse ]] || exit 0
 
 max="$(kit_conf '.handoff.max_context' 150000)"
 # context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
@@ -30,4 +33,6 @@ mkdir -p "$gitdir/claude-review"
 printf '%s\n' "$step" >"$mark"
 
 note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session: a paste-ready prompt in a code block holding the goal, the steps left, decisions made here and not in the repo, files to read first and open items; nothing the repo or git log already holds."
-jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $n}}'
+# a coordinator re-reads its whole context on each batch's notification: past the limit the plan goes on in a fresh one
+[[ "$event" == PostToolUse ]] && note="This coordinator's context is about $((used / 1000))k tokens (handoff.max_context $((max / 1000))k), and every further batch re-reads it on each notification. Launch no new commit batch: let the running subagents and their reviews finish, then end with the final report and its \"Next session\" item (CLAUDE.core.md): a paste-ready prompt in a code block holding the goal, the batches left in order with their briefs' essentials, decisions made here and not in the repo, files to read first and open items, so the plan continues in a fresh session."
+jq -n --arg n "$note" --arg e "$event" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $n}}'

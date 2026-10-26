@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.15.0
+
+Levers 3 and 4 from the first project trial: the coordinator's context grew from 88k to 250k over one 24-commit plan
+(30% of the cost), and move-only commits were still reviewed.
+
+- `handoff-nudge.sh` also runs on PostToolUse for Agent, Task and SendMessage: a coordinator gets no user prompt
+  between batches, so the UserPromptSubmit note never fired. Past `handoff.max_context` its note says to launch no
+  new batch and to hand the batches left to a fresh session through the "Next session" item.
+- `docs/plan-batching.md`: the coordinator reads large docs by `grep -n` and line range only (one whole read of
+  `ai/decisions.md` cost 11k tokens on every later call), stops launching batches at the context limit, and gives no
+  reviewer to a commit that changes no code line.
+- New `review-skip-guard.sh` (PreToolUse on Agent and Task): blocks a reviewer launch whose brief names only commits
+  with no code line (moved blocks, comments, docs, `ai/usage`) and no `review.always` path.
+- `hooks/lib.sh` `kit_code_lines`: the changed code lines with moved blocks dropped (`git diff --color-moved`,
+  indentation changes allowed); `review-before-stop.sh` uses it, so a block moved between files no longer counts as
+  a change that needs a review.
+
 ## 2.14.0
 
 Commit subagents get their own agent type (lever L2 from the first project trial: commit subagents were 40% of a

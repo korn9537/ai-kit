@@ -79,7 +79,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
      `ai-kit:change-reviewer` findings, and what was not checked. Any change outside `*.md` goes through it, except
      what the Stop hook lets pass (`ai-kit/README.md`, Stop: comment-only or small). For a calculation, permission or
      final-decision change, launch the reviewer yourself even when small. Findings on code you just changed are
-     fixed and re-checked once by the same reviewer (fix diff only), with a fresh background reviewer per commit. No
+     fixed and re-checked once by the same reviewer (fix diff only), with a fresh background reviewer per commit
+     (none for a commit of only moved blocks, comments or docs). No
      third pass: the report says, as plain text with no quotes or backticks, Review closed: re-checked once, no
      third pass. Exception: a CONFIRMED finding about data or rule correctness is fixed and then reviewed by a fresh
      reviewer. A user message starting with "skip review" or "ไม่ต้อง review" opts out. UI suggestions → Decided

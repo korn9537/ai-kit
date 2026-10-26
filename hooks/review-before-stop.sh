@@ -123,12 +123,8 @@ if ! grep -qxF '(via Bash)' <<<"$files"; then
   specs=()
   while IFS= read -r f; do specs+=(":(literal)$f"); done <<<"$files"
 fi
-code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); prints anything that is not a comment
-  git -C "$project" -c core.quotePath=false diff --numstat "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' | grep -E '^-' || true
-  git -C "$project" -c core.quotePath=false diff -U0 "$1" ${2:+"$2"} -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' \
-    | grep -E '^[+-]' | grep -vE '^(\+\+\+|---) "?(a/|b/|/dev/null)' \
-    | sed -E 's/^[+-][[:space:]]*//' \
-    | grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
+code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); prints the changed code lines (lib.sh)
+  kit_code_lines "$project" "$1" ${2:+"$2"} -- "${specs[@]}"
 }
 
 session="$(jq -r '.session_id // empty' <<<"$input")"
