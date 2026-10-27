@@ -40,5 +40,14 @@ check "stdin left open gives the same output as /dev/null" "$(cmp -s "$TMP/null.
 printf '{"session_id":"abc"}' | bash "$HOOK" >"$TMP/json.out" 2>/dev/null
 check "session id on stdin without a newline gives the same output" "$(cmp -s "$TMP/null.out" "$TMP/json.out" && echo 0 || echo 1)"
 
+snap="$REPO/.git/claude-review"
+printf '{"session_id":"s2","source":"resume"}' | bash "$HOOK" >/dev/null 2>&1
+check "a resumed session gets no review snapshot" "$([[ ! -f "$snap/s2" ]] && echo 0 || echo 1)"
+printf '{"session_id":"s3","source":"startup"}' | bash "$HOOK" >/dev/null 2>&1
+check "a new session gets a review snapshot" "$([[ -s "$snap/s3" ]] && echo 0 || echo 1)"
+echo kept >"$snap/s3"
+printf '{"session_id":"s3","source":"startup"}' | bash "$HOOK" >/dev/null 2>&1
+check "an existing snapshot is kept" "$([[ "$(cat "$snap/s3")" == kept ]] && echo 0 || echo 1)"
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

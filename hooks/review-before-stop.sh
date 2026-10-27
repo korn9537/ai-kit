@@ -10,10 +10,12 @@
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
 # Escape hatch: a user message starting with "ไม่ต้อง review" or "skip review" after the last edit.
-# Comment-only: nothing but //, one-line /* */ or blank lines changed since the last review's snapshot
-# (review-snapshot.sh), or since the session began when none was reviewed → no review. Small: at most config
+# Comment-only: nothing but //, one-line /* */ or blank lines changed since the snapshot (review-snapshot.sh: the
+# last review's tree, else the one session-start.sh took), or since the commit before the session began without one → no
+# review. A Bash write is judged by those changed lines, not by the files its command names. Small: at most config
 # review.skip_lines changed code lines, no new file, no path matching review.always, nothing reviewed yet (a fix
-# after a review always goes to its re-check) → no review. Gap: sed -i whose script names /tmp/ is not counted.
+# after a review always goes to its re-check) → no review. Gap: sed -i whose script names /tmp/ is not counted, nor a
+# change to a path no Edit named when no Bash write was seen (a user hook's formatter, an unrecognized rename).
 set -euo pipefail
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -117,7 +119,7 @@ files="$(jq -r '.files[]' <<<"$result")"
 [[ -n "$files" ]] || exit 0
 state="$(jq -r '.state' <<<"$result")"
 
-# no snapshot: diff only the paths this session edited (other sessions share the checkout), all when via Bash
+# diff only the paths this session edited (other sessions share the checkout), all when via Bash
 specs=(.)
 if ! grep -qxF '(via Bash)' <<<"$files"; then
   specs=()
@@ -134,13 +136,12 @@ snapshot=""
 changed="" new_files="" paths=""
 if [[ -n "$snapshot" ]]; then
   # Both sides built by review-snapshot.sh, so untracked files compare line by line too.
-  specs=(.)
   now_tree="$("$(dirname "$0")/review-snapshot.sh" --tree "$project" 2>/dev/null || true)"
   if [[ -n "$now_tree" ]]; then
     changed="$(code_since "$snapshot" "$now_tree")"
     [[ -z "$changed" ]] && exit 0
-    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- . ':(exclude)*.md' ':(exclude)ai/usage')"
-    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- . ':(exclude)*.md' ':(exclude)ai/usage')"
+    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
+    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
   fi
 else
   since="$(jq -R 'fromjson? // empty | .timestamp // empty' -r "$transcript" | head -1 || true)"

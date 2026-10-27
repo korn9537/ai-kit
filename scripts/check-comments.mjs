@@ -44,19 +44,70 @@ const DATED = new RegExp(
   ].join("|"),
   "i",
 );
-const TESTS = /(\/tests?\/|\/e2e\/|\.(test|spec)\.tsx?$|_test\.(go|dart)$)/;
-const COMMENT = /^\s*(\/\/|\/\*|\*(?!\*)|\*\/|\{\/\*)/;
+const TESTS = /(\/tests?\/|\/e2e\/|\.(test|spec)\.tsx?$|_test\.(go|dart|py)$|(^|\/)test_[^/]*\.py$)/;
+// a `*` line is a comment only inside /* */: outside it is code (`*args,` in a call split over lines)
+const COMMENT = /^\s*(\/\/|\/\*|\{\/\*)/;
+const BLOCK_OPEN = /^\s*\{?\/\*/;
+// `#` comments; in Python a triple-quoted string first in the file or right after a def/class line is one too
+// (a docstring); lines inside a shell heredoc or another triple-quoted string are data
+const HASH = /\.(py|sh|bash|rb|ya?ml)$/;
+const HASH_KEEP =
+  /^\s*#(!|\s*(-\*-|noqa\b|type:|pylint:|shellcheck |rubocop:|frozen_string_literal|fmt:|pragma\b|yaml-language-server))/;
+const DOC_OPEN = /^\s*[rRuUbB]{0,2}("""|''')/;
+const DOC_AFTER = /^(async\s+)?(def|class)\b.*:$|\)(\s*->.*)?:$/;
+// not a here-string (<<<) or a shift ($((1<<2)))
+const HEREDOC = /(?<!<)<<(?![<(\d])-?\s*['"]?([A-Za-z_]\w*)['"]?/;
+const commentLines = (f, lines) => {
+  const out = [];
+  if (HASH.test(f)) {
+    const py = f.endsWith(".py");
+    const sh = /\.(sh|bash)$/.test(f);
+    let doc = "";
+    let data = "";
+    let prev = "";
+    for (const l of lines) {
+      if (data) {
+        out.push(false);
+        if (sh ? l.trim() === data : l.includes(data)) data = "";
+        continue;
+      }
+      const m = !doc && py && (prev === "" || DOC_AFTER.test(prev)) && DOC_OPEN.exec(l);
+      const hash = /^\s*#/.test(l);
+      if (doc || m) {
+        out.push(true);
+        const rest = m ? l.slice(m[0].length) : l;
+        if (doc && rest.includes(doc)) doc = "";
+        else if (m && !rest.includes(m[1])) doc = m[1];
+      } else {
+        out.push(hash);
+        if (sh && !hash && !l.includes("$((")) data = HEREDOC.exec(l)?.[1] ?? "";
+        if (py && !hash)
+          data = ['"""', "'''"].find((q) => l.split(q).length % 2 === 0) ?? "";
+      }
+      if (l.trim() && !hash) prev = l.replace(/\s+#.*$/, "").trim();
+    }
+    return out;
+  }
+  let block = false;
+  for (const l of lines) {
+    const open = !block && COMMENT.test(l);
+    out.push(block || open);
+    if (open) block = BLOCK_OPEN.test(l) && !l.replace(BLOCK_OPEN, "").includes("*/");
+    else if (block && l.includes("*/")) block = false;
+  }
+  return out;
+};
 const SUMMARY = /^\s*\/\/\/\s*<summary>/;
 const KEEP =
   /eslint-disable|@ts-(expect-error|ignore)|#pragma|prettier-ignore|biome-ignore|^\s*\/\/(go:|nolint\b|line )/;
 const DART_KEEP = /^\s*\/\/ ignore(_for_file)?:/;
 // Go's generated-file marker, valid only in the header before the package clause (go.dev/s/generatedcode)
 const GENERATED = /^\/\/ Code generated .* DO NOT EDIT\.$/;
-const generatedGo = (f, lines) => {
+const generatedGo = (f, lines, cl) => {
   if (!f.endsWith(".go")) return false;
-  for (const l of lines) {
+  for (const [i, l] of lines.entries()) {
     if (GENERATED.test(l)) return true;
-    if (l.trim() && !COMMENT.test(l)) return false;
+    if (l.trim() && !cl[i]) return false;
   }
   return false;
 };
@@ -73,8 +124,10 @@ files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && existsSync(f));
 const report = [];
 for (const f of files) {
   const lines = readFileSync(f, "utf8").split(/\r?\n/);
-  if (generatedGo(f, lines)) continue;
+  const cl = commentLines(f, lines);
+  if (generatedGo(f, lines, cl)) continue;
   const dart = f.endsWith(".dart");
+  const hash = HASH.test(f);
   const issues = [];
   let start = -1;
   let summaryAt = -1;
@@ -85,7 +138,10 @@ for (const f of files) {
   };
   lines.forEach((l, i) => {
     const isC =
-      COMMENT.test(l) && !KEEP.test(l) && !(dart && DART_KEEP.test(l));
+      cl[i] &&
+      !KEEP.test(l) &&
+      !(dart && DART_KEEP.test(l)) &&
+      !(hash && HASH_KEEP.test(l));
     if (isC && start < 0) start = i;
     if (!isC) close(i);
     if (f.endsWith(".cs")) {
@@ -104,7 +160,7 @@ for (const f of files) {
       issues.push(`${f}:${i + 1} dated: ${l.trim().slice(0, 80)}`);
   });
   close(lines.length);
-  const total = lines.filter((l) => COMMENT.test(l)).length;
+  const total = cl.filter(Boolean).length;
   if (issues.length) report.push({ f, issues, total });
 }
 

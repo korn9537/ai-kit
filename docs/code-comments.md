@@ -33,6 +33,8 @@ Reader: AI agents only. A comment exists to stop the next agent from making a wr
 - An edit that makes a nearby comment false fixes or deletes it in the same edit.
 - C# `///` XML docs are compiled (a broken `cref` or malformed XML fails the build); otherwise the same rules
   as `//`.
+- `#` comments (Python, shell, Ruby, YAML) and Python docstrings: the same rules as `//`; the check keeps a shebang,
+  `# noqa`, `# type:`, `# pylint:`, `# shellcheck`, `# -*- coding -*-`.
 - One C# member, one `/// <summary>`: insert a new member above an existing summary, never between it and its
   member (the check blocks a second summary).
 - Keep: license headers, `eslint-disable`/`#pragma`/`@ts-expect-error` with a short reason, Go directives

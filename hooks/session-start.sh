@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart: records the plugin path for the git pre-commit shim (<git-common-dir>/ai-kit-root) and injects
-# CLAUDE.core.md with its ai-kit/ paths made absolute (plain text without jq), and flushes other sessions' token
-# buffers idle for 6 hours into ai/usage/. Silent without ai/kit/.
+# CLAUDE.core.md with its ai-kit/ paths made absolute (plain text without jq), flushes other sessions' token
+# buffers idle for 6 hours into ai/usage/, and records a new session's review snapshot. Silent without ai/kit/.
 set -euo pipefail
 
 . "$(dirname "$0")/lib.sh"
@@ -18,6 +18,19 @@ if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
   while IFS= read -r -t 1 line; do input+="$line"$'\n'; done || rc=$?
   if ((rc < 128)); then input+="$line"; fi
   sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
+  # review baseline until the first review (review-before-stop.sh): a resumed session keeps its own or none
+  src="$(printf '%s' "$input" | jq -r '.source // empty' 2>/dev/null || true)"
+  gitdir="$(git -C "$kit_root" rev-parse --absolute-git-dir 2>/dev/null || true)"
+  if [[ -n "$sid" && -n "$gitdir" && "$src" =~ ^(startup|clear)$ && ! -f "$gitdir/claude-review/$sid" ]]; then
+    # at most 4 s, so a large tree never delays the injection; killed before the write = no snapshot (the fallback)
+    snap="$gitdir/claude-review/$sid"
+    (tree="$("$(dirname "$0")/review-snapshot.sh" --tree "$kit_root")" && mkdir -p "${snap%/*}" &&
+      printf '%s\n' "$tree" >"$snap.$$" && mv "$snap.$$" "$snap") >/dev/null 2>&1 &
+    pid=$!
+    for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  fi
 fi
 if command -v node >/dev/null 2>&1; then
   CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/usage.mjs" flush --idle ${sid:+--except "$sid"} >/dev/null 2>&1 || true

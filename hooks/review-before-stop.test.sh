@@ -129,6 +129,22 @@ run_case "pass: nothing changed since the snapshot" pass - "$reviewer" "$(edit s
 printf '%s\n' '// note' >>"$REPO/src/a.ts"
 run_case "pass: only a comment line added since the snapshot" pass - "$reviewer" "$(edit src/a.ts)"
 reset
+# a session-start snapshot: a Bash write is judged by what changed since, not by the names in its command
+seq 1 30 | sed 's/$/y/' >"$REPO/src/other.ts"
+snap
+mkdir -p "$REPO/docs" && echo "see user.service.ts" >"$REPO/docs/plan.md"
+mdwrite="$(line Bash "{\"command\": \"python3 - <<'EOF'\\nopen('$REPO/docs/plan.md', 'w').write('see user.service.ts')\\nEOF\"}")"
+run_case "pass: a .md-only Bash write naming a .ts file, another session's change before the snapshot" pass - "$mdwrite"
+sed -i.bak '1,20s/$/x/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
+run_case "block: a Bash write to a .ts file after the snapshot" block "no review yet" \
+  "$(line Bash "{\"command\": \"sed -i '' s/a/b/ $REPO/src/c.ts\"}")"
+git -C "$REPO" checkout -q -- src/c.ts
+sed -i.bak '1,20s/$/x/' "$REPO/src/b.ts" && rm "$REPO/src/b.ts.bak"
+run_case "block: an Edit is still scoped to its path" block "no review yet" "$(edit src/b.ts)"
+run_case "pass: an Edit does not count another session's change after the snapshot" pass - "$(edit src/a.ts)"
+rm -rf "$REPO/docs"
+reset
+
 # records under ai/usage are logs, not work
 usage() { mkdir -p "$REPO/ai/usage/2030-01" && seq 1 40 >"$REPO/ai/usage/2030-01/s1.jsonl"; }
 snap

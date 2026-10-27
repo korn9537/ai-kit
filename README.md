@@ -29,7 +29,9 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `scripts/usage-*.test.mjs`    | fixture tests for the usage modules: `node scripts/usage-<name>.test.mjs`                      |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite and `check-wrap.mjs` in parallel: `node scripts/test-all.mjs` |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
-| `scripts/check-comments.mjs`  | comment rule check, run by pre-commit and post-edit                                            |
+| `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit    |
+| `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
+| `scripts/check-size.mjs`      | pre-commit: blocks an edit to a code file over 40 KB at HEAD that is not a move-only split     |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
 | `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |
@@ -44,7 +46,8 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 Hooks (each exits silently when the project has no `ai/kit/`):
 
 - `session-start.sh` (SessionStart) injects `CLAUDE.core.md` with its paths pointing into the plugin, writes
-  the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim, and asks for
+  the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim, records a new session's work tree as
+  its review snapshot (`review-snapshot.sh --tree`), and asks for
   `/ai-kit:memory-export` while the repo's auto-memory dir holds files.
 - `review-before-stop.sh` (Stop) blocks the final reply until `ai-kit:change-reviewer` has reviewed code edited
   since the last review. A review is an Agent call of that type (or a general-purpose one with "review" in its
@@ -77,7 +80,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
   `git commit -a` (shared checkout).
 - `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build command (`build_guard.build_re`; default
-  `pnpm`/`npm`/`yarn build`, `next build`, `turbo build`) while the dev port listens.
+  `pnpm`/`npm`/`yarn build` with `--prefix`/`-C`/`--cwd`/`-w`/`--workspace`/`--filter`, `next build`, `turbo build`)
+  while the dev port listens. It probes the port with `lsof`, else `ss`, `netstat` (Git Bash on Windows) or `nc`;
+  with none it lets the build run and says the port was not checked.
 
 ## Project settings (`ai/kit/`)
 

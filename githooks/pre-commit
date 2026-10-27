@@ -68,6 +68,14 @@ if [ -n "$moved" ]; then
   exit 1
 fi
 
+# An edit to a code file over 40 KB at HEAD waits for its move-only split (conventions/general.md item 12).
+if [ -n "$(git diff --cached --name-only --diff-filter=M)" ]; then
+  node "$ai_kit_plugin/scripts/check-size.mjs" || {
+    echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"
+    exit 1
+  }
+fi
+
 # Prettier on staged files when package.json declares it. A fully staged file is formatted and re-staged; a partially
 # staged one (other hunks left in the work tree, maybe another session's) gets only its index blob formatted.
 if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
@@ -94,6 +102,14 @@ EOF
       exit 1
     }
     printf '%s' "$whole" | tr '\n' '\0' | xargs -0 git --literal-pathspecs add --
+    # a path-limited commit stages into a temporary index: the real one (index.lock, which git commits after this
+    # hook; no index.lock → skipped) would keep the unformatted copy
+    case "${GIT_INDEX_FILE:-}" in
+      *next-index-*.lock)
+        real="$(dirname "$GIT_INDEX_FILE")/index.lock"
+        [ -f "$real" ] && printf '%s' "$whole" | tr '\n' '\0' | GIT_INDEX_FILE="$real" xargs -0 git --literal-pathspecs add --
+        ;;
+    esac
   fi
   if [ -n "$partial" ]; then
     tmp="$(mktemp)"

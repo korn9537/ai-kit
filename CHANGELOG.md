@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.17.0
+
+Windows and subfolder builds are guarded, Python comments are checked, and the 40 KB split rule is enforced.
+
+- `build-while-dev-guard.sh`: without `lsof` (Git Bash on Windows) the port is probed with `ss`, `netstat` or `nc`;
+  with none the build runs with a one-line warning instead of silently (#18).
+- `build-while-dev-guard.sh`: the default `build_re` matches `--prefix`, `-C`, `--cwd`, `-w` and `--workspace`
+  before `run`/`build`, as `--filter` (#19).
+- `check-comments.mjs`: `#` comments in py/sh/rb/yaml and Python docstrings are checked; a `*` line counts as a
+  comment only inside `/* */`, so `*args` lines are code; new `check-comments.test.mjs` (#20).
+- New `scripts/check-size.mjs`, run by pre-commit: an edit to a code file over 40 KB at HEAD is blocked unless it
+  only moves lines out (plus imports); escape `ALLOW_LARGE_EDIT=1`. The `split-deferred:` message line the issue
+  asked for cannot work: pre-commit runs before the message exists (#17).
+- `review-before-stop.sh`: a new session starts with a review snapshot (`session-start.sh`), so a Bash write is
+  judged by the code lines changed since, not by the file names in its command or other sessions' earlier work;
+  the snapshot diff is limited to the session's edited paths unless a Bash write is among them (#16).
+- `githooks/pre-commit`: in a path-limited commit (`git commit -- <paths>`, `-o`) prettier's output is staged in the
+  real index too, so it no longer keeps the unformatted copy; `docs/shared-checkout.md` says to commit with no
+  paths, as core does (#15).
+
 ## 2.16.0
 
 A multi-commit plan no longer stops at the coordinator's context limit for the user to start a fresh session: it
