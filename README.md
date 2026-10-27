@@ -13,15 +13,16 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
 | `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                                           |
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
-| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`                        |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`      |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage` |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh` and `usage-flush.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh` and `ask-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `flush` (SessionEnd, SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
+| `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check |
@@ -75,6 +76,17 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `usage-flush.sh` (SessionEnd) writes the buffer's new records to a new file `ai/usage/<YYYY-MM>/<session>.jsonl`
   (`<session>.2.jsonl`, `.3`, ... after a resume; an existing file is never modified). `session-start.sh` does the
   same for other sessions' buffers idle over 6 hours (a crashed session). The next commit carries the files.
+- `ask-guard.sh` (PreToolUse on AskUserQuestion) blocks a question to the owner until an `ai-kit:decider` call of
+  the session returned OWNER in the last 30 minutes; one such call serves one ask (the used ids are kept in
+  `<git-common-dir>/claude-decider/<session>.json`). The verdict is read from the decider's own subagent transcript
+  (`<session>/subagents/agent-<id>.jsonl`), so a background call works as a foreground one. DECIDED → the block says
+  to act on the decider's choice; no verdict lines yet → to wait. Gap: the verdict is matched per call, not per
+  question. Off with `decider.enabled: false`; a question matching `decider.always_owner` goes through, and so does
+  every ask when node is missing or the guard errs.
+- `decider-log.sh` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
+  `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl` (one file per call, never rewritten, so branches and
+  worktrees never conflict on it). The pre-commit stages the log with `ai/usage`; reviews skip it.
+  `/ai-kit:decisions` prints it as a report.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
   `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
@@ -88,7 +100,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -112,6 +124,12 @@ reported apart. Records are committed with the next commit (`githooks/pre-commit
 by name, except in a path-limited commit, so commit with `git add` then `git commit` with no paths; `check` warns
 about record files uncommitted for over a day). A tracked file under `ai/usage/` is never modified, so a branch switch,
 merge or rebase is never blocked.
+
+`decider.enabled` (default `true`) lets every AskUserQuestion through with `false`. `decider.always_owner` (a
+case-insensitive jq (Oniguruma) regex over the questions and headers, default none) names topics this project
+always decides itself, e.g. `"bundle id|store listing|privacy"`; an invalid pattern lets every ask through. The
+decision log is committed: the decider writes questions and reasons only, each field capped at 500 characters, and
+never a secret or personal data (`agents/decider.md`).
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns

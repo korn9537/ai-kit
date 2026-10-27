@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.18.0
+
+Questions no longer stop the session for the owner unless they are one of the four owner kinds: a decider agent
+answers the rest and every verdict is logged as a report.
+
+- New `ai-kit:decider` agent (`agents/decider.md`): researches code, `ai/` docs, git history and the web, replies
+  per question with `Verdict: DECIDED | OWNER`, kind, choice, reason, confidence, undo and sources.
+- New `hooks/ask-guard.sh` (PreToolUse on AskUserQuestion): blocks the ask until a decider call returned OWNER in
+  the last 30 minutes, one ask per call; the verdict is read from the decider's subagent transcript, so background
+  calls count; `decider.enabled` and `decider.always_owner` in `ai/kit/config.json`.
+- New `hooks/decider-log.sh` (SubagentStop, Stop) and `scripts/decider.mjs`: each decider call's verdicts go to
+  `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl`, written once, committed with `ai/usage`;
+  `/ai-kit:decisions` (`commands/decisions.md`) prints it as a report, low confidence first. `usage-digest.mjs`
+  skips `decisions/`.
+- `CLAUDE.core.md`: a question to the owner, in a tool or in a reply, goes to the decider first.
+
 ## 2.17.0
 
 Windows and subfolder builds are guarded, Python comments are checked, and the 40 KB split rule is enforced.

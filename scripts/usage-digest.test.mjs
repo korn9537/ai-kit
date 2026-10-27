@@ -143,6 +143,9 @@ try {
   const since = loadRecords(tmp, "2026-02-01");
   eq("since filters by ts, inclusive", [since.recs.map((r) => r.ts.slice(0, 10)), since.bad], [["2026-02-01", "2026-02-02"], 1]);
   eq("missing dir", loadRecords(join(tmp, "nope")), { recs: [], bad: 0, skipped: 0 });
+  mkdirSync(join(tmp, "decisions", "2026-02"), { recursive: true });
+  writeFileSync(join(tmp, "decisions", "2026-02", "s.jsonl"), '{"ts":"2026-02-03T00:00:00Z","verdict":"DECIDED"}\n');
+  eq("decisions/ (the decider log) is not read as token records", loadRecords(tmp).skipped, 2);
   writeFileSync(join(tmp, "2026-02", "c.jsonl"), [
     JSON.stringify({ ...rec({}), v: 2 }), JSON.stringify(rec({ agents: ["x"] })), JSON.stringify(rec({ agents: [null] })),
     JSON.stringify(rec({ agents: [ag({ model: 7 })] })), JSON.stringify(rec({ agents: [ag({ read: "9" })] })), JSON.stringify(rec({ agents: [ag({ model: undefined })] })),

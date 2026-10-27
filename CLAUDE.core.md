@@ -28,7 +28,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   irreversible or outward action (delete real data, production deploy, contact people) · 3. legal, privacy,
   consent · 4. changing a decision recorded as final (Confirmed, or the project's final status). Anything else
   inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request →
-  Open.
+  Open. A question you would put to the owner (AskUserQuestion, hook-guarded, or one in a reply) goes to the
+  `ai-kit:decider` agent first, with its options, the user's words and what you know: DECIDED → act on it without
+  asking; OWNER → ask, its recommendation first. The kit logs each verdict (`ai/usage/decisions/`,
+  `/ai-kit:decisions`).
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
   stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
   change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report; a UI-only
@@ -40,10 +43,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
   a BA request by the user is always run; unsure → summarize.
-- **Agent model:** `ai-kit:business-analyst` and `ai-kit:change-reviewer` run on sonnet at medium effort (agent
-  frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"` when the change
-  touches a DB schema or migration, a calculation, a permission, or a decision recorded as final; no other model or
-  effort override.
+- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on sonnet at medium
+  effort (agent frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"`
+  when the change or question touches a DB schema or migration, a calculation, a permission, or a decision recorded
+  as final; no other model or effort override.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for

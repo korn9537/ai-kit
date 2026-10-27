@@ -17,6 +17,7 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 | `ai/plans/<slug>.md` | a multi-commit plan in progress; deleted when done | `T-<n>` | `plan.md` |
 | `ai/notes.md` | references: URL, dashboard, ticket, account name | `R<n>` | `notes.md` |
 | `ai/usage/<YYYY-MM>/<session>[.<n>].jsonl` | token records, written by the kit (flushed once per session, never edited); not a doc | — | — |
+| `ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl` | `ai-kit:decider` verdicts, one file per call, written once by the kit; not a doc | — | — |
 
 - Ids are never reused. A file-level id (`F`, `S`) is in the file's heading; an entry id (`D`, `REQ`, `R`, `I`) in
   the entry's heading or line. `T-<n>` is scoped to its plan and never pointed to from outside it.

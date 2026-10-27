@@ -29,7 +29,11 @@ export function loadRecords(usageDir, since = "") {
   const out = { recs: [], bad: 0, skipped: 0 };
   let files = [];
   try {
-    files = readdirSync(usageDir, { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl")).sort();
+    // decisions/ holds the decider log (decider.mjs), not token records
+    files = readdirSync(usageDir, { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith(".jsonl") && !/^decisions[/\\]/.test(f))
+      .sort();
   } catch {
     return out;
   }
