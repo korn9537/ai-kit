@@ -19,6 +19,11 @@ Windows and subfolder builds are guarded, Python comments are checked, and the 4
 - `githooks/pre-commit`: in a path-limited commit (`git commit -- <paths>`, `-o`) prettier's output is staged in the
   real index too, so it no longer keeps the unformatted copy; `docs/shared-checkout.md` says to commit with no
   paths, as core does (#15).
+- Review fixes: `check-size.mjs` skips a merge, cherry-pick or revert, takes a C# `using` statement or a `require()`
+  call as code, and ends an open import at its hunk; the port probes read their output before grep (no SIGPIPE
+  miss under pipefail); `check-comments.mjs` opens no heredoc on a `(( ))` shift, reads no `/*` inside a JS/TS
+  template literal as a comment and limits a never-closed `/*` to its own line; probe tests use canned
+  `netstat -ano`, `ss` and `nc` output.
 
 ## 2.16.0
 

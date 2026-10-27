@@ -41,15 +41,17 @@ hint="$(kit_conf .build_guard.hint "A build writes where the dev server serves f
 # Git Bash on Windows has no lsof: its netstat (-ano) marks a listener LISTENING, or by a 0.0.0.0:0 / [::]:0 peer
 # when the state is localized. 0 listening, 1 not, 2 no probe tool.
 listening() {
-  local flags=-an
+  local flags=-an out
+  # output captured first: under pipefail a grep -q that quits early can SIGPIPE the writer and read as "not listening"
   if command -v lsof >/dev/null 2>&1; then
     lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
   elif command -v ss >/dev/null 2>&1; then
-    ss -ltn 2>/dev/null | grep -qE "[:.]$port[[:space:]]"
+    out="$(ss -ltn 2>/dev/null || true)"
+    grep -qE "[:.]$port[[:space:]]" <<<"$out"
   elif command -v netstat >/dev/null 2>&1; then
     [[ "$(uname -s 2>/dev/null)" =~ ^(MINGW|MSYS|CYGWIN) ]] && flags=-ano
-    netstat "$flags" 2>/dev/null | grep -E "[:.]$port[[:space:]]" \
-      | grep -qiE 'LISTEN|[[:space:]](0\.0\.0\.0:0|\[::\]:0)[[:space:]]'
+    out="$(netstat "$flags" 2>/dev/null | grep -E "[:.]$port[[:space:]]" || true)"
+    grep -qiE 'LISTEN|[[:space:]](0\.0\.0\.0:0|\[::\]:0)[[:space:]]' <<<"$out"
   elif command -v nc >/dev/null 2>&1; then
     nc -z 127.0.0.1 "$port" >/dev/null 2>&1
   else

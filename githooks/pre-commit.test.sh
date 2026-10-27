@@ -109,6 +109,24 @@ mv "$REPO/big2.new" "$REPO/big two.ts"
 git -C "$REPO" add "big two.ts" "part two.ts"
 check "a move-only split with a multi-line import passes" "$(blocked split2)" committed
 
+# check-size alone: a merge is exempt; a C# using statement and code after an import closed in context are not wiring
+size() { (cd "$REPO" && node "$PLUGIN/scripts/check-size.mjs" >/dev/null 2>&1 && echo pass || echo blocked); }
+for i in $(seq 1 1200); do echo "export const value$i = computeSomething($i, 'argument value');"; done >"$REPO/big3.ts"
+printf 'import {\n  a,\n} from "./x";\n' | cat - "$REPO/big3.ts" >"$REPO/big3.new" && mv "$REPO/big3.new" "$REPO/big3.ts"
+git -C "$REPO" add big3.ts && git -C "$REPO" commit -qm big3 2>&1
+sed -i.bak '1s/import {/import type {/' "$REPO/big3.ts" && rm "$REPO/big3.ts.bak"
+echo 'export const leak = 1;' >>"$REPO/big3.ts"
+git -C "$REPO" add big3.ts
+check "code after an import line whose close is context is checked" "$(size)" blocked
+git -C "$REPO" rev-parse HEAD >"$REPO/.git/MERGE_HEAD"
+check "a merge is exempt" "$(size)" pass
+rm -f "$REPO/.git/MERGE_HEAD"
+git -C "$REPO" checkout -q -- big3.ts
+echo 'using (var tx = Begin()) {' >>"$REPO/big3.ts"
+git -C "$REPO" add big3.ts
+check "a C# using statement is code, not wiring" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- big3.ts
+
 # prettier in a path-limited commit: the real index gets the formatted copy too, so the file ends clean
 mkdir -p "$REPO/node_modules/prettier/bin"
 cat >"$REPO/node_modules/prettier/bin/prettier.cjs" <<'EOF2'

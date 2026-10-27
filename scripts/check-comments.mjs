@@ -55,7 +55,7 @@ const HASH_KEEP =
   /^\s*#(!|\s*(-\*-|noqa\b|type:|pylint:|shellcheck |rubocop:|frozen_string_literal|fmt:|pragma\b|yaml-language-server))/;
 const DOC_OPEN = /^\s*[rRuUbB]{0,2}("""|''')/;
 const DOC_AFTER = /^(async\s+)?(def|class)\b.*:$|\)(\s*->.*)?:$/;
-// not a here-string (<<<) or a shift ($((1<<2)))
+// not a here-string (<<<) or a shift (inside `(( ))`, or a `let` line)
 const HEREDOC = /(?<!<)<<(?![<(\d])-?\s*['"]?([A-Za-z_]\w*)['"]?/;
 const commentLines = (f, lines) => {
   const out = [];
@@ -80,7 +80,8 @@ const commentLines = (f, lines) => {
         else if (m && !rest.includes(m[1])) doc = m[1];
       } else {
         out.push(hash);
-        if (sh && !hash && !l.includes("$((")) data = HEREDOC.exec(l)?.[1] ?? "";
+        if (sh && !hash && !/^\s*let\b/.test(l))
+          data = HEREDOC.exec(l.replace(/\$?\(\([^)]*\)\)/g, ""))?.[1] ?? "";
         if (py && !hash)
           data = ['"""', "'''"].find((q) => l.split(q).length % 2 === 0) ?? "";
       }
@@ -88,13 +89,19 @@ const commentLines = (f, lines) => {
     }
     return out;
   }
-  let block = false;
-  for (const l of lines) {
-    const open = !block && COMMENT.test(l);
-    out.push(block || open);
-    if (open) block = BLOCK_OPEN.test(l) && !l.replace(BLOCK_OPEN, "").includes("*/");
-    else if (block && l.includes("*/")) block = false;
-  }
+  // JS/TS: a line inside a template literal (odd backticks on code lines so far) is data, never a comment
+  const js = /\.[cm]?[jt]sx?$/.test(f);
+  let tpl = false;
+  let block = -1;
+  lines.forEach((l, i) => {
+    const open = block < 0 && !tpl && COMMENT.test(l);
+    out.push(block >= 0 || open);
+    if (open) block = BLOCK_OPEN.test(l) && !l.replace(BLOCK_OPEN, "").includes("*/") ? i : -1;
+    else if (block >= 0 && l.includes("*/")) block = -1;
+    else if (js && block < 0 && (l.replace(/\\./g, "").split("`").length - 1) % 2) tpl = !tpl;
+  });
+  // never closed (a `/*` inside a string): only its opening line is a comment
+  if (block >= 0) for (let i = block + 1; i < lines.length; i++) out[i] = COMMENT.test(lines[i]);
   return out;
 };
 const SUMMARY = /^\s*\/\/\/\s*<summary>/;

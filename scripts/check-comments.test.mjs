@@ -81,6 +81,28 @@ const CASES = [
     want: ["a.py:3 block of 4 lines"],
   },
   {
+    desc: "a shift inside (( )) opens no heredoc",
+    files: { "a.sh": `(( m |= 1 << bit ))\n${block("#", 3)}\necho x\n` },
+    want: ["a.sh:2 block of 3 lines"],
+  },
+  {
+    desc: "a never-closed /* (inside a string) covers only its own line",
+    files: { "a.ts": `const t = \`\n/* not a comment\n\`;\nconst a = 1;\n${block("//", 3)}\nconst b = 2;\n` },
+    want: ["a.ts:5 block of 3 lines"],
+  },
+  {
+    desc: "a /* line in a template literal opens no block, even with a JSDoc later",
+    files: {
+      "a.ts": "const t = `\n/* not a comment\n`;\nconst a = 1;\nconst b = 2;\nconst c = 3;\n/** One. */\nconst d = 4;\n",
+    },
+    want: [],
+  },
+  {
+    desc: "a heredoc on a line with (( )) is still a heredoc",
+    files: { "a.sh": `cat <<EOF | awk '{ print ((1)) }'\n${block("#", 3)}\nEOF\n` },
+    want: [],
+  },
+  {
     desc: "history in a # comment is reported",
     files: { "a.py": "# this used to retry\nx = 1\n" },
     want: ["a.py:1 history"],

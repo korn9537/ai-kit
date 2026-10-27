@@ -12,12 +12,23 @@ NO_KIT="$(mktemp -d)"
 # PATH dirs holding the hook's tools with lsof left out (netstat kept), and with no probe tool at all
 NO_LSOF="$(mktemp -d)"
 NO_PROBE="$(mktemp -d)"
-trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE"' EXIT
+STUBS="$(mktemp -d)"
+trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE" "$STUBS"' EXIT
 for t in bash env jq grep sed tr cat dirname git uname; do
   ln -s "$(command -v "$t")" "$NO_LSOF/$t"
   ln -s "$(command -v "$t")" "$NO_PROBE/$t"
 done
-ln -s "$(command -v netstat)" "$NO_LSOF/netstat"
+for t in netstat ss; do command -v "$t" >/dev/null && ln -s "$(command -v "$t")" "$NO_LSOF/$t"; done
+# stub_path <name> <tool=script>...: the base tools (no lsof) plus canned probe tools, as a PATH
+stub_path() {
+  local d="$STUBS/$1" kv
+  shift
+  mkdir -p "$d"
+  for kv in "$@"; do printf '#!/bin/sh\n%s\n' "${kv#*=}" >"$d/${kv%%=*}" && chmod +x "$d/${kv%%=*}"; done
+  printf '%s:%s' "$d" "$NO_PROBE"
+}
+WIN_UNAME='uname=echo MINGW64_NT-10.0'
+win_netstat() { printf 'netstat=[ "$1" = -ano ] && printf "  TCP    0.0.0.0:%s    %s    %s    1234\\r\\n"' "$1" "$2" "$3"; }
 
 pass=0
 fail=0
@@ -60,7 +71,9 @@ for c in "npm --prefix web run build" "npm -w web run build" "npm --workspace we
   "npm --workspace=web run build" "npm run build -w web" "pnpm -C web build" "yarn --cwd web build"; do
   run_case "block: $c while listening" 2 "$c"
 done
-CASE_PATH="$NO_LSOF" run_case "block: no lsof, netstat sees the listener" 2 "pnpm build"
+if [[ -e "$NO_LSOF/netstat" || -e "$NO_LSOF/ss" ]]; then
+  CASE_PATH="$NO_LSOF" run_case "block: no lsof, netstat or ss sees the listener" 2 "pnpm build"
+fi
 CASE_PATH="$NO_PROBE" run_case "allow: no probe tool at all" 0 "pnpm build"
 run_case "allow: unrelated command while listening" 0 "pnpm lint"
 run_case "allow: escape hatch while listening" 0 "ALLOW_BUILD_WHILE_DEV=1 pnpm build"
@@ -71,6 +84,17 @@ wait "$server_pid" 2>/dev/null
 rm -f /tmp/build-guard-server.$$
 
 CASE_PATH="$NO_LSOF" run_case "allow: no lsof, nothing listening" 0 "pnpm build"
+# canned probe output: the Windows netstat -ano branch, its localized state, ss and nc
+CASE_PATH="$(stub_path win "$WIN_UNAME" "$(win_netstat "$TEST_PORT" 0.0.0.0:0 LISTENING)")" \
+  run_case "block: Windows netstat -ano LISTENING" 2 "pnpm build"
+CASE_PATH="$(stub_path winl "$WIN_UNAME" "$(win_netstat "$TEST_PORT" 0.0.0.0:0 ABHOEREN)")" \
+  run_case "block: Windows netstat with a localized state" 2 "pnpm build"
+CASE_PATH="$(stub_path wino "$WIN_UNAME" "$(win_netstat 1$TEST_PORT 0.0.0.0:0 LISTENING)")" \
+  run_case "allow: Windows netstat, another port listening" 0 "pnpm build"
+CASE_PATH="$(stub_path ss "ss=echo 'LISTEN 0 128 127.0.0.1:$TEST_PORT 0.0.0.0:*'")" \
+  run_case "block: ss lists the port" 2 "pnpm build"
+CASE_PATH="$(stub_path nc "nc=exit 0")" run_case "block: nc connects" 2 "pnpm build"
+CASE_PATH="$(stub_path nc1 "nc=exit 1")" run_case "allow: nc refused" 0 "pnpm build"
 out="$(jq -n '{tool_name:"Bash", tool_input:{command:"pnpm build"}}' |
   env -i PATH="$NO_PROBE" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" bash "$GUARD" 2>/dev/null)"
 if [[ "$out" == *"was not checked"* ]]; then
