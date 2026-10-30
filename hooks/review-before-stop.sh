@@ -4,8 +4,9 @@
 # that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
 # (fallback). Docs (*.md), ai/usage records and files outside the repo do not count; a Bash command that writes
 # into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a
-# .md-only Bash write does not. Edits by a finished commit subagent (ai-kit:committer or description "commit: ...")
-# count too; one still running is skipped until it ends.
+# .md-only Bash write does not; a relative redirect, tee, mv, cp or rm target counts when the line's cwd is in the
+# repo. Edits by a finished commit subagent (ai-kit:committer or description "commit: ...") count too; one still
+# running is skipped until it ends.
 #
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
@@ -37,11 +38,12 @@ project="${project//\\//}"
 project="${project%/}"
 
 read -r -d '' events_jq <<'JQ' || true
-  def re_escape: gsub("(?<c>[.+])"; "\\\(.c)");
+  def re_escape: gsub("(?<c>[\\\\^$.|?*+()\\[\\]{}])"; "\\\(.c)");
   ($root | re_escape) as $r
   # cd into the root, spelled with or without its trailing slash
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
-  | def writes_repo:
+  # $in: the command ran with its cwd in the repo, as a cd into the root does
+  | def writes_repo($in):
       test("(sed -i|perl -pi)(?![^;&|]*/(private/)?tmp/)|git apply|apply_patch|write_text|writeFileSync")
       or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']")
       # as a command word: a codemod or a fixing formatter; mv/cp/rm on a repo path, or after cd into the repo
@@ -49,12 +51,17 @@ read -r -d '' events_jq <<'JQ' || true
       or test("(^|[;&|(\n] *)(npx +|pnpm +(exec +)?|yarn +|bunx +)?[\\w./-]*(eslint|prettier|biome|stylelint|ruff)\\b[^;&|\n]*--(fix|write)\\b|gofmt +-w|dotnet +format")
       or test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]*(" + $r + "|[ \"'](\\./)?(" + $dirs + ")/)")
       or (test($cd) and test("(^|[;&|(\n] *)(git +)?(mv|cp|rm) (?![^;&|\n]*(/tmp|/private/tmp|\\$\\{?TMP))"))
+      # quoted text is one word Q: a > inside jq, awk or echo quotes is no redirect, a quoted target still counts
+      or ($in and (test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]*(/tmp|/private/tmp|\\$\\{?TMP)") | not)
+          and (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]* (?![-/~$])[\\w.]")))
       or test("(>>?|tee) *[\"']?(\\./|\\$\\{?\\w+\\}?/)?(" + $r + "|(" + $dirs + ")/)")
-      or (test($cd) and test("(^|[^0-9&>])(>>?|tee) *(?!/dev/|/tmp|/private/tmp|&)[^ ]"));
+      or (test($cd) and test("(^|[^0-9&>])(>>?|tee) *(?!/dev/|/tmp|/private/tmp|&)[^ ]"))
+      or ($in and (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test("(^|[\\s;&|(])>>? *(?![/~$&(])[\\w.]|(^|[;&|(\n] *)tee +(-a +)?(?![-/~$])[\\w.]")));
     def only_md: [scan("[A-Za-z0-9_./-]+\\.[A-Za-z]{1,6}\\b")] | length > 0 and all(test("\\.md$"));
   fromjson? // empty
   | select((.isSidechain == true) == $side)
   | .timestamp as $ts
+  | ((.cwd // "") | gsub("\\\\"; "/") | rtrimstr("/") + "/" | startswith($root)) as $in
   | if .type == "assistant" then
       .message.content | arrays | .[]
       | if .type == "text" and ($side | not)
@@ -65,7 +72,7 @@ read -r -d '' events_jq <<'JQ' || true
           ((.input.file_path // .input.notebook_path // "") | gsub("\\\\"; "/")) as $p
           | select(($p | startswith($root)) and ($p | test("\\.md$") | not))
           | {k: "edit", p: ($p | ltrimstr($root)), ts: $ts}
-        elif .name == "Bash" and ((.input.command // "") | writes_repo and (only_md | not)) then
+        elif .name == "Bash" and ((.input.command // "") | writes_repo($in) and (only_md | not)) then
           {k: "edit", p: "(via Bash)", ts: $ts}
         elif $side then empty
         elif (.name == "Agent" or .name == "Task")
@@ -93,7 +100,7 @@ read -r -d '' tail_jq <<'JQ' || true
      files: ((if $last == null then $x else $x[($last + 1):] end) | map(select(.k == "edit") | .p) | unique)}
 JQ
 # config code_dirs: top-level folders a Bash redirect writes code into
-dirs="$(kit_conf '.code_dirs | map(gsub("\\."; "\\.")) | join("|")' 'apps|src|packages|scripts|\.claude|\.githooks')"
+dirs="$(kit_conf '.code_dirs | map(gsub("(?<c>[\\\\^$.|?*+()\\[\\]{}])"; "\\\(.c)")) | join("|")' 'apps|src|packages|scripts|\.claude|\.githooks')"
 events="$(jq -R --arg root "$project/" --arg dirs "$dirs" --argjson side false "$events_jq" "$transcript")" || {
   echo "review-before-stop: could not read the transcript, review not enforced" >&2
   exit 0
@@ -133,6 +140,8 @@ session="$(jq -r '.session_id // empty' <<<"$input")"
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null || true)"
 snapshot=""
 [[ -n "$session" && -n "$gitdir" && -f "$gitdir/claude-review/$session" ]] && snapshot="$(cat "$gitdir/claude-review/$session")"
+# the tree is unreferenced, so gc may have pruned it: then judge as without a snapshot
+[[ -n "$snapshot" ]] && ! git -C "$project" cat-file -e "$snapshot^{tree}" 2>/dev/null && snapshot=""
 changed="" new_files="" paths=""
 if [[ -n "$snapshot" ]]; then
   # Both sides built by review-snapshot.sh, so untracked files compare line by line too.

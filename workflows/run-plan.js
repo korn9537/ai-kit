@@ -158,6 +158,12 @@ async function reviewChain(b, r, need) {
   }
   r.recheck = rc.findings
   r.review = fresh ? 'fixed; fresh review of the data or rule fix' : 'fixed; re-checked once, no third pass'
+  const left = (rc.findings || []).filter((f) => f.verdict === 'CONFIRMED').length
+  if (left) {
+    r.status = 'partial'
+    r.review += `; ${left} CONFIRMED finding(s) left`
+    r.open.push(`${left} CONFIRMED finding(s) left after the re-check: see recheck`)
+  }
   log(`${b.title}: fix ${fx.hash}, ${rc.findings.length} finding(s) left`)
 }
 

@@ -16,9 +16,8 @@ root="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)" || e
 rel="${file#"$root"/}"
 [[ "$rel" != "$file" ]] || exit 0
 cd "$root" || exit 0
-# a checkout without ai/kit/, or a Node project without installed packages, cannot run the checks
+# a checkout without ai/kit/ is not set up; the kit's checks need only node, a project's may need its packages
 [[ -d ai/kit ]] || exit 0
-[[ ! -f package.json || -d node_modules ]] || exit 0
 
 # which checks cover the file (config include/skip, else the scripts' defaults): no node start for the rest
 scope="$({ cat ai/kit/config.json 2>/dev/null || echo '{}'; } | jq -r --arg f "$rel" '
@@ -62,7 +61,7 @@ run_to() {
 # lines added since HEAD, files in config docs.include only
 [[ "$scope" == *docs* ]] && run "docs:check" - node "$kit_plugin/scripts/check-docs.mjs" --strict "$rel"
 # shellcheck source=/dev/null
-[[ -f ai/kit/post-edit.sh ]] && . ai/kit/post-edit.sh
+[[ -f ai/kit/post-edit.sh && (! -f package.json || -d node_modules) ]] && . ai/kit/post-edit.sh
 
 # only the checks: a job post-edit.sh starts itself (a watcher) is not waited for
 ((${#pids[@]})) && wait "${pids[@]}"

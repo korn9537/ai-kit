@@ -117,6 +117,25 @@ run_case "block: Path().open(\"w\") counts as a repo write" block - \
   "$(line Bash "{\"command\": \"cd $REPO && python3 -c 'Path(\\\"src/a.ts\\\").open(\\\"w\\\")'\"}")"
 reset
 
+# the session's cwd is the repo root: a relative write target names neither the root nor a code_dirs folder
+incwd() { line Bash "$(jq -cn --arg c "$1" '{command: $c}')" | jq -c --arg d "$REPO" '.cwd = $d'; }
+mkdir -p "$REPO/lib" && seq 1 40 | sed 's/$/y/' >"$REPO/lib/a.ts"
+run_case "block: a relative redirect from a cwd in the repo" block "no review yet" "$(incwd 'seq 40 > lib/a.ts')"
+run_case "block: cat heredoc to a relative path" block - "$(incwd $'cat > lib/a.ts <<EOF\nx\nEOF')"
+run_case "block: mv of a relative path" block - "$(incwd 'mv lib/b.ts lib/a.ts')"
+run_case "pass: stderr, /dev/null, /tmp and fd redirects are not repo writes" pass - \
+  "$(incwd 'grep -rn x . 2>/dev/null >/tmp/out.txt; ls >&2; node -e "a => b" 2>&1 | tee /tmp/log')"
+run_case "pass: rm and cp on absolute paths outside the repo" pass - "$(incwd 'rm -rf /tmp/x && cp ~/a /tmp/b')"
+run_case "pass: a copy from the repo to /tmp" pass - "$(incwd 'cp lib/a.ts /tmp/x')"
+run_case "pass: a copy to a quoted /tmp path" pass - "$(incwd 'cp lib/a.ts "/tmp/x"')"
+run_case "pass: > inside quotes is no redirect" pass - \
+  "$(incwd $'jq \'select(.n > 3)\' f.json; awk \'$1 > 5\' x; echo "a > b"; node -e "a > b"')"
+run_case "block: a quoted relative target" block - "$(incwd 'echo x > "lib/a.ts"')"
+run_case "pass: the same relative redirect from a cwd outside the repo" pass - \
+  "$(line Bash "$(jq -cn '{command: "seq 40 > lib/a.ts"}')" | jq -c '.cwd = "/elsewhere"')"
+rm -rf "$REPO/lib"
+reset
+
 # snapshot branch: the snapshot is the reviewed tree
 snap() { mkdir -p "$REPO/.git/claude-review" && ./review-snapshot.sh --tree "$REPO" >"$REPO/.git/claude-review/s1"; }
 reviewer="$(line Agent '{"subagent_type": "ai-kit:change-reviewer", "description": "x"}')"
@@ -157,6 +176,20 @@ run_case "pass: only ai/usage changed, no snapshot" pass - \
   "$(line Bash "{\"command\": \"echo x >> $REPO/ai/usage/2030-01/s1.jsonl\"}")"
 rm -rf "$REPO/ai/usage"
 reset
+
+# a pruned snapshot is judged as none, not left to fail open
+mkdir -p "$REPO/.git/claude-review" && echo 0123456789abcdef0123456789abcdef01234567 >"$REPO/.git/claude-review/s1"
+sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "block: a snapshot tree gc has pruned" block "no review yet" "$(edit src/a.ts)"
+reset
+
+# regex characters in the repo path
+REPO="$REPO/p(2" && mkdir -p "$REPO/ai/kit" "$REPO/src" && seq 1 40 >"$REPO/src/a.ts"
+git -C "$REPO" init -q && git -C "$REPO" add -A
+git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm base --date 2020-01-01T00:00:00Z
+sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "block: a repo path with ( still enforces review" block "no review yet" \
+  "$(line Bash "$(jq -cn --arg c "echo x >> $REPO/src/a.ts" '{command: $c}')")"
 
 echo "$pass passed, $fail failed"
 ((fail == 0))

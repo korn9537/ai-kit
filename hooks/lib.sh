@@ -24,11 +24,12 @@ kit_conf() {
   printf '%s' "${v:-$2}"
 }
 
-# kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line, none in
-# ai/usage, and none that moved to another file (--color-moved marks moved lines "ul"; a line counts as moved only
-# when its counterpart, leading whitespace aside, is in a different file, so a reorder or re-indent within a file
-# still counts), plus a numstat row per binary file. A failing git diff prints a line too, so a caller never reads it as
-# "no change". Byte-safe (LC_ALL=C): non-UTF-8 text must not end the pipeline early.
+# kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line (a tool
+# directive such as // @ts-ignore or //go:build is code), none in ai/usage, and none that moved to another file
+# (--color-moved marks moved lines "ul"; a line counts as moved only when its counterpart, leading whitespace aside,
+# is in a different file, so a reorder or re-indent within a file still counts), plus a numstat row per binary file.
+# A failing git diff prints a line too, so a caller never reads it as "no change". Byte-safe (LC_ALL=C): non-UTF-8
+# text must not end the pipeline early.
 kit_code_lines() {
   local repo="$1" rc=0
   shift
@@ -66,7 +67,8 @@ kit_code_lines() {
         }
       }' \
     | LC_ALL=C sed -E 's/^[+-][[:space:]]*//' \
-    | LC_ALL=C grep -vE '^$|^//|^/\*([^*]|\*+[^*/])*\*+/$|^\{/\*([^*]|\*+[^*/])*\*+/\}$' || true
+    | LC_ALL=C awk '/^\/\/[[:space:]]*(@ts-|eslint-|prettier-ignore|biome-ignore|deno-lint-ignore|go:|\+build|nolint)/ ||
+      !/^$|^\/\/|^\/\*([^*]|\*+[^*\/])*\*+\/$|^\{\/\*([^*]|\*+[^*\/])*\*+\/\}$/' || true
 }
 
 # kit_review_skippable <repo> <commit>: succeeds when the commit changes no code line (kit_code_lines) and so needs no

@@ -85,6 +85,14 @@ else
   fail=$((fail + 1))
 fi
 
+# a Node project without node_modules (a fresh worktree): the kit's checks still run, the project's do not
+echo '{}' >"$REPO/package.json"
+echo '{"comments": {"include": "^src/c\\.ts$"}, "docs": {"include": "^$"}}' >"$REPO/ai/kit/config.json"
+printf '// one\n// two\n// three\nconst c = 1;\n' >"$REPO/src/c.ts"
+check "block: without node_modules the comment check still runs" 2 src/c.ts 'comments:check' 'run "a" - true'
+check "pass: without node_modules post-edit.sh is skipped" 0 src/a.ts - 'run "a" - false'
+rm "$REPO/package.json"
+
 echo
 echo "$pass passed, $fail failed"
 [[ "$fail" == "0" ]]
