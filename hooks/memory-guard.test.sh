@@ -35,5 +35,22 @@ run_case "pass: a repo file" 0 Write "$REPO/ai/notes.md"
 # a session opened in a subfolder, spelled with backslashes (Windows): the kit still finds ai/kit at the root
 PD="${REPO//\//\\}\\sub" run_case "block: project dir as a Windows subfolder path" 2 Write "/home/u/.claude/projects/-r/memory/a.md"
 
+# lib.sh kit_path: Git Bash (OSTYPE msys) spells C:/x as /c/x; elsewhere /c/x is a real POSIX path
+path_case() {
+  local got
+  got="$(OSTYPE="$1" bash -c '. ./lib.sh; OSTYPE="$0"; kit_path "$1"' "$1" "$2")"
+  if [[ "$got" == "$3" ]]; then
+    echo "ok   - kit_path ($1) $2"
+    pass=$((pass + 1))
+  else
+    echo "FAIL - kit_path ($1) $2: got $got, want $3"
+    fail=$((fail + 1))
+  fi
+}
+path_case msys /c/Users/u/repo C:/Users/u/repo
+path_case msys 'C:\Users\u\repo' C:/Users/u/repo
+path_case msys /tmp/x /tmp/x
+path_case darwin /c/Users/u/repo /c/Users/u/repo
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

@@ -21,7 +21,7 @@ const git = (cwd, ...args) => {
 
 // As hooks/lib.sh kit_project_root: the dir holding ai/kit/, else the git toplevel keeping the given spelling.
 export function projectRoot(dir) {
-  let d = (dir || "/").replace(/\/+$/, "") || "/";
+  let d = (dir || "/").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
   if (existsSync(join(d, "ai", "kit"))) return d;
   const prefix = git(d, "rev-parse", "--show-prefix").replace(/\/+$/, "");
   if (prefix && d.endsWith(`/${prefix}`)) d = d.slice(0, -(prefix.length + 1));

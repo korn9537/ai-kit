@@ -3,9 +3,18 @@
 # kit_enabled fails in a project without ai/kit/: the plugin may be on at user scope, so hooks then exit 0.
 # kit_project_root <dir>: the repo root of a subdirectory (repo/api), keeping the given spelling: --show-toplevel
 # resolves symlinks (/tmp -> /private/tmp), which breaks matching transcript paths against the root.
+# kit_path <path>: a Windows spelling (C:\a\b, or /c/a/b under Git Bash) as C:/a/b, the form git prints; else as is
+kit_path() {
+  local p="${1//\\//}"
+  if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && [[ "$p" =~ ^/([a-zA-Z])(/.*)?$ ]]; then
+    p="$(printf '%s' "${BASH_REMATCH[1]}" | tr a-z A-Z):${BASH_REMATCH[2]:-/}"
+  fi
+  printf '%s\n' "$p"
+}
+
 kit_project_root() {
-  # Windows: C:\repo\sub as C:/repo/sub, the form git prints
-  local d="${1//\\//}" prefix
+  local d prefix
+  d="$(kit_path "$1")"
   d="${d%/}"
   [[ -n "$d" ]] || d=/
   if [[ -d "$d/ai/kit" ]]; then printf '%s\n' "$d"; return; fi

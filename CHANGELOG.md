@@ -30,11 +30,13 @@ Windows (Git Bash):
   scripts (`$'\r': command not found`).
 - `kit.mjs init` appends `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to the project's `.gitattributes`
   when git does not read them as LF; `check` warns when missing. New `scripts/kit-init.test.mjs`.
-- `kit_project_root` (`lib.sh`) and `decider.mjs` read a backslash path (`C:\repo\sub`), so a session opened in a
-  subfolder finds `ai/kit/` instead of skipping every hook; `review-before-stop.sh` compares paths with `/` and an
+- `kit_project_root` (`lib.sh`, through the new `kit_path`), `decider.mjs` and `usage.mjs` read a backslash path
+  (`C:\repo\sub`), and under Git Bash a `/c/repo` one, as `C:/repo`, so a session opened in a subfolder finds
+  `ai/kit/` instead of skipping every hook; `review-before-stop.sh` compares paths with `/` and an
   upper-case drive letter; `memory-guard.sh` matches `C:\...\.claude\projects\...\memory` and a Windows
   `CLAUDE_CONFIG_DIR`. New `hooks/memory-guard.test.sh`.
-- `session-start.sh` finds the snapshot job's children with Git Bash's `ps` when there is no `pgrep`.
+- `session-start.sh` finds the snapshot job's children with Git Bash's `ps` when there is no `pgrep` (a status letter
+  before the PID, apart or glued, is skipped).
 
 ## 2.18.0
 
