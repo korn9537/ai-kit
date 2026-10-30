@@ -24,6 +24,18 @@ sweeping stages in subshells no longer get past the hooks.
 - `memory-guard.sh` honours `CLAUDE_CONFIG_DIR`; `session-start.sh` kills the snapshot job's whole process tree at its
   time limit and `review-snapshot.sh` removes its temp index when killed.
 
+Windows (Git Bash):
+
+- New `.gitattributes` (`* text=auto eol=lf`): a `core.autocrlf` checkout of the plugin no longer gives bash CRLF
+  scripts (`$'\r': command not found`).
+- `kit.mjs init` appends `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to the project's `.gitattributes`
+  when git does not read them as LF; `check` warns when missing. New `scripts/kit-init.test.mjs`.
+- `kit_project_root` (`lib.sh`) and `decider.mjs` read a backslash path (`C:\repo\sub`), so a session opened in a
+  subfolder finds `ai/kit/` instead of skipping every hook; `review-before-stop.sh` compares paths with `/` and an
+  upper-case drive letter; `memory-guard.sh` matches `C:\...\.claude\projects\...\memory` and a Windows
+  `CLAUDE_CONFIG_DIR`. New `hooks/memory-guard.test.sh`.
+- `session-start.sh` finds the snapshot job's children with Git Bash's `ps` when there is no `pgrep`.
+
 ## 2.18.0
 
 Questions no longer stop the session for the owner unless they are one of the four owner kinds: a decider agent

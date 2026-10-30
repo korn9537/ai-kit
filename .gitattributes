@@ -1,0 +1,2 @@
+# bash, sh and node read the kit with LF only; Git for Windows (core.autocrlf) would check text out as CRLF
+* text=auto eol=lf

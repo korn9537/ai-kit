@@ -114,6 +114,10 @@ try {
   eq("guard: a general-purpose decider fallback counts", guard(input), "owner");
   agent("g2", "general-purpose", block("OWNER", "qx"), 0.05, "2026-10-27T03:04:05Z", "research store region");
   eq("guard: a general-purpose agent without decider in its description does not", guard(input), "decided");
+  mkdirSync(join(repo, "sub"));
+  process.env.CLAUDE_PROJECT_DIR = `${repo.replace(/\//g, "\\")}\\sub`;
+  eq("guard: a Windows subfolder project dir finds the root", guard(input), "decided");
+  process.env.CLAUDE_PROJECT_DIR = repo;
   eq("guard: no transcript path lets the ask through", guard({ session_id: "s1" }), "owner");
   eq("guard: no session id lets the ask through", guard({ transcript_path: transcript }), "owner");
   rmSync(join(repo, "ai", "kit"), { recursive: true });

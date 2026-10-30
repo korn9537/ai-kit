@@ -4,7 +4,9 @@
 # kit_project_root <dir>: the repo root of a subdirectory (repo/api), keeping the given spelling: --show-toplevel
 # resolves symlinks (/tmp -> /private/tmp), which breaks matching transcript paths against the root.
 kit_project_root() {
-  local d="${1%/}" prefix
+  # Windows: C:\repo\sub as C:/repo/sub, the form git prints
+  local d="${1//\\//}" prefix
+  d="${d%/}"
   [[ -n "$d" ]] || d=/
   if [[ -d "$d/ai/kit" ]]; then printf '%s\n' "$d"; return; fi
   prefix="$(git -C "$d" rev-parse --show-prefix 2>/dev/null || true)"

@@ -38,8 +38,11 @@ project="${project//\\//}"
 project="${project%/}"
 
 read -r -d '' events_jq <<'JQ' || true
+  # Windows: backslashes as / and the drive letter upper-case, so C:\repo and c:/repo compare equal
+  def norm: gsub("\\\\"; "/") | if test("^[a-z]:/") then (.[0:1] | ascii_upcase) + .[1:] else . end;
   def re_escape: gsub("(?<c>[\\\\^$.|?*+()\\[\\]{}])"; "\\\(.c)");
-  ($root | re_escape) as $r
+  ($root | norm) as $root
+  | ($root | re_escape) as $r
   # cd into the root, spelled with or without its trailing slash
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
   # $in: the command ran with its cwd in the repo, as a cd into the root does
@@ -61,7 +64,7 @@ read -r -d '' events_jq <<'JQ' || true
   fromjson? // empty
   | select((.isSidechain == true) == $side)
   | .timestamp as $ts
-  | ((.cwd // "") | gsub("\\\\"; "/") | rtrimstr("/") + "/" | startswith($root)) as $in
+  | ((.cwd // "") | norm | rtrimstr("/") + "/" | startswith($root)) as $in
   | if .type == "assistant" then
       .message.content | arrays | .[]
       | if .type == "text" and ($side | not)
@@ -69,7 +72,7 @@ read -r -d '' events_jq <<'JQ' || true
           {k: "closed", ts: $ts}
         elif .type != "tool_use" then empty
         elif (.name | test("^(Edit|Write|MultiEdit|NotebookEdit)$")) then
-          ((.input.file_path // .input.notebook_path // "") | gsub("\\\\"; "/")) as $p
+          ((.input.file_path // .input.notebook_path // "") | norm) as $p
           | select(($p | startswith($root)) and ($p | test("\\.md$") | not))
           | {k: "edit", p: ($p | ltrimstr($root)), ts: $ts}
         elif .name == "Bash" and ((.input.command // "") | writes_repo($in) and (only_md | not)) then

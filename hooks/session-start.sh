@@ -28,8 +28,14 @@ if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
       printf '%s\n' "$tree" >"$snap.$$" && mv "$snap.$$" "$snap") >/dev/null 2>&1 &
     pid=$!
     for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
-    # the subshell's children too (review-snapshot.sh, its git add); no pgrep (Git Bash) = the subshell only
-    kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+    # the subshell's children too (review-snapshot.sh, its git add); Git Bash has no pgrep: its ps lists PID PPID,
+    # a status letter first on some lines
+    kids() {
+      if command -v pgrep >/dev/null 2>&1; then pgrep -P "$1"; else
+        ps 2>/dev/null | awk -v p="$1" '{ if ($1 !~ /^[0-9]+$/) { $1 = ""; $0 = $0 } if ($2 == p) print $1 }'
+      fi
+    }
+    kill_tree() { local c; for c in $(kids "$1"); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
     kill_tree "$pid" || true
     wait "$pid" 2>/dev/null || true
   fi

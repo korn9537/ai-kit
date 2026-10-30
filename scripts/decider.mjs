@@ -25,7 +25,7 @@ const git = (cwd, ...args) => {
 
 // As hooks/lib.sh kit_project_root (usage.mjs runs its CLI on import, so not shared from there).
 function projectRoot(dir) {
-  let d = (dir || "/").replace(/\/+$/, "") || "/";
+  let d = (dir || "/").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
   if (existsSync(join(d, "ai", "kit"))) return d;
   const prefix = (git(d, "rev-parse", "--show-prefix") ?? "").replace(/\/+$/, "");
   if (prefix && d.endsWith(`/${prefix}`)) d = d.slice(0, -(prefix.length + 1));

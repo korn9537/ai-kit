@@ -5,7 +5,8 @@ agent, a git pre-commit runner, and comment and doc checks. This repo is both th
 (`korn9537`). It holds nothing project-specific. Each project keeps its own settings in `ai/kit/`, which the kit
 reads and never overwrites; a project without `ai/kit/` is left alone, so the plugin is safe at user scope.
 
-Requires `jq` (hooks) and Node 22+ (scripts).
+Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git Bash (Git for Windows); the kit's
+`.gitattributes` keeps every file at LF, so a `core.autocrlf` checkout of the plugin still runs.
 
 ## Layout
 
@@ -17,10 +18,11 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh` and `git-add-all-guard.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh` and `memory-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
+| `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `flush` (SessionEnd, SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
@@ -149,7 +151,9 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
   writes the `.githooks/pre-commit` shim when missing (rewrites a 1.x shim; warns about any other hook there) and
   sets `core.hooksPath` to `.githooks` unless another path is set (warns), writes `<git-common-dir>/ai-kit-root`
-  for the shim, and adds `"autoMemoryEnabled": false` to `.claude/settings.json` when the key is absent.
+  for the shim, adds `"autoMemoryEnabled": false` to `.claude/settings.json` when the key is absent, and appends
+  `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to `.gitattributes` when git does not already read those
+  paths as LF (a Windows `core.autocrlf` checkout would give `sh` a CRLF shim).
 - `node <plugin>/scripts/kit.mjs check` exits 1 when `ai/kit/config.json` is missing, malformed or not an object,
   when `conventions` is not an array or names a file `conventions/` lacks, when the shim is missing or not the kit
   shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`, `.claude/settings.local.json`
@@ -158,7 +162,8 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
   `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. It warns (`!`, exit unchanged)
   when auto-memory is not off (no `autoMemoryEnabled: false` in the highest scope that sets it, or
-  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`).
+  `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`), and
+  when the shim or `ai/kit/*.sh` has no `eol=lf` attribute.
   The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
   `.claude/agents/` or `CLAUDE.md` are staged.
 - `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside

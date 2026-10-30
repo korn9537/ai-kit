@@ -98,6 +98,21 @@ const memoryFiles = () => {
   );
 };
 // warnings, not problems: this machine's state, and a project before 2.7.0 must keep committing
+// sh and bash read these with LF only; Git for Windows (core.autocrlf) checks text out as CRLF without an eol rule
+const LF_RULES = [
+  { line: ".githooks/* text eol=lf", sample: ".githooks/pre-commit" },
+  { line: "ai/kit/*.sh text eol=lf", sample: "ai/kit/pre-commit.sh" },
+];
+const lfMissing = () =>
+  LF_RULES.filter((r) => !/: eol: lf$/m.test(tryGit("check-attr", "eol", "--", r.sample) ?? ""));
+
+function eolWarnings() {
+  return lfMissing().map(
+    (r) =>
+      `${r.sample} has no eol=lf attribute, so a Windows checkout gets CRLF and sh fails on it (fix: node <plugin>/scripts/kit.mjs init adds "${r.line}" to .gitattributes)`,
+  );
+}
+
 function memoryWarnings() {
   const out = [];
   const scopes = [
@@ -448,6 +463,18 @@ function initFiles(created = []) {
     console.log('~ .claude/settings.json ("autoMemoryEnabled": false)');
   }
 
+  // outside a git repo check-attr fails: nothing to add
+  const lf = tryGit("rev-parse", "--git-dir") === null ? [] : lfMissing();
+  if (lf.length) {
+    const gp = at(".gitattributes");
+    const gt = read(gp);
+    const eol = gt ? eolOf(gt) : "\n";
+    const lead = gt && !gt.endsWith("\n") ? eol : "";
+    writeFileSync(gp, (gt ?? "") + lead + lf.map((r) => r.line).join(eol) + eol);
+    if (gt === null) created.push(".gitattributes");
+    console.log(`~ .gitattributes (${lf.map((r) => r.line).join(", ")})`);
+  }
+
   // the shim reads this; session-start.sh rewrites it each session
   const common = tryGit("rev-parse", "--path-format=absolute", "--git-common-dir");
   if (common && existsSync(common)) {
@@ -465,6 +492,7 @@ function init() {
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
+  eolWarnings().forEach((w) => console.log(`! ${w}`));
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
@@ -815,6 +843,7 @@ function migrate() {
   }
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
+  eolWarnings().forEach((w) => console.log(`! ${w}`));
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
@@ -929,6 +958,7 @@ else if (cmd === "check") {
   const out = problems();
   out.forEach((p) => console.log(`ai-kit: ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  eolWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));

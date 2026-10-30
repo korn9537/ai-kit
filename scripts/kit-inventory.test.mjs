@@ -1,7 +1,7 @@
 // Tests for kit.mjs inventory: a fixture repo, then each wanted line must appear in the output.
 // Usage: node scripts/kit-inventory.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -89,7 +89,8 @@ try {
 } finally {
   rmSync(dir2, { recursive: true, force: true });
 }
-// records are never edited once committed (part files), so init needs no .gitattributes entry and check does not ask
+// records are never edited once committed (part files), so init writes no merge=union entry and check does not ask
+// (the eol=lf rules are kit-init.test.mjs)
 let extra = 1;
 {
   const d = mkdtempSync(join(tmpdir(), "kit-attr-"));
@@ -99,8 +100,9 @@ let extra = 1;
     execFileSync("git", ["init", "-q"], { cwd: d });
     const out = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
     const chk = spawnSync("node", [SCRIPT, "check"], { cwd: d, encoding: "utf8" }).stdout;
-    const ok = !existsSync(join(d, ".gitattributes")) && !out.includes("gitattributes") && !chk.includes("gitattributes");
-    console.log(`${ok ? "ok  " : "FAIL"} - init writes no .gitattributes and check does not mention it`);
+    const attrs = existsSync(join(d, ".gitattributes")) ? readFileSync(join(d, ".gitattributes"), "utf8") : "";
+    const ok = !/merge=union|ai\/usage/.test(attrs) && !chk.includes("gitattributes");
+    console.log(`${ok ? "ok  " : "FAIL"} - init writes no ai/usage merge entry and check does not ask for one`);
     if (!ok) {
       fail++;
       console.log(JSON.stringify({ out, chk }));
