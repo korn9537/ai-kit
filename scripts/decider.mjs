@@ -2,8 +2,9 @@
 // Decision log CLI. Verdicts are read from each ai-kit:decider subagent's own transcript
 // (<session>/subagents/agent-<id>.jsonl beside the session transcript), so a background call counts as a foreground
 // one. `sync` (SubagentStop, Stop) writes a finished decider's verdict blocks once to
-// ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl. `guard` (ask-guard.sh) syncs, then prints owner, decided,
-// pending or none for the newest unused decider of the last 30 minutes; owner marks it used. `report [--since
+// ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl; on SubagentStop from the hook's agent_id and
+// last_assistant_message. `guard` (ask-guard.sh) prints owner, decided, pending or none for the newest unused decider
+// of the last 30 minutes; owner marks it used. `report [--since
 // YYYY-MM-DD]` prints the log as markdown. Never fails: an error is one stderr line.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -59,7 +60,12 @@ export function subagentsDir(transcript) {
   return join(transcript.replace(/\.jsonl$/, ""), "subagents");
 }
 
-// Every decider subagent of the session: id, the text and time of its last assistant message, its verdict blocks.
+// ai-kit:decider, or the general-purpose fallback when that type is not loaded (description names the decider)
+export const isDecider = (type, description = "") =>
+  /(^|:)decider$/.test(type) || ((type === "" || type === "general-purpose") && /decider/i.test(description));
+
+// Every decider subagent of the session: id, the text and time of its last assistant message, its verdict blocks,
+// done (the last assistant line hands back or ends the turn with no tool call).
 export function deciders(dir) {
   let names = [];
   try {
@@ -75,11 +81,13 @@ export function deciders(dir) {
     } catch {
       continue;
     }
-    if (!/(^|:)decider$/.test(meta.agentType ?? "")) continue;
+    if (!isDecider(meta.agentType ?? "", meta.description ?? "")) continue;
     const id = n.slice(0, -".meta.json".length).replace(/^agent-/, "");
     const path = join(dir, `agent-${id}.jsonl`);
     let text = "";
     let ts = "";
+    let done = false;
+    let quiet = false;
     let lines = [];
     try {
       lines = readFileSync(path, "utf8").split("\n");
@@ -92,6 +100,9 @@ export function deciders(dir) {
         continue;
       }
       if (e?.type !== "assistant" || !Array.isArray(e.message?.content)) continue;
+      const tools = e.message.content.filter((c) => c?.type === "tool_use").map((c) => c.name ?? "");
+      done = (tools.length === 1 && /handback/i.test(tools[0])) || (tools.length === 0 && e.message.stop_reason === "end_turn");
+      quiet = tools.length === 0 && e.message.stop_reason == null;
       // the final reply is a text block, or the message of a SubagentHandback call where the harness has one
       const t = e.message.content
         .map((c) => (c?.type === "text" ? c.text : c?.type === "tool_use" && /handback/i.test(c.name ?? "") ? c.input?.message : null))
@@ -105,20 +116,27 @@ export function deciders(dir) {
     try {
       mtime = statSync(path).mtimeMs;
     } catch {}
-    out.push({ id, ts: ts || new Date(mtime).toISOString(), mtime, blocks: parseBlocks(text) });
+    // a text reply with no stop_reason (some transcripts) is final once the file has been idle for a minute
+    if (quiet && Date.now() - mtime > 60000) done = true;
+    out.push({ id, ts: ts || new Date(mtime).toISOString(), mtime, done, blocks: parseBlocks(text) });
   }
   return out.sort((a, b) => a.mtime - b.mtime);
 }
 
-// One file per decider call, written once: no two branches, worktrees or machines write the same name differently.
+// One file per finished decider call, created once ("wx": SubagentStop and Stop may race): no two branches,
+// worktrees or machines write the same name differently.
 export function logDeciders(root, session, list) {
   for (const d of list) {
-    if (d.blocks.length === 0) continue;
+    if (!d.done || d.blocks.length === 0) continue;
     const dir = join(root, "ai", "usage", "decisions", d.ts.slice(0, 7));
     const path = join(dir, `${session}.${d.id}.jsonl`);
     if (existsSync(path)) continue;
     mkdirSync(dir, { recursive: true });
-    writeFileSync(path, d.blocks.map((b) => JSON.stringify({ ts: d.ts, session, agent: d.id, ...b }) + "\n").join(""));
+    try {
+      writeFileSync(path, d.blocks.map((b) => JSON.stringify({ ts: d.ts, session, agent: d.id, ...b }) + "\n").join(""), { flag: "wx" });
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
+    }
   }
 }
 
@@ -131,7 +149,21 @@ function context(input) {
 
 export function sync(input) {
   const c = context(input);
-  if (c) logDeciders(c.root, c.session, c.list);
+  if (!c) return;
+  // SubagentStop names the call that just ended and carries its final reply; a handback reply may leave it empty
+  const id = typeof input.agent_id === "string" ? input.agent_id : "";
+  if (id && typeof input.last_assistant_message === "string") {
+    let d = c.list.find((x) => x.id === id);
+    if (!d && isDecider(input.agent_type ?? "")) {
+      d = { id, ts: new Date().toISOString(), mtime: Date.now(), blocks: [] };
+      c.list.push(d);
+    }
+    if (d) {
+      const blocks = parseBlocks(input.last_assistant_message);
+      Object.assign(d, { done: true }, blocks.length ? { blocks } : {});
+    }
+  }
+  logDeciders(c.root, c.session, c.list);
 }
 
 // owner: an unused call of the last 30 minutes has an OWNER block (the newest such call is now used up) · else the
@@ -141,7 +173,6 @@ export function sync(input) {
 export function guard(input, now = Date.now()) {
   const c = context(input);
   if (!c) return "owner";
-  logDeciders(c.root, c.session, c.list);
   const common = git(c.root, "rev-parse", "--path-format=absolute", "--git-common-dir");
   const statePath = common ? join(common, "claude-decider", `${c.session}.json`) : "";
   let used = [];

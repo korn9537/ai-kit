@@ -8,6 +8,8 @@ work_tree() {  # $1 = repo dir → tree id of every non-ignored file as it is on
   local gitdir tmp_index tree
   gitdir="$(git -C "$1" rev-parse --absolute-git-dir)"
   tmp_index="$(mktemp)"
+  # killed by session-start.sh's time limit: leave no index copy in $TMPDIR
+  trap 'rm -f "$tmp_index"; exit 143' TERM
   # no index yet (new repo): git rejects an empty index file, so start from none
   cp "$gitdir/index" "$tmp_index" 2>/dev/null || rm -f "$tmp_index"
   tree="$(cd "$1" && GIT_INDEX_FILE="$tmp_index" git add -A . >/dev/null 2>&1 \

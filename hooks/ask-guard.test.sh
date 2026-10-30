@@ -21,7 +21,7 @@ agent() {
   echo '{"agentType":"ai-kit:decider"}' >"$SUBS/agent-$1.meta.json"
   if [[ -n "$2" ]]; then
     jq -cn --arg v "$2" '{type: "assistant", timestamp: "2026-10-27T03:04:05Z",
-      message: {content: [{type: "text", text: ("Verdict: " + $v + "\nQuestion: q\nChoice: c\nConfidence: high")}]}}'
+      message: {stop_reason: "end_turn", content: [{type: "text", text: ("Verdict: " + $v + "\nQuestion: q\nChoice: c\nConfidence: high")}]}}'
   else
     echo '{"type":"user","message":{"content":"brief"}}'
   fi >"$SUBS/agent-$1.jsonl"

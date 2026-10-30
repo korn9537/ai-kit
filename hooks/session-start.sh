@@ -28,7 +28,9 @@ if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
       printf '%s\n' "$tree" >"$snap.$$" && mv "$snap.$$" "$snap") >/dev/null 2>&1 &
     pid=$!
     for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.1; done
-    kill "$pid" 2>/dev/null || true
+    # the subshell's children too (review-snapshot.sh, its git add); no pgrep (Git Bash) = the subshell only
+    kill_tree() { local c; for c in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$c"; done; kill "$1" 2>/dev/null; }
+    kill_tree "$pid" || true
     wait "$pid" 2>/dev/null || true
   fi
 fi

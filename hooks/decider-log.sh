@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SubagentStop and Stop: each finished ai-kit:decider call of the session is logged once to ai/usage/decisions/
-# (scripts/decider.mjs sync reads its subagent transcript). Never blocks: any failure is one stderr line and exit 0.
+# (scripts/decider.mjs sync: the SubagentStop input's last_assistant_message, else the subagent transcript). Never
+# blocks: any failure is one stderr line and exit 0.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0

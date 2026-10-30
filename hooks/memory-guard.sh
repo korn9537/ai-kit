@@ -9,7 +9,10 @@ kit_enabled || exit 0
 
 input="$(cat)"
 tool="$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null || true)"
-mem='\.claude/projects/[^/[:space:]]+/memory(/|$)'
+# the config dir as lib.sh kit_memory_dir has it: ~/.claude, or CLAUDE_CONFIG_DIR
+cfg='\.claude'
+[[ -n "${CLAUDE_CONFIG_DIR:-}" ]] && cfg="(\\.claude|$(printf '%s' "${CLAUDE_CONFIG_DIR%/}" | sed 's/[][\.*^$+?(){}|]/\\&/g'))"
+mem="$cfg"'/projects/[^/[:space:]]+/memory(/|$)'
 
 hit=0
 case "$tool" in
@@ -19,13 +22,13 @@ case "$tool" in
     ;;
   Bash)
     cmd="$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null || true)"
-    [[ "$cmd" == *.claude/projects/*/memory* ]] || exit 0
+    [[ "$cmd" == */projects/*/memory* ]] || exit 0
     # writes only: a redirect into the dir, or tee/sed -i/cp/mv/install/ln on it in command position; read and rm
     # stay allowed. Not caught: perl -pi, touch, scripts, a quoted | before the path, a write after do/then/xargs/
     # find -exec (Write/Edit are the usual route).
     nl=$'\n'
-    mem='\.claude/projects/[^/[:space:]]+/memory([/[:space:]"'\'';&|]|$)'
-    path='\.claude/projects/[^/[:space:]]+/memory(/[^[:space:];&|]*)?'
+    mem="$cfg"'/projects/[^/[:space:]]+/memory([/[:space:]"'\'';&|]|$)'
+    path="$cfg"'/projects/[^/[:space:]]+/memory(/[^[:space:];&|]*)?'
     cmdpos='(^|[;&|(`'"$nl"'])[[:space:]]*(sudo[[:space:]]+)?'
     arg="[^;&|$nl]*"
     w='>>?[[:space:]]*["'\'']?[^[:space:]]*'"$mem"

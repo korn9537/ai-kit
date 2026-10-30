@@ -15,7 +15,16 @@ cmd="$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null || true)"
 cwd="$(jq -r '.cwd // empty' <<<"$input" 2>/dev/null || true)"
 cd "${cwd:-${CLAUDE_PROJECT_DIR:-.}}" 2>/dev/null || true
 
+# a subshell or group opener, a compound-command keyword or a wrapper in front of git leaves git the command
+lead_re='^[[:space:]]*([({!]|(then|do|else|if|elif|while|until|time|env|command|sudo|exec|nohup)[[:space:]]|-[A-Za-z-]+[[:space:]])(.*)$'
+
 sweeping() {
+  local s="$1" prev=""
+  while [[ "$s" != "$prev" ]]; do
+    prev="$s"
+    [[ "$s" =~ $lead_re ]] && s="${BASH_REMATCH[3]}"
+  done
+  set -- "$s"
   [[ "$1" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]|$) ]] || return 1
   local -a t=()
   local tok toks
@@ -40,7 +49,9 @@ sweeping() {
   ((i++))
   local seen_dd=0 arg
   for ((; i < n; i++)); do
-    arg="${t[i]}"
+    # the closer of a subshell or group: `(cd lib && git add .)`
+    arg="${t[i]%%[)\}]*}"
+    [[ -n "$arg" ]] || continue
     if [[ "$sub" == "add" ]]; then
       if ((seen_dd == 0)); then
         case "$arg" in

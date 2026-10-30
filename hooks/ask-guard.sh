@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # PreToolUse (AskUserQuestion): a question reaches the owner only after an ai-kit:decider call of this session
 # returned OWNER within the last 30 minutes; one such call serves one ask (scripts/decider.mjs guard reads the
-# decider's subagent transcript and logs it). Otherwise the ask is blocked and the main session runs the decider.
-# Gap: the verdict is matched per decider call, not per question. Off with config decider.enabled false; a question
-# matching decider.always_owner (jq regex, case-insensitive) goes through, as does one when the pattern is invalid,
-# node is missing or the guard errs.
+# decider's subagent transcript; decider-log.sh logs it). Otherwise the ask is blocked and the main session runs the
+# decider. Gap: the verdict is matched per decider call, not per question. Off with config decider.enabled false; a
+# question matching decider.always_owner (jq regex, case-insensitive) goes through, as does one when the pattern is
+# invalid, node is missing or the guard errs.
 set -euo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
 command -v node >/dev/null 2>&1 || exit 0
@@ -45,8 +45,10 @@ MSG
 Blocked: the agent decides; the owner holds only the four owner kinds (CLAUDE.core.md Working conventions). Launch
 the ai-kit:decider agent first (subagent_type "ai-kit:decider"; model opus, effort high when the question touches a
 DB schema, a calculation, a permission or a final decision) with each question, its options, the user's request in
-their words and what you already know. DECIDED: act on its Choice without asking and list it under Decided. OWNER:
-ask again with its recommended option first, labelled "(Recommended)", and its Reason in that option's description.
+their words and what you already know. Agent type not loaded (plugin enabled mid-session): general-purpose,
+description containing "decider", told to follow the plugin's agents/decider.md. DECIDED: act on its Choice without
+asking and list it under Decided. OWNER: ask again with its recommended option first, labelled "(Recommended)", and
+its Reason in that option's description.
 The project turns this off with "decider": {"enabled": false} in ai/kit/config.json.
 MSG
     ;;

@@ -45,13 +45,13 @@ try {
   const transcript = join(tmp, "proj", "s1.jsonl");
   const input = { session_id: "s1", transcript_path: transcript };
   // agent <id> <type> <final text> [age in minutes]: a subagent transcript as Claude Code writes it
-  const agent = (id, type, text, age = 0, ts = "2026-10-27T03:04:05Z") => {
-    writeFileSync(join(subs, `agent-${id}.meta.json`), JSON.stringify({ agentType: type }));
+  const agent = (id, type, text, age = 0, ts = "2026-10-27T03:04:05Z", description = "") => {
+    writeFileSync(join(subs, `agent-${id}.meta.json`), JSON.stringify({ agentType: type, description }));
     const lines = [
       { type: "user", message: { role: "user", content: "brief: Verdict: DECIDED quoted by the caller" } },
       { type: "assistant", timestamp: "2026-10-27T03:00:00Z", message: { content: [{ type: "text", text: "looking" }, { type: "tool_use" }] } },
     ];
-    if (text) lines.push({ type: "assistant", timestamp: ts, message: { content: [{ type: "text", text }] } });
+    if (text) lines.push({ type: "assistant", timestamp: ts, message: { stop_reason: "end_turn", content: [{ type: "text", text }] } });
     writeFileSync(join(subs, `agent-${id}.jsonl`), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
     const t = (Date.now() - age * 60000) / 1000;
     utimesSync(join(subs, `agent-${id}.jsonl`), t, t);
@@ -63,7 +63,8 @@ try {
   agent("r1", "ai-kit:change-reviewer", block("OWNER", "x"), 2);
   eq("deciders: only the decider type, its last assistant text", deciders(subs).map((d) => [d.id, d.blocks.length, d.ts]), [["a1", 1, "2026-10-27T03:04:05Z"]]);
   eq("guard: DECIDED", guard(input), "decided");
-  eq("guard logs the decider once per call", logged(), ["s1.a1.jsonl"]);
+  sync(input);
+  eq("sync logs the decider once per call", logged(), ["s1.a1.jsonl"]);
   agent("a2", "ai-kit:decider", "", 1);
   eq("guard: newest decider has no verdict yet", guard(input), "pending");
   agent("a2", "ai-kit:decider", `${block("DECIDED", "q2")}\n---\n${block("OWNER", "q3")}`, 1);
@@ -83,6 +84,18 @@ try {
   writeFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.a1.jsonl"), `${JSON.stringify({ ts: "2026-10-27T03:04:05Z", verdict: "DECIDED", question: "q1" })}\n`);
 
   const all = loadDecisions(repo);
+  // still running: its last line is a text block streamed before the tool call, with verdict-like words in it
+  writeFileSync(join(subs, "agent-run1.meta.json"), JSON.stringify({ agentType: "ai-kit:decider" }));
+  writeFileSync(join(subs, "agent-run1.jsonl"), JSON.stringify({ type: "assistant", timestamp: "2026-10-27T06:00:00Z",
+    message: { content: [{ type: "text", text: block("DECIDED", "draft") }] } }) + "\n");
+  sync(input);
+  eq("sync: a decider still running is not logged", logged().includes("s1.run1.jsonl"), false);
+  sync({ ...input, agent_id: "run1", agent_type: "ai-kit:decider", last_assistant_message: block("OWNER", "qf") });
+  eq("sync: SubagentStop logs from last_assistant_message",
+    JSON.parse(readFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.run1.jsonl"), "utf8")).question, "qf");
+  rmSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.run1.jsonl"));
+  rmSync(join(subs, "agent-run1.jsonl"));
+  rmSync(join(subs, "agent-run1.meta.json"));
   eq("load: every record in ts order", all.map((r) => r.question), ["q1", "q2", "q3", "qh", "q4"]);
   eq("load: since excludes older", loadDecisions(repo, "2026-10-28").length, 0);
   const md = report(all);
@@ -97,6 +110,10 @@ try {
   agent("p2", "ai-kit:decider", block("DECIDED", "qd"), 0.2);
   eq("guard: an unused OWNER call wins over a newer DECIDED one", guard(input), "owner");
   eq("guard: then the newer DECIDED one shows", guard(input), "decided");
+  agent("g1", "general-purpose", block("OWNER", "qg"), 0.1, "2026-10-27T03:04:05Z", "decider: which store region");
+  eq("guard: a general-purpose decider fallback counts", guard(input), "owner");
+  agent("g2", "general-purpose", block("OWNER", "qx"), 0.05, "2026-10-27T03:04:05Z", "research store region");
+  eq("guard: a general-purpose agent without decider in its description does not", guard(input), "decided");
   eq("guard: no transcript path lets the ask through", guard({ session_id: "s1" }), "owner");
   eq("guard: no session id lets the ask through", guard({ transcript_path: transcript }), "owner");
   rmSync(join(repo, "ai", "kit"), { recursive: true });
