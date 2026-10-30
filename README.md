@@ -223,7 +223,10 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 3. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
    hook, command, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
    settings to keep working.
-4. Commit and push.
+4. Work on a branch: `main` is the release, since every project with `autoUpdate` installs from it. Merge with
+   `git merge --ff-only` once `node scripts/test-all.mjs` passes (rerun a flaky test alone before counting it) and
+   the review leaves no CONFIRMED finding open, or `CHANGELOG.md` names the ones left. Tag the version commit
+   `vX.Y.Z` and push `main` with the tag; a bad release is reverted on `main`.
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected
@@ -335,7 +338,10 @@ kit บันทึกการใช้ token ของทุก round (ค่�
    - patch (2.0.x) — แก้บั๊ก
    - minor (2.x.0) — เพิ่ม hook, command, check หรือ config key ที่มีค่า default
    - major (x.0.0) — โปรเจกต์ต้องแก้ `ai/kit/`, `CLAUDE.md` หรือ settings ถึงจะใช้ต่อได้
-4. commit แล้ว push
+4. ทำงานบน branch: `main` คือ release เพราะทุกโปรเจกต์ที่ตั้ง `autoUpdate` ติดตั้งจาก `main` merge ด้วย
+   `git merge --ff-only` เมื่อ `node scripts/test-all.mjs` ผ่าน (test ที่ flaky ให้รันเดี่ยวซ้ำก่อนนับ) และ review
+   ไม่มี finding CONFIRMED ค้าง หรือ `CHANGELOG.md` ระบุข้อที่ค้างไว้ ใส่ tag `vX.Y.Z` ที่ commit ที่เปลี่ยน version
+   แล้ว push `main` พร้อม tag release ที่เสียให้ revert บน `main`
 
 กฎหรือข้อบกพร่องที่เจอระหว่างทำงานในโปรเจกต์ agent จะเปิดเป็น GitHub issue label `proposal` ใน repo นี้
 (เกณฑ์และรูปแบบอยู่ใน `docs/kit-proposals.md`: ต้องเขียนกฎได้โดยไม่อ้างชื่อโปรเจกต์ code หรือ path จริง ไม่อย่างนั้นลง
