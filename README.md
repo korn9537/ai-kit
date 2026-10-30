@@ -17,7 +17,7 @@ Requires `jq` (hooks) and Node 22+ (scripts).
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh` and `ask-guard.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh` and `git-add-all-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
@@ -56,7 +56,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   reviewed. Before the first
   review a small change passes without one: at most `review.skip_lines` changed code lines, no new file, no path
   matching `review.always` (such a path is reviewed regardless of size). A change of only `//` comments, one-line block
-  comments or blank lines since the last review (or since the session began when none) passes too. Edits by a finished
+  comments or blank lines since the last review (or since the session began when none) passes too; a tool directive
+  (`// @ts-ignore`, `// eslint-...`, `//go:build`, `//nolint`) is code. A Bash write counts when it names the repo
+  or a `code_dirs` folder, or names a relative path while the session's cwd is in the repo. Edits by a finished
   commit subagent count too; one still running is skipped. Also counted as a review: a user message starting with
   "skip review" or "ไม่ต้อง review" after the last edit (earlier edits included), and, right after a re-check, a
   main-session reply with `Review closed: re-checked once` (not quoted). A block moved to another file counts as no
@@ -69,7 +71,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the
   workflow's batches stay out of the main session's context.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
-  and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order.
+  and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
+  without `node_modules` (a fresh worktree) only the project's checks are skipped.
 - `usage-log.sh` (Stop) appends each round's token use to a buffer in the git common dir
   (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
   summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks.
@@ -81,16 +84,20 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   `<git-common-dir>/claude-decider/<session>.json`). The verdict is read from the decider's own subagent transcript
   (`<session>/subagents/agent-<id>.jsonl`), so a background call works as a foreground one. DECIDED → the block says
   to act on the decider's choice; no verdict lines yet → to wait. Gap: the verdict is matched per call, not per
-  question. Off with `decider.enabled: false`; a question matching `decider.always_owner` goes through, and so does
-  every ask when node is missing or the guard errs.
+  question. A general-purpose call whose description names the decider counts too (the type not loaded). Off with
+  `decider.enabled: false`; a question matching `decider.always_owner` goes through, and so does every ask when node
+  is missing or the guard errs.
 - `decider-log.sh` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
   `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl` (one file per call, never rewritten, so branches and
-  worktrees never conflict on it). The pre-commit stages the log with `ai/usage`; reviews skip it.
+  worktrees never conflict on it), on SubagentStop from the hook's `last_assistant_message`; a call still running is
+  not logged. The pre-commit stages the log with `ai/usage`; reviews skip it.
   `/ai-kit:decisions` prints it as a report.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
-  `~/.claude/projects/*/memory/` and names the repo file to use instead; reading and `rm` stay allowed.
+  `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead; reading and
+  `rm` stay allowed.
 - `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
-  `git commit -a` (shared checkout).
+  `git commit -a` (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, or behind
+  `env`/`command`/`sudo`.
 - `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build command (`build_guard.build_re`; default
   `pnpm`/`npm`/`yarn build` with `--prefix`/`-C`/`--cwd`/`-w`/`--workspace`/`--filter`, `next build`, `turbo build`)
   while the dev port listens. It probes the port with `lsof`, else `ss`, `netstat` (Git Bash on Windows) or `nc`;

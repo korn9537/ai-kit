@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.19.0
+
+Review gaps closed: relative Bash writes, regex characters in the repo path, pruned snapshots, tool directives and
+sweeping stages in subshells no longer get past the hooks.
+
+- `review-before-stop.sh`: a Bash redirect, `tee`, `mv`, `cp` or `rm` on a relative path counts as a repo write when
+  the transcript line's `cwd` is in the repo; the repo path and `code_dirs` are escaped in full for the regex (a `(`
+  in the path no longer turns the check off); a snapshot tree `git gc` pruned is judged as no snapshot instead of
+  failing open.
+- `lib.sh` `kit_code_lines`: a tool directive written as a `//` comment (`@ts-`, `eslint-`, `prettier-ignore`,
+  `biome-ignore`, `deno-lint-ignore`, `go:`, `+build`, `nolint`) is code, so it is reviewed and its commit review is
+  not blocked.
+- `git-add-all-guard.sh`: a sweeping stage inside `( )` or `{ }`, after `then`/`do`/`else`/`if`/`while`, or behind
+  `env`/`command`/`sudo`/`exec`/`nohup`/`time` is blocked; new `hooks/git-add-all-guard.test.sh`.
+- `workflows/run-plan.js`: a re-check that still reports a CONFIRMED finding leaves the batch `partial` with an open
+  item, not reported as re-checked.
+- `decider.mjs`: on SubagentStop the verdict is logged from the hook's `agent_id` and `last_assistant_message`; a
+  decider still running is not logged (finished = a handback or an `end_turn` reply), the file is created with `wx`;
+  a general-purpose call whose description names the decider counts when the type is not loaded, and the ask-guard
+  block says so.
+- `post-edit-check.sh`: without `node_modules` only `ai/kit/post-edit.sh` is skipped; the comment and doc checks run.
+- `memory-guard.sh` honours `CLAUDE_CONFIG_DIR`; `session-start.sh` kills the snapshot job's whole process tree at its
+  time limit and `review-snapshot.sh` removes its temp index when killed.
+
 ## 2.18.0
 
 Questions no longer stop the session for the owner unless they are one of the four owner kinds: a decider agent
