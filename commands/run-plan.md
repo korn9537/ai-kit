@@ -24,8 +24,9 @@ command is the user's opt-in to that workflow.
      fixed and the re-check's findings; `Review closed: re-checked once, no third pass` only where `review` says
      re-checked once (plain text).
    - Git: every commit, fixes included.
-   - Open: each `owner` decision, each `open` item, each `blocked`, `partial` or `skipped` batch with its reason,
-     each commit `not reviewed` or `not re-checked`, re-check findings left, each PLAUSIBLE finding. `waitsFor`
-     sees the commit, not its review: name each batch that ran on one its review left `partial`.
+   - Open: each `owner` decision, each `blockers` and `notes` item, each `blocked`, `partial` or `skipped` batch
+     with its reason, each commit `not reviewed` or `not re-checked`, re-check findings left, each PLAUSIBLE
+     finding. `waitsFor` sees the commit, not its review: name each batch that ran on one its review left
+     `partial`.
    - After the owner answers: run this command again with the batches left.
 5. No Workflow tool, or the call is refused → run the plan as coordinator per §Coordinator pipeline instead.

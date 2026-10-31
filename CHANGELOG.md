@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.19.1
+
+- `workflows/run-plan.js`: a committer reports `blockers` and `notes` instead of `open`; only an owner decision or
+  a blocker holds the batches that wait on a commit, notes go to the report's Open (#25).
+- `workflows/run-plan.js`: a fix commit keeps the scope of the batch title's type (`feat(x): y` → `fix(x): y`), no
+  doubled `fix: feat(x):` subject (#24).
+- `conventions/sql.md` item 12: a versioned row stores its series id, and the version counts per series (#23).
+- `conventions/general.md` item 13: a number shown beside its limit comes from the function that enforces it (#22).
+- `conventions/general.md` item 13: thresholds are compared with the unrounded value (#21).
+
 ## 2.19.0
 
 Review gaps closed: relative Bash writes, regex characters in the repo path, pruned snapshots, tool directives and

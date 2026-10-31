@@ -37,3 +37,7 @@ on a conflict and is where a repo writes an exception, with its reason.
     does not apply; "moved verbatim" is no reason (pre-commit rejects it). Pre-commit also rejects an edit to a
     code file over 40 KB at HEAD that adds more than moved lines and imports (`ALLOW_LARGE_EDIT=1` when it cannot
     wait). How: `typescript.md` item 11, `csharp.md` item 11, `nestjs.md` item 1.
+13. **Limits and thresholds** — compare a value with a threshold, limit or gate unrounded; round only to format
+    for display, never before the decision (`10.004` rounded to `10.00` passes a `<= 10.00` check it fails). A
+    number shown next to its limit (a daily total beside its cap) comes from the same function that enforces the
+    limit, never a second calculation in the display code.

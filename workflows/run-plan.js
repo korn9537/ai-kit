@@ -21,10 +21,11 @@ const COMMIT = {
     files: { type: 'array', items: { type: 'string' } },
     choices: { type: 'array', items: { type: 'string' }, description: 'each choice the brief did not fix' },
     owner: { type: 'array', items: { type: 'string' }, description: 'owner decisions hit and left unanswered' },
-    open: { type: 'array', items: { type: 'string' }, description: 'blockers and other open items' },
+    blockers: { type: 'array', items: { type: 'string' }, description: 'what stops a later batch building on it' },
+    notes: { type: 'array', items: { type: 'string' }, description: 'verify results, assumptions, follow-ups' },
     review: { type: 'string', enum: ['review', 'skip'], description: 'the word review-needed.sh printed' },
   },
-  required: ['hash', 'files', 'choices', 'owner', 'open', 'review'],
+  required: ['hash', 'files', 'choices', 'owner', 'blockers', 'notes', 'review'],
 }
 const REVIEW = {
   type: 'object',
@@ -64,8 +65,9 @@ const where = args.repo ? `Repo: ${args.repo} (run every command there).` : ''
 const report = [
   `After the commit run \`${needed} <hash>\` from the project root and put the word it prints in \`review\`.`,
   'Report in the structured output: hash ("" when nothing was committed), files, choices, owner (owner decisions',
-  'left unanswered; stop before the code that depends on one), open (blockers). Nothing committed: restore the',
-  'files you edited, so the next batch starts on a clean tree.',
+  'left unanswered; stop before the code that depends on one), blockers (only what stops a later batch building on',
+  'this commit), notes (verify results, assumptions, follow-ups). Nothing committed: restore the files you edited,',
+  'so the next batch starts on a clean tree.',
 ].join('\n')
 
 const commitPrompt = (b) =>
@@ -81,11 +83,16 @@ const reviewPrompt = (b, hash) =>
     `Read \`git show ${hash} -- . ':(exclude)ai/usage'\`, not the work tree. Review that commit only.`,
   ].join('\n')
 
+// a typed title keeps its scope: `feat(x): y` → `fix(x): y`, never `fix: feat(x): y`
+const fixSubject = (title) => {
+  const m = title.match(/^(?:feat|fix|refactor|perf|docs|test|build|ci|chore|style|revert)(\([^)]*\))?!?: (.*)$/)
+  return m ? `fix${m[1] || ''}: ${m[2]}` : `fix: ${title}`
+}
 const list = (fs) => fs.map((f, i) => `${i + 1}. ${f.where} · ${f.what} · ${f.rule} · fix: ${f.fix}`).join('\n')
 const fixPrompt = (b, hash, fs) =>
   [
     `Review findings on commit ${hash} (batch ${b.id}: ${b.title}). Fix only these, verify the same way and make one`,
-    `commit "fix: ${b.title}".`,
+    `commit "${fixSubject(b.title)}".`,
     where,
     '',
     list(fs),
@@ -113,7 +120,7 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
       ].join('\n')
 
 const results = {}
-const pick = (c) => ({ hash: c.hash, files: c.files, choices: c.choices, owner: c.owner, open: c.open })
+const pick = (c) => ({ hash: c.hash, files: c.files, choices: c.choices, owner: c.owner, blockers: c.blockers, notes: c.notes })
 
 async function reviewChain(b, r, need) {
   if (need === 'skip') {
@@ -143,7 +150,8 @@ async function reviewChain(b, r, need) {
   if (!fx || !fx.hash) {
     r.status = 'partial'
     r.review = 'CONFIRMED findings left unfixed'
-    r.open.push(...((fx && fx.open) || []))
+    r.blockers.push(...((fx && fx.blockers) || []))
+    r.notes.push(...((fx && fx.notes) || []))
     return
   }
   r.fix = pick(fx)
@@ -162,7 +170,7 @@ async function reviewChain(b, r, need) {
   if (left) {
     r.status = 'partial'
     r.review += `; ${left} CONFIRMED finding(s) left`
-    r.open.push(`${left} CONFIRMED finding(s) left after the re-check: see recheck`)
+    r.blockers.push(`${left} CONFIRMED finding(s) left after the re-check: see recheck`)
   }
   log(`${b.title}: fix ${fx.hash}, ${rc.findings.length} finding(s) left`)
 }
@@ -182,13 +190,16 @@ for (const [i, b] of batches.entries()) {
     }),
   )
   if (!c || !c.hash) {
-    results[b.id] = { ...head, status: 'blocked', owner: (c && c.owner) || [], open: (c && c.open) || ['agent failed'] }
+    results[b.id] = {
+      ...head, status: 'blocked', owner: (c && c.owner) || [],
+      blockers: (c && c.blockers) || ['agent failed'], notes: (c && c.notes) || [],
+    }
     log(`${i + 1}/${batches.length} ${b.title}: not committed`)
     continue
   }
-  // an owner decision or a blocker left open: the commit stands, but no batch that waits on it runs. waitsFor sees
-  // the commit only: a dependent may start before this commit's review ends
-  const held = c.owner.length || c.open.length
+  // an owner decision or a blocker left open: the commit stands, but no batch that waits on it runs; notes never
+  // hold one. waitsFor sees the commit only: a dependent may start before this commit's review ends
+  const held = c.owner.length || c.blockers.length
   const r = { ...head, status: held ? 'partial' : 'committed', ...pick(c) }
   results[b.id] = r
   log(`${i + 1}/${batches.length} ${b.title} → ${c.hash}${held ? ' (left open: see report)' : ''}`)

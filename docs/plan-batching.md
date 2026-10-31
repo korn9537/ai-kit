@@ -60,8 +60,9 @@ kept small. The user naming a runner wins.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and
-  its findings and makes a `fix: <batch>` commit; a fresh reviewer re-checks the fix commit only, or reviews both
-  commits whole when a finding was about data or rule correctness.
+  its findings and makes a fix commit (`feat(x): y` → `fix(x): y`, an untyped title → `fix: <batch>`); a fresh
+  reviewer re-checks the fix commit only, or reviews both commits whole when a finding was about data or rule
+  correctness.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.

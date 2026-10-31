@@ -21,3 +21,7 @@ Reader: agents writing or reviewing schema, migrations and queries. Adds to `gen
     (prefix each with `\`) through one shared helper before wildcards are added, and is bound as a parameter with
     the default escape character, no `ESCAPE` clause; SQL that adds the wildcards itself (`'%' || $1 || '%'`) binds
     the escaped value. Unescaped, a search for `50%` or `A_1` matches unrelated rows.
+12. **Versioned rows** — a row cloned into a new version stores its series id (NOT NULL, a foreign key to the
+    series' first version or to a series table), and the version counts within the series: unique
+    `(series_id, version)`, a new version is the series' max + 1. Never infer a series from a name, a slot or a
+    category column: a name is edited in place, and a category can hold several series.
