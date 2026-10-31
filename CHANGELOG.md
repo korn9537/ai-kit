@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.19.2
+
+- `CLAUDE.core.md`: heavy reads (browser checks, searches past about five reads) go to a subagent in any session;
+  the main session reads its report; pointer from `docs/plan-batching.md` §Coordinator pipeline (#26).
+
 ## 2.19.1
 
 - `workflows/run-plan.js`: a committer reports `blockers` and `notes` instead of `open`; only an owner decision or

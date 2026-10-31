@@ -66,6 +66,7 @@ kept small. The user naming a runner wins.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
+  A browser check or a broad search goes to a subagent, as in any session (CLAUDE.core.md, heavy reads).
 - Main session as coordinator only: past `handoff.max_context` (default 150k) it launches no new batch;
   `handoff-nudge.sh` notes it on the next Agent or SendMessage call. The running batches finish, with their
   reviews, fixes and re-checks, and the final report's "Next session" item holds the batches left so the plan
