@@ -25,3 +25,9 @@ Reader: agents writing or reviewing schema, migrations and queries. Adds to `gen
     series' first version or to a series table), and the version counts within the series: unique
     `(series_id, version)`, a new version is the series' max + 1. Never infer a series from a name, a slot or a
     category column: a name is edited in place, and a category can hold several series.
+13. **Counters** — a per-key counter (document, invoice or ticket numbers) is one row per key under a unique index
+    on the full key (owner or tenant column first, period columns included, no nullable key column), taken in one
+    statement inside the caller's transaction:
+    `INSERT INTO counters AS t (...) VALUES (..., 1) ON CONFLICT (<key>) DO UPDATE SET n = t.n + 1 RETURNING n`.
+    Never read, add one and save in application code, and never `max(no) + 1` over the documents: two
+    transactions get the same number. A rollback returns the number; a preview reads `n + 1` without writing.

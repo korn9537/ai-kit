@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.21.1
+
+- `conventions/general.md` 7: a filter or sort on a derived field uses the one rule that derives it, never a restated
+  copy on raw columns; other values are a 400 (#27).
+- `conventions/general.md` 9: the server rejects every write rule itself (locked field, state gate, frozen
+  record), not only permissions, each lock tested through the endpoint (#28).
+- `conventions/general.md` 14: forwarding headers are read only from a configured trusted-proxy CIDR list (#29).
+- `workflows/run-plan.js`: a fix commit keeps a leading task id first (`T-12a: y` → `T-12a: fix y`) (#30).
+- `workflows/run-plan.js`, `agents/committer.md`: the committer prompt lists the later batches, and work planned
+  for one of them is a note, never a blocker that skips it (#31).
+- `conventions/sql.md` 13: counters are taken with one upsert on a unique key, never read-add-save or `max + 1`
+  (#32).
+- `conventions/dart.md` 5: a commit with a golden PNG names its `--update-goldens` command in the body; the
+  proposed commit-msg hook is left out (#33).
+
 ## 2.21.0
 
 - `scripts/usage-collect.mjs`: reviewer findings returned through `StructuredOutput` (the run-plan REVIEW schema)

@@ -66,12 +66,18 @@ const report = [
   `After the commit run \`${needed} <hash>\` from the project root and put the word it prints in \`review\`.`,
   'Report in the structured output: hash ("" when nothing was committed), files, choices, owner (owner decisions',
   'left unanswered; stop before the code that depends on one), blockers (only what stops a later batch building on',
-  'this commit), notes (verify results, assumptions, follow-ups). Nothing committed: restore the files you edited,',
-  'so the next batch starts on a clean tree.',
+  'this commit; work a later batch below is planned to do is a note, never a blocker), notes (verify results,',
+  'assumptions, follow-ups). Nothing committed: restore the files you edited, so the next batch starts on a clean',
+  'tree.',
 ].join('\n')
 
+// the later batches' titles let the committer tell planned work (a note) from a blocker
+const later = (b) => {
+  const rest = batches.slice(batches.indexOf(b) + 1).map((x) => `- ${x.id}: ${x.title}`)
+  return rest.length ? ['', 'Later batches of this plan:', ...rest, ''].join('\n') : ''
+}
 const commitPrompt = (b) =>
-  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', report].join('\n')
+  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', later(b), report].join('\n')
 
 const scope = (b) => (b.alsoInScope || []).map((s) => `also in scope: ${s} (coordinator)`).join('\n')
 const reviewPrompt = (b, hash) =>
@@ -83,10 +89,13 @@ const reviewPrompt = (b, hash) =>
     `Read \`git show ${hash} -- . ':(exclude)ai/usage'\`, not the work tree. Review that commit only.`,
   ].join('\n')
 
-// a typed title keeps its scope: `feat(x): y` → `fix(x): y`, never `fix: feat(x): y`
+// a typed title keeps its scope: `feat(x): y` → `fix(x): y`, never `fix: feat(x): y`; a task id stays first:
+// `T-12a: y` → `T-12a: fix y`
 const fixSubject = (title) => {
   const m = title.match(/^(?:feat|fix|refactor|perf|docs|test|build|ci|chore|style|revert)(\([^)]*\))?!?: (.*)$/)
-  return m ? `fix${m[1] || ''}: ${m[2]}` : `fix: ${title}`
+  if (m) return `fix${m[1] || ''}: ${m[2]}`
+  const id = title.match(/^([A-Z][A-Z0-9]*-\d+[a-z]?): (.*)$/)
+  return id ? `${id[1]}: fix ${id[2]}` : `fix: ${title}`
 }
 const list = (fs) => fs.map((f, i) => `${i + 1}. ${f.where} · ${f.what} · ${f.rule} · fix: ${f.fix}`).join('\n')
 const fixPrompt = (b, hash, fs) =>

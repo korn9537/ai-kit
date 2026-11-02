@@ -35,4 +35,5 @@ Reply with only these four, no summary of the work:
 - **Hash** — the commit hash (or `uncommitted` and why).
 - **Files** — the files the commit touches.
 - **Choices** — each choice you made that the brief did not fix, one line each.
-- **Open** — owner decisions and blockers left, one line each; `none` when there are none.
+- **Open** — owner decisions and blockers left, one line each; `none` when there are none. A blocker is only what
+  stops a later batch building on this commit; work the plan gives to a later batch is a note, never a blocker.

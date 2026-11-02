@@ -24,8 +24,13 @@ on a conflict and is where a repo writes an exception, with its reason.
 7. **Lists** — list endpoints that can grow are paged with a default and a cap; a size over the cap is cut to it
    or refused, never unbounded; a negative size is a 400. Filter, count, order and page run in the database. A
    fixed small set (roles, statuses) or one parent's own trail (a record's event history) may be returned whole.
+   A filter or sort on a derived field (a status computed from several columns) uses the rule that derives it,
+   defined once (one SQL expression or function) and called by the field, the filter and the sort, never restated
+   on raw columns; the filter accepts only the derived values, anything else is a 400.
 8. **No query in a loop** — no database read inside a loop: batch-fetch the rows first, then look them up.
-9. **Authorization** — the server enforces every permission, default deny; a client-side gate is UX only.
+9. **Authorization** — the server enforces every permission, default deny, and every other write rule (a locked
+   field, a state that allows no edit, a record frozen after approval) by rejecting the write itself; a client-side
+   gate or disabled field is UX only. Each such lock has a test that calls the endpoint directly.
 10. **Secrets** — none in committed config: keep the key shape with empty values, real values come from the
     environment.
 11. **One screen = one server read** — a screen's data comes from one server read (endpoint, query, loader, server
@@ -41,3 +46,6 @@ on a conflict and is where a repo writes an exception, with its reason.
     for display, never before the decision (`10.004` rounded to `10.00` passes a `<= 10.00` check it fails). A
     number shown next to its limit (a daily total beside its cap) comes from the same function that enforces the
     limit, never a second calculation in the display code.
+14. **Client IP** — a forwarding header (`X-Forwarded-For`, `X-Real-IP`) is read only when the TCP peer is inside a
+    configured trusted-proxy CIDR list, empty by default; otherwise the client is the TCP peer. Never a middleware
+    that trusts the header from any peer: a client could pick its own rate-limit or audit key.
