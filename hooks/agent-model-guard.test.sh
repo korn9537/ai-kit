@@ -36,6 +36,16 @@ run_case "pass: ai-kit:committer" 0 '{"subagent_type":"ai-kit:committer","prompt
 run_case "pass: Explore" 0 '{"subagent_type":"Explore","prompt":"x"}'
 run_case "pass: Plan" 0 '{"subagent_type":"Plan","prompt":"x"}'
 run_case "pass: fork" 0 '{"subagent_type":"fork","prompt":"x"}'
+# the block message names the fallback models
+echo '{"tool_name":"Agent","tool_input":{"subagent_type":"general-purpose","prompt":"x"}}' |
+  env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" >/dev/null 2>"$TMP/err"
+if grep -q 'model "opus"' "$TMP/err" && grep -q 'ai-kit:committer' "$TMP/err"; then
+  echo "ok   - block message names the opus fallback"
+  pass=$((pass + 1))
+else
+  echo "FAIL - block message names the opus fallback"
+  fail=$((fail + 1))
+fi
 rm -rf "$REPO/ai/kit"
 run_case "pass: a project without ai/kit" 0 '{"subagent_type":"general-purpose","prompt":"x"}'
 

@@ -12,7 +12,8 @@
   0.4-0.5) at 6-8x the cost per review; Opus 5.5 benchmarks show a small medium-vs-high gap. The per-batch `heavy`
   flag of `run-plan` and the "unsure → opus" rule are gone.
 - `hooks/agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent launched without a
-  `model`; typed agents (ai-kit:*, Explore, Plan, ...) and fork pass.
+  `model`; typed agents (ai-kit:*, Explore, Plan, ...) and fork pass. The block message and the README name the
+  fallback models (opus medium for the reviewer, business-analyst and decider; sonnet medium for the committer).
 - A general-purpose fallback for a kit agent (type not loaded) passes that agent's frontmatter model and effort: opus
   medium for the reviewer and decider, sonnet medium for the committer; the model guard message says so.
 - Open holds only owner decisions and blocked in-scope work. Work outside the request that needs no decision is a
