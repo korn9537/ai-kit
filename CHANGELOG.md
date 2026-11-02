@@ -15,6 +15,10 @@
   `model`; typed agents (ai-kit:*, Explore, Plan, ...) and fork pass.
 - A general-purpose fallback for a kit agent (type not loaded) passes that agent's frontmatter model and effort: opus
   medium for the reviewer and decider, sonnet medium for the committer; the model guard message says so.
+- Open holds only owner decisions and blocked in-scope work. Work outside the request that needs no decision is a
+  follow-up commit with its own review after the requested one; the agent cleans up what it created for the task;
+  a pre-existing backlog is not reported; offers and suggestions in a reply go to the decider. Reason: the owner had
+  to say "continue" for Open items that needed no decision.
 
 ## 2.21.1
 

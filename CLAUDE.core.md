@@ -27,8 +27,14 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   infra cost; any change to an amount a customer pays, a bug fix toward the evident intent included) · 2.
   irreversible or outward action (delete real data, production deploy, contact people) · 3. legal, privacy,
   consent · 4. changing a decision recorded as final (Confirmed, or the project's final status). Anything else
-  inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request →
-  Open. A question you would put to the owner (AskUserQuestion, hook-guarded, or one in a reply) goes to the
+  inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request
+  that needs no owner decision is done after the requested work, as its own commit(s) with its own review, and
+  reported under Done as follow-up, never in the requested commit; only an owner decision or work blocked by
+  something you cannot remove stays Open. What you created for the task (worktrees, scratch or test databases, temp
+  branches, seeded test tenants) you clean up before the report; that is not kind 2 (real data). A repo-wide backlog
+  the task did not cause (lint baseline, spec warnings) is not Open; mention it only if the task raised the count. A
+  question you would put to the owner (AskUserQuestion, hook-guarded, or one in a reply, offers and suggestions such
+  as "could X if ...", "want me to ...?" included) goes to the
   `ai-kit:decider` agent first, with its options, the user's words and what you know: DECIDED → act on it without
   asking; OWNER → ask, its recommendation first. The kit logs each verdict (`ai/usage/decisions/`,
   `/ai-kit:decisions`).
@@ -57,11 +63,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   same commit; cross-repo → a `proposal` issue on
   korn9537/ai-kit, never an edit of the installed plugin. Also for a repeated review finding, a user correction or a
   kit gap. Filing is pre-approved; when, test, format, fallback: `ai-kit/docs/kit-proposals.md`.
-- **Change only what was asked.** Name the files first and stay inside them; a wider change → Open, one sentence.
+- **Change only what was asked.** Name the files first and stay inside them; a wider change is a follow-up after it.
   "Remove X" means remove it, not move or rename it; keeping any of it → Open, never into the change. "Every `<x>`"
   means every instance of that kind, including ones built a different way: list which changed and which did not.
 - **Recommend, do not list.** Options come with a verdict, the reason and the one condition that would flip it; an
-  anomaly found while checking: in scope → fix it; outside the request → Open.
+  anomaly found while checking: in scope → fix it; outside the request → follow-up.
 - **Project knowledge lives in the repo, never in auto-memory** (one machine only; `init` sets
   `"autoMemoryEnabled": false`, writes are hook-guarded), in the same commit as the work. Where each kind goes:
   `ai-kit/docs/ai-layout.md` §Where a fact goes.
@@ -94,20 +100,20 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the
   summary reports Done, Checked and Git, plus Decided and Open when they hold anything):
-  1. **Done** — what changed, 1–3 lines. 2. **Files** — links. 3. **Checked** — each command run and its result, the
-     `ai-kit:change-reviewer` findings, and what was not checked. Any change outside `*.md` goes through it, except
-     what the Stop hook lets pass (`ai-kit/README.md`, Stop: comment-only or small). For a calculation, permission or
-     final-decision change, launch the reviewer yourself even when small. Findings on code you just changed are
-     fixed and re-checked once by the same reviewer (fix diff only), with a fresh background reviewer per commit
-     (none for a commit of only moved blocks, comments or docs). No
-     third pass: the report says, as plain text with no quotes or backticks, Review closed: re-checked once, no
-     third pass. Exception: a CONFIRMED finding about data or rule correctness is fixed and then reviewed by a fresh
-     reviewer. A user message starting with "skip review" or "ไม่ต้อง review" opts out. UI suggestions → Decided
-     (applied) or Open. A finding seen a second time that a script could catch → say so in the proposal issue, or add
-     the pre-commit check when it fails the cross-repo test (`ai-kit/docs/kit-proposals.md`).
+  1. **Done** — what changed, 1–3 lines, and follow-ups. 2. **Files** — links. 3. **Checked** — each command run
+     and its result, the `ai-kit:change-reviewer` findings, and what was not checked. Any change outside `*.md` goes
+     through it, except what the Stop hook lets pass (`ai-kit/README.md`, Stop: comment-only or small). For a
+     calculation, permission or final-decision change, launch the reviewer yourself even when small. Findings on code
+     you just changed are fixed and re-checked once by the same reviewer (fix diff only), with a fresh background
+     reviewer per commit (none for a commit of only moved blocks, comments or docs). No third pass: the report says,
+     as plain text with no quotes or backticks, Review closed: re-checked once, no third pass. Exception: a CONFIRMED
+     finding about data or rule correctness is fixed and then reviewed by a fresh reviewer. A user message starting
+     with "skip review" or "ไม่ต้อง review" opts out. UI suggestions → Decided (applied) or Open. A finding seen a
+     second time that a script could catch → say so in the proposal issue, or add the pre-commit check when it fails
+     the cross-repo test (`ai-kit/docs/kit-proposals.md`).
      4. **Git** — commit hash or uncommitted; pushed or not. 5. **User sees** — what looks or behaves
      differently. 6. **Decided** — each choice the agent made that the owner might want otherwise: the choice,
-     one-line reason, where recorded. 7. **Open** — only an owner decision (the four kinds above), work outside the
-     request, or in-scope work that is blocked (with what blocks it), each with its proposed fix (file:line, cost)
+     one-line reason, where recorded. 7. **Open** — only an owner decision (the four kinds above) or in-scope work
+     that is blocked (with what blocks it), each with its proposed fix (file:line, cost)
      where one exists. In-scope and fixable → fix it before the report; a limit kept on purpose → note it in the
      code or doc. 8. **Next session** — only when the handoff hook asks; it says what to include.
