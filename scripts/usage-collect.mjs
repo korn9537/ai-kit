@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Text the harness or an IDE adds to a user entry; <pasted_content> is the user's own and stays.
 const INJECTED = /^<((?:browser_instruction|ide_|system-reminder|task-notification|local-command|command-)[\w-]*)[^>]*>/;
@@ -11,6 +12,7 @@ const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
 
 export function roleOf(desc, type) {
   if (/committer/.test(type ?? "") || /^\s*commit:/i.test(desc ?? "")) return "commit";
+  if (/decider/.test(type ?? "") || /\bdecider\b|^\s*decide\b/i.test(desc ?? "")) return "decider";
   if (/change-reviewer/.test(type ?? "") || /review/i.test(desc ?? "")) return "reviewer";
   if (/business-analyst/.test(type ?? "")) return "ba";
   return "other";
@@ -176,8 +178,44 @@ function readNew(path, cache, isMain) {
   return f;
 }
 
-function agentOf(id, role, desc, model, f) {
-  const a = { id, role, desc, model, calls: 0, input: 0, read: 0, write_5m: 0, write_1h: 0, output: 0, peak: f.peak,
+// Effort of a subagent: the `effort` its launching Agent/Task call carried, else the effort: line of an ai-kit agent's frontmatter.
+const AGENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "agents");
+
+export function frontmatterEffort(type, dir = AGENTS_DIR) {
+  const m = /^ai-kit:([\w-]+)$/.exec(type ?? "");
+  if (!m) return "";
+  try {
+    const head = /^---\n([\s\S]*?)\n---/.exec(readFileSync(join(dir, `${m[1]}.md`), "utf8"))?.[1] ?? "";
+    return /^effort:\s*(\S+)\s*$/m.exec(head)?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+// Efforts of the Agent/Task tool_use blocks in the parent transcript, by tool_use id (only for ids in `want`).
+function launchEfforts(transcript, want) {
+  const out = {};
+  if (!want.size) return out;
+  let text = "";
+  try {
+    text = readFileSync(transcript, "utf8");
+  } catch {}
+  for (const line of text.split("\n")) {
+    if (!line.includes('"tool_use"')) continue;
+    let e;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    for (const b of Array.isArray(e?.message?.content) ? e.message.content : [])
+      if (b?.type === "tool_use" && want.has(b.id) && typeof b.input?.effort === "string") out[b.id] = b.input.effort;
+  }
+  return out;
+}
+
+function agentOf(id, role, desc, model, f, effort = "") {
+  const a = { id, role, desc, model, effort, calls: 0, input: 0, read: 0, write_5m: 0, write_1h: 0, output: 0, peak: f.peak,
     tools: { ...f.tools }, largest_result: f.largest };
   for (const [i, r, w5, w1, o] of Object.values(f.ids)) {
     a.calls++;
@@ -210,14 +248,20 @@ export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead:
     runs = readdirSync(join(subDir, "workflows")).sort();
   } catch {}
   const files = [...agentFiles(subDir), ...runs.flatMap((r) => agentFiles(join(subDir, "workflows", r)))];
-  for (const [dir, name] of files) {
-    const id = name.slice("agent-".length, -".jsonl".length);
-    let meta = {};
+  const metas = files.map(([dir, name]) => {
     try {
-      meta = JSON.parse(readFileSync(join(dir, `agent-${id}.meta.json`), "utf8"));
-    } catch {}
+      return JSON.parse(readFileSync(join(dir, `agent-${name.slice("agent-".length, -".jsonl".length)}.meta.json`), "utf8"));
+    } catch {
+      return {};
+    }
+  });
+  const launched = launchEfforts(transcript, new Set(metas.map((m) => m.toolUseId).filter(Boolean)));
+  for (const [i, [dir, name]] of files.entries()) {
+    const id = name.slice("agent-".length, -".jsonl".length);
+    const meta = metas[i];
+    const effort = launched[meta.toolUseId] ?? frontmatterEffort(meta.agentType);
     const f = readNew(join(dir, name), cache, false);
-    agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f);
+    agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f, effort);
     for (const c of f.commits) if (!commits.some((x) => x.hash === c.hash)) commits.push(c);
   }
   commits.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0));

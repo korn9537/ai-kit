@@ -135,7 +135,7 @@ export function digest(recs, prices, meta = {}) {
   // Distinct agents: calls and tools add up across records, peak and largest result are maxima.
   const agents = new Map();
   for (const x of rows) {
-    const g = agents.get(x.key) ?? { role: x.role, desc: dec(x.a.desc), model: x.a.model, session: x.r.session, user: x.r.user, calls: 0, peak: 0, largest: 0, cost: 0, tools: new Map(), findings: null, kit: x.r.kit };
+    const g = agents.get(x.key) ?? { role: x.role, desc: dec(x.a.desc), model: x.a.model, effort: x.a.effort ?? "", session: x.r.session, user: x.r.user, calls: 0, peak: 0, largest: 0, cost: 0, tools: new Map(), findings: null, kit: x.r.kit };
     g.calls += x.a.calls ?? 0;
     g.peak = Math.max(g.peak, x.a.peak ?? 0);
     g.largest = Math.max(g.largest, x.a.largest_result ?? 0);
@@ -269,12 +269,13 @@ export function digest(recs, prices, meta = {}) {
   const rev = new Map();
   for (const g of agents.values()) {
     if (g.role !== "reviewer" || !g.findings) continue;
-    const e = rev.get(modelShort(g.model)) ?? { n: 0, confirmed: 0, plausible: 0, cost: 0 };
+    const key = g.effort ? `${modelShort(g.model)} ${one(g.effort, 12)}` : modelShort(g.model);
+    const e = rev.get(key) ?? { n: 0, confirmed: 0, plausible: 0, cost: 0 };
     e.n++;
     e.confirmed += g.findings.confirmed ?? 0;
     e.plausible += g.findings.plausible ?? 0;
     e.cost += g.cost;
-    rev.set(modelShort(g.model), e);
+    rev.set(key, e);
   }
   if (!rev.size) out.push("none");
   for (const [m, e] of [...rev].sort((a, b) => b[1].n - a[1].n).slice(0, CAP.models)) {

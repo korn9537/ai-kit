@@ -47,7 +47,7 @@ const recs = [
       ag({ id: "c1", role: "commit", desc: "commit: fix login", calls: 250, read: 2e7, peak: 406000, largest_result: 90000,
         tools: { "Bash:sed": 55, "Bash:grep": 70 } }),
       ag({ id: "c2", role: "commit", desc: "commit: tests", model: SONNET, calls: 5, read: 1e6, peak: 30000 }),
-      ag({ id: "r1", role: "reviewer", desc: "review", calls: 20, read: 4e6, peak: 60000, findings: { confirmed: 2, plausible: 1 } }),
+      ag({ id: "r1", role: "reviewer", desc: "review", effort: "medium", calls: 20, read: 4e6, peak: 60000, findings: { confirmed: 2, plausible: 1 } }),
     ],
   }),
   rec({
@@ -75,7 +75,8 @@ match("by kit compares versions", d, /2\.13\.0 .*\n2\.13\.1 /);
 match("by kit: reviewer findings per review", d, /^2\.13\.0 .* 1 reviews 2 confirmed\/review 1 plausible\/review/m);
 match("by kit: second kit's findings", d, /^2\.13\.1 .* 1 reviews 1 confirmed\/review 0 plausible\/review/m);
 match("drivers name tool mix", d, /commit: .*Bash:sed \d+/);
-match("reviews per model", d, /opus: \d+ reviews, [\d.]+ confirmed\/review/);
+match("reviews split by model and effort", d, /^opus medium: \d+ reviews, [\d.]+ confirmed\/review/m);
+match("reviews: a record without effort shows the model alone", d, /^sonnet: \d+ reviews/m);
 match("costliest rounds: session, round, prompt length, user, role mix, no excerpt", d, /^- \$[\d.]+ s1aaaaaa r1 17 chars alice: commit \d+% .*coordinator/m);
 eq("no prompt text or excerpt separator in the rounds section", /\| |\(no prompt\)/.test(d.split("## costliest rounds")[1].split("## outliers")[0]), false);
 match("outliers over 150k peak or 150 calls", d, /peak 406k|250 calls/);

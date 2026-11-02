@@ -2,6 +2,8 @@
 
 ## 2.22.0
 
+- Usage records each agent's `effort` (the launching call's, else the agent frontmatter's) and a `decider` role; the
+  digest `## reviews` section splits by model and effort (`opus medium: N reviews, ...`).
 - Agents run on their frontmatter, no per-call override: `business-analyst`, `change-reviewer` and `decider` on opus
   at medium effort, `committer` on sonnet at medium effort. The committer works from a complete brief (BA and decider
   made the judgment calls) and its reviewer checks the commit, so it stays on sonnet; the three that judge run on

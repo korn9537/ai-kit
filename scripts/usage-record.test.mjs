@@ -28,7 +28,7 @@ function match(desc, got, re) {
 const agent = (o) => ({ id: "main", role: "coordinator", desc: "", model: "claude-x-1", calls: 0, input: 0, read: 0,
   write_5m: 0, write_1h: 0, output: 0, peak: 0, tools: {}, largest_result: 0, ...o });
 const main1 = agent({ calls: 3, input: 3, read: 900, write_1h: 50, output: 10, peak: 953, tools: { "Bash:git": 1, Read: 2 }, largest_result: 5000 });
-const sub = agent({ id: "x1", role: "commit", desc: "commit: foo", model: "claude-y-1", calls: 1, input: 1, write_5m: 3, write_1h: 4, output: 5, peak: 8 });
+const sub = agent({ id: "x1", effort: "medium", role: "commit", desc: "commit: foo", model: "claude-y-1", calls: 1, input: 1, write_5m: 3, write_1h: 4, output: 5, peak: 8 });
 const session = {
   firstTs: "2026-01-01T00:00:00Z", baseContext: 953, agents: { main: main1, x1: sub },
   prompts: [{ round: 1, ts: "2026-01-01T00:00:00Z", chars: 28 }], commits: [],
@@ -46,6 +46,7 @@ const prices = { "claude-x": 2 };
 const r1 = buildRecord(session, [], ctx);
 const r2 = buildRecord(session2, [r1], ctx2);
 const readOf = (r) => r.agents.reduce((n, a) => n + a.read, 0);
+eq("effort is kept in the stored record, absent when empty", [r1.agents.find((a) => a.id === "x1").effort, "effort" in r1.agents.find((a) => a.id === "main")], ["medium", false]);
 const resumed = buildRecord(session2, [r1], ctx2);
 const all = [r1, resumed, buildRecord(session2, [r1, resumed], ctx2)].filter(Boolean);
 

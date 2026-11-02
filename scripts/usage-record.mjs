@@ -18,7 +18,7 @@ export const dec = (s) => (typeof s === "string" ? Buffer.from(s, "base64").toSt
 const LIMIT = 200;
 const DESC_MAX = 200;
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
-const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", other: "other" };
+const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", decider: "decider", other: "other" };
 
 // Delta of every agent against the sum of its fields in prior records; peak and largest_result stay cumulative maxima.
 function deltaAgents(session, prior) {
@@ -34,6 +34,7 @@ function deltaAgents(session, prior) {
       }
     }
     const d = { id: a.id, role: a.role, desc: enc([...String(a.desc ?? "")].slice(0, DESC_MAX).join("")), model: a.model };
+    if (a.effort) d.effort = String(a.effort).slice(0, 12);
     for (const k of COUNTED) d[k] = Math.max(0, (a[k] ?? 0) - was[k]);
     d.peak = a.peak ?? 0;
     d.tools = {};

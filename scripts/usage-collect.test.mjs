@@ -3,7 +3,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectSession, loadCache, mergeCommits, roleOf, saveCache, toolKey, transcriptsDir } from "./usage-collect.mjs";
+import { collectSession, loadCache, mergeCommits, frontmatterEffort, roleOf, saveCache, toolKey, transcriptsDir } from "./usage-collect.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -199,6 +199,25 @@ eq("commits: git log adds quiet commits, a transcript hash of a logged commit ap
   mergeCommits([{ ts: "2025-12-31T17:01:30Z", hash: "a1b2c3d" }, { ts: "2025-12-31T17:03:00Z", hash: "0000abc" }], log).map((c) => c.hash),
   ["ffff0000", "a1b2c3d4", "0000abc"]);
 eq("commits: no git log output keeps the transcript ones", mergeCommits([{ ts: "t", hash: "abc1234" }], "").map((c) => c.hash), ["abc1234"]);
+
+eq("roleOf: decider by type, by description, before reviewer",
+  [roleOf("x", "ai-kit:decider"), roleOf("Decide owner questions", ""), roleOf("decider: review options", ""), roleOf("Undecided review", "")],
+  ["decider", "decider", "decider", "reviewer"]);
+eq("frontmatterEffort: ai-kit agent reads its effort line", [frontmatterEffort("ai-kit:decider"), frontmatterEffort("general-purpose"), frontmatterEffort("ai-kit:nope")], ["medium", "", ""]);
+{
+  const d2 = mkdtempSync(join(tmpdir(), "usage-effort-"));
+  const t = join(d2, "p", "s.jsonl");
+  const sd = join(d2, "p", "s", "subagents");
+  mkdirSync(sd, { recursive: true });
+  writeFileSync(t, lines(asst("m1", "2026-01-01T00:00:00Z", tool("tu1", "Agent", { effort: "high", prompt: "p" }), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(sd, "agent-e1.jsonl"), lines(asst("e1a", "2026-01-01T00:00:01Z", text("hi"), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(sd, "agent-e1.meta.json"), JSON.stringify({ description: "Decide it", agentType: "ai-kit:decider", toolUseId: "tu1" }));
+  writeFileSync(join(sd, "agent-e2.jsonl"), lines(asst("e2a", "2026-01-01T00:00:02Z", text("hi"), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(sd, "agent-e2.meta.json"), JSON.stringify({ description: "Decide it", agentType: "ai-kit:decider", toolUseId: "none" }));
+  const r = collectSession(t);
+  eq("effort from the parent tool_use, frontmatter fallback, main empty", [r.agents.e1.effort, r.agents.e2.effort, r.agents.main.effort, r.agents.e1.role], ["high", "medium", "", "decider"]);
+  rmSync(d2, { recursive: true, force: true });
+}
 
 rmSync(dir, { recursive: true, force: true });
 console.log(`${passed} passed, ${failed} failed`);
