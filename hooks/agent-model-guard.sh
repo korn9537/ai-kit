@@ -14,6 +14,7 @@ jq -e '.tool_input | (.subagent_type // "") as $t | ((.model // "") | tostring) 
 
 cat >&2 <<'EOT'
 Blocked: a general-purpose subagent without a model inherits the main session's model (opus). Launch it again with
-model "sonnet" (CLAUDE.core.md, Agent model).
+model "sonnet" (CLAUDE.core.md, Agent model); a fallback for a kit agent passes that agent's frontmatter
+model and effort.
 EOT
 exit 2

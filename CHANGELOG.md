@@ -13,6 +13,8 @@
   flag of `run-plan` and the "unsure → opus" rule are gone.
 - `hooks/agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent launched without a
   `model`; typed agents (ai-kit:*, Explore, Plan, ...) and fork pass.
+- A general-purpose fallback for a kit agent (type not loaded) passes that agent's frontmatter model and effort: opus
+  medium for the reviewer and decider, sonnet medium for the committer; the model guard message says so.
 
 ## 2.21.1
 

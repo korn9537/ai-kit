@@ -40,7 +40,8 @@ kept small. The user naming a runner wins.
   implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for
   `general-purpose`, and its own prompt carries the commit-subagent rules, read and verify-output discipline and
   report shape, so the brief holds only the batch. When that type is not loaded (plugin enabled mid-session), launch
-  `general-purpose` with the same description, told first to read and follow `<plugin root>/agents/committer.md`.
+  `general-purpose` (`model: "sonnet"`, `effort: "medium"`) with the same description, told first to read and
+  follow `<plugin root>/agents/committer.md`.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
