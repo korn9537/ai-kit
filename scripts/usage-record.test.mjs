@@ -102,8 +102,12 @@ eq("no session id throws", threw, true);
 eq("session id taken from a prior record", buildRecord(sessionMore, [rA], { ...ctx, session: undefined }).session, "s1");
 eq("a commit a prior record spelled shorter is not counted again",
   buildRecord({ ...session, commits: [{ ts: "t", hash: "abc12345" }, { ts: "t", hash: "def5678" }] }, [{ ...r1, agents: [], commits: ["abc1234"] }], ctx).commits, ["def5678"]);
-eq("uniqueCommits: 20000 distinct hashes stay distinct, quickly", (() => { const t = Date.now();
-  const n = uniqueCommits(Array.from({ length: 20000 }, (_, i) => i.toString(16).padStart(10, "0"))).length; return [n, Date.now() - t < 2000]; })(), [20000, true]);
+// growth, not wall time: 4x the hashes takes about 5x as long today, 16x if it turns quadratic; a fixed budget failed under load
+const hashes = (k) => Array.from({ length: k }, (_, i) => i.toString(16).padStart(10, "0"));
+const ms = (k) => { const h = hashes(k), runs = [0, 1, 2].map(() => { const t = performance.now(); uniqueCommits(h); return performance.now() - t; });
+  return runs.sort((a, b) => a - b)[1]; };
+eq("uniqueCommits: 10000 distinct hashes stay distinct", uniqueCommits(hashes(10000)).length, 10000);
+eq("uniqueCommits: time grows about linearly", ms(10000) / Math.max(ms(2500), 1) < 10, true);
 eq("uniqueCommits: one commit per prefix family, the longest spelling kept", uniqueCommits(["abc1234", "abc12345", "def5678"]), ["abc12345", "def5678"]);
 eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
 
