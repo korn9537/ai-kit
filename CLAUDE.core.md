@@ -43,15 +43,9 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
   a BA request by the user is always run; unsure → summarize.
-- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on sonnet at medium
-  effort (agent frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"`:
-  - to the reviewer, BA and decider when the change or question touches a DB schema or migration, a calculation, a
-    permission or a decision recorded as final, or a changed path matches `review.always`; unsure → opus.
-  - to a committer only when its batch itself writes a DB schema change or migration, changes how a calculation
-    computes its result (formula, rounding, a total), adds, removes or changes a role, guard, policy or an owner or
-    tenant row filter, or implements a decision recorded as final. Code that only uses these stays on sonnet; unsure
-    → sonnet, its reviewer is the check.
-  - No other model or effort override, except `model: "sonnet"` on a general-purpose heavy-read subagent.
+- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
+  effort, `ai-kit:committer` on sonnet at medium effort, all from their agent frontmatter; the Agent call passes no
+  model or effort for them. A general-purpose subagent gets `model: "sonnet"`.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for

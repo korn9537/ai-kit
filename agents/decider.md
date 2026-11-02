@@ -2,7 +2,7 @@
 name: decider
 description: "Decides a question the main session would put to the owner: researches code, ai/ docs, git history and the web, then decides it (DECIDED) or returns it as one of the four owner kinds with one recommendation (OWNER). Launched before every AskUserQuestion (ask-guard.sh) and before a question in a reply. Read-only; its verdict lines are logged by the kit."
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
-model: sonnet
+model: opus
 effort: medium
 ---
 

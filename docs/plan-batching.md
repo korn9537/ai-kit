@@ -43,10 +43,7 @@ kept small. The user naming a runner wins.
   `general-purpose` with the same description, told first to read and follow `<plugin root>/agents/committer.md`.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
-- The Agent call passes no model or effort (the agent runs on sonnet); `model: "opus"` and `effort: "high"` only
-  when the batch itself writes a schema change or migration, changes a calculation, an access rule or row filter,
-  or implements a final decision (the committer rule, CLAUDE.core.md Agent model). Its reviewer follows the wider
-  reviewer rule there, so a batch can run a sonnet committer and an opus reviewer.
+- The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
 - The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands and
   anything the coordinator already found (paths, line numbers), so the subagent does not search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for

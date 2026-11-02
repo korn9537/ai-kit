@@ -43,8 +43,7 @@ MSG
   none)
     cat >&2 <<'MSG'
 Blocked: the agent decides; the owner holds only the four owner kinds (CLAUDE.core.md Working conventions). Launch
-the ai-kit:decider agent first (subagent_type "ai-kit:decider"; model opus, effort high when the question touches a
-DB schema, a calculation, a permission or a final decision; unsure → opus) with each question, its options, the
+the ai-kit:decider agent first (subagent_type "ai-kit:decider") with each question, its options, the
 user's request in their words and what you already know. Agent type not loaded (plugin enabled mid-session): general-purpose,
 description containing "decider", told to follow the plugin's agents/decider.md. DECIDED: act on its Choice without
 asking and list it under Decided. OWNER: ask again with its recommended option first, labelled "(Recommended)", and

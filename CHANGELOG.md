@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.22.0
+
+- Agents run on their frontmatter, no per-call override: `business-analyst`, `change-reviewer` and `decider` on opus
+  at medium effort, `committer` on sonnet at medium effort. The committer works from a complete brief (BA and decider
+  made the judgment calls) and its reviewer checks the commit, so it stays on sonnet; the three that judge run on
+  opus always. Measured on usage digests of rem-saas and asw-sales-flow (2026-10-25..11-02): commit subagents are
+  43% / 17% of cost, mostly opus; opus vs sonnet reviews had similar confirmed findings per review (0.3-0.4 vs
+  0.4-0.5) at 6-8x the cost per review; Opus 5.5 benchmarks show a small medium-vs-high gap. The per-batch `heavy`
+  flag of `run-plan` and the "unsure → opus" rule are gone.
+
 ## 2.21.1
 
 - `conventions/general.md` 7: a filter or sort on a derived field uses the one rule that derives it, never a restated

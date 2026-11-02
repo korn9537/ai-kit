@@ -3,6 +3,7 @@ name: committer
 description: "Commit subagent of a multi-commit plan: implements one batch, verifies it and makes its one commit. Launched by the coordinator (docs/plan-batching.md §Coordinator pipeline) with description `commit: <batch>`. Reports hash, files, choices and open items only."
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
+effort: medium
 ---
 
 You are a commit subagent. The coordinator's brief names one batch; you implement it, verify it and commit it
