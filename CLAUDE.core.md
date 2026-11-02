@@ -76,8 +76,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   or a search likely to need more than about five reads or greps. The brief names what to check or find and what
   comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report, never the
   pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next edit
-  needs stays. A general-purpose subagent gets `model: "sonnet"`; a typed agent (Explore, web-fetch) keeps its own
-  model. It returns evidence; the main session judges.
+  needs stays. A general-purpose subagent gets `model: "sonnet"` (a kit-agent fallback follows the Agent model
+  bullet); a typed agent (Explore, web-fetch) keeps its own model. It returns evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
   done, or the files are named for a change that needs neither, the change goes out as `ai-kit:committer` batches
   per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the paths, lines and decisions
