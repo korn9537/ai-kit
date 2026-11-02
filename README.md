@@ -18,7 +18,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh` and `memory-guard.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
@@ -69,6 +69,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `review-skip-guard.sh` (PreToolUse on Agent and Task) blocks a commit review (a brief with `git show`) whose named
   commits change no code line (blocks moved to another file, comments, docs, `ai/usage`); a mode change, an empty new
   file, a merge, a root commit or a `review.always` path is reviewed as usual.
+- `agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent (type `general-purpose`,
+  `claude` or none) launched without a `model`, which would inherit the main session's opus; pass `sonnet`.
 - `handoff-nudge.sh` (UserPromptSubmit, and PostToolUse on Agent, Task and SendMessage for a coordinator) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
   coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the

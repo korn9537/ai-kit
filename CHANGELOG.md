@@ -9,6 +9,8 @@
   43% / 17% of cost, mostly opus; opus vs sonnet reviews had similar confirmed findings per review (0.3-0.4 vs
   0.4-0.5) at 6-8x the cost per review; Opus 5.5 benchmarks show a small medium-vs-high gap. The per-batch `heavy`
   flag of `run-plan` and the "unsure → opus" rule are gone.
+- `hooks/agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent launched without a
+  `model`; typed agents (ai-kit:*, Explore, Plan, ...) and fork pass.
 
 ## 2.21.1
 
