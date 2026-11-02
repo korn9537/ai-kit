@@ -115,6 +115,14 @@ run_case "block: a codemod over other files after a small edit" block - "$(edit 
   "$(line Bash '{"command": "npx prettier --write src"}')"
 run_case "block: Path().open(\"w\") counts as a repo write" block - \
   "$(line Bash "{\"command\": \"cd $REPO && python3 -c 'Path(\\\"src/a.ts\\\").open(\\\"w\\\")'\"}")"
+run_case "pass: => and | in a quoted grep pattern after cd into the repo" pass - \
+  "$(line Bash "$(jq -cn --arg c "cd $REPO/src; grep -n \"Name =>\\|x\" a.ts | head" '{command: $c}')")"
+run_case "pass: a quoted /tmp target after cd into the repo" pass - \
+  "$(line Bash "$(jq -cn --arg c "cd $REPO; seq 40 > \"/tmp/x\"" '{command: $c}')")"
+run_case "block: a quoted relative target outside code_dirs after cd into the repo" block - \
+  "$(line Bash "$(jq -cn --arg c "cd $REPO; seq 40 > \"lib/a.ts\"" '{command: $c}')")"
+run_case "block: a redirect between mixed quotes after cd into the repo" block - \
+  "$(line Bash "$(jq -cn --arg c "cd $REPO; echo \"it's\" > lib/a.ts; echo \"y\"" '{command: $c}')")"
 reset
 
 # the session's cwd is the repo root: a relative write target names neither the root nor a code_dirs folder

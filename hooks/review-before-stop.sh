@@ -58,7 +58,9 @@ read -r -d '' events_jq <<'JQ' || true
       or ($in and (test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]*(/tmp|/private/tmp|\\$\\{?TMP)") | not)
           and (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test("(^|[;&|(\n] *)(git +)?(mv|cp|rm)\\b[^;&|\n]* (?![-/~$])[\\w.]")))
       or test("(>>?|tee) *[\"']?(\\./|\\$\\{?\\w+\\}?/)?(" + $r + "|(" + $dirs + ")/)")
-      or (test($cd) and test("(^|[^0-9&>])(>>?|tee) *(?!/dev/|/tmp|/private/tmp|&)[^ ]"))
+      # > and | inside quotes (a grep or jq pattern) are blanked, so a quoted target still shows its path
+      or (test($cd) and (gsub("(?<m>\"[^\"]*\"|'[^']*')"; .m | gsub("[<>|]"; "_"))
+          | test("(^|[^0-9&>])(>>?|tee) *(?![\"']?(/dev/|/tmp|/private/tmp|&))[^ ]")))
       or ($in and (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test("(^|[\\s;&|(])>>? *(?![/~$&(])[\\w.]|(^|[;&|(\n] *)tee +(-a +)?(?![-/~$])[\\w.]")));
     def only_md: [scan("[A-Za-z0-9_./-]+\\.[A-Za-z]{1,6}\\b")] | length > 0 and all(test("\\.md$"));
   fromjson? // empty
