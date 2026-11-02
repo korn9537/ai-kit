@@ -177,9 +177,9 @@ process.env.CLAUDE_CONFIG_DIR = join(dir, "cfg");
 eq("transcriptsDir slug", transcriptsDir("/Users/a.b/My Repo"), join(dir, "cfg", "projects", "-Users-a-b-My-Repo"));
 eq("unreadable cache file loads empty", Object.keys(loadCache(main).files), []);
 writeFileSync(join(dir, "old-cache.json"), JSON.stringify({ v: 1, files: { x: { offset: 99, prompts: [{ text: "plain prompt" }] } } }));
-eq("a version 1 cache (it kept prompt text) is dropped and rebuilt", [loadCache(join(dir, "old-cache.json")).v, Object.keys(loadCache(join(dir, "old-cache.json")).files)], [2, []]);
+eq("a version 1 cache (it kept prompt text) is dropped and rebuilt", [loadCache(join(dir, "old-cache.json")).v, Object.keys(loadCache(join(dir, "old-cache.json")).files)], [3, []]);
 saveCache(join(dir, "new-cache.json"), { files: {} });
-eq("saved cache is version 2", JSON.parse(readFileSync(join(dir, "new-cache.json"), "utf8")).v, 2);
+eq("saved cache is version 3", JSON.parse(readFileSync(join(dir, "new-cache.json"), "utf8")).v, 3);
 
 // tool keys never carry a path or a value: assignments, env and function definitions are skipped
 const bk = (command) => toolKey({ name: "Bash", input: { command } });
@@ -216,6 +216,14 @@ eq("frontmatterEffort: ai-kit agent reads its effort line", [frontmatterEffort("
   writeFileSync(join(sd, "agent-e2.meta.json"), JSON.stringify({ description: "Decide it", agentType: "ai-kit:decider", toolUseId: "none" }));
   const r = collectSession(t);
   eq("effort from the parent tool_use, frontmatter fallback, main empty", [r.agents.e1.effort, r.agents.e2.effort, r.agents.main.effort, r.agents.e1.role], ["high", "medium", "", "decider"]);
+  const cache = { v: 3, files: {}, bytesRead: 0 };
+  collectSession(t, cache);
+  const first = cache.bytesRead;
+  appendFileSync(t, lines(asst("m2", "2026-01-01T00:00:03Z", tool("tu3", "Task", { effort: "low", prompt: "p" }), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(sd, "agent-e3.jsonl"), lines(asst("e3a", "2026-01-01T00:00:04Z", text("hi"), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(sd, "agent-e3.meta.json"), JSON.stringify({ description: "Decide it", agentType: "ai-kit:decider", toolUseId: "tu3" }));
+  const r2 = collectSession(t, cache);
+  eq("effort of a launch appended later, parent read incrementally", [r2.agents.e3.effort, r2.agents.e1.effort, cache.bytesRead < first], ["low", "high", true]);
   rmSync(d2, { recursive: true, force: true });
 }
 

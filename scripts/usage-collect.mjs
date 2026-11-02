@@ -33,22 +33,22 @@ export function transcriptsDir(repoRoot) {
 export function loadCache(path) {
   try {
     const c = JSON.parse(readFileSync(path, "utf8"));
-    if (c?.v === 2 && c.files) return { v: 2, files: c.files, bytesRead: 0 };
+    if (c?.v === 3 && c.files) return { v: 3, files: c.files, bytesRead: 0 };
   } catch {}
-  return { v: 2, files: {}, bytesRead: 0 };
+  return { v: 3, files: {}, bytesRead: 0 };
 }
 
 export function saveCache(path, c) {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify({ v: 2, files: c.files }));
+  writeFileSync(tmp, JSON.stringify({ v: 3, files: c.files }));
   renameSync(tmp, path);
 }
 
 // ids maps message.id to its last counted usage, so a repeated id replaces rather than adds.
 const freshFile = () => ({
   offset: 0, firstTs: null, baseContext: null, model: "", ids: {}, tu: {}, tools: {}, largest: 0, peak: 0,
-  prompts: [], commits: [], last: null,
+  prompts: [], commits: [], last: null, efforts: {},
 });
 
 function textOf(content) {
@@ -118,6 +118,7 @@ function absorb(f, e, isMain) {
       f.tu[b.id] = b.name;
       const k = toolKey(b);
       f.tools[k] = (f.tools[k] ?? 0) + 1;
+      if (isMain && (b.name === "Agent" || b.name === "Task") && typeof b.input?.effort === "string") (f.efforts ??= {})[b.id] = b.input.effort;
       const found = b.name === "StructuredOutput" && b.input?.findings;
       if (Array.isArray(found)) {
         verdicts(found.filter((x) => x?.verdict === "CONFIRMED").length, found.filter((x) => x?.verdict === "PLAUSIBLE").length);
@@ -192,28 +193,6 @@ export function frontmatterEffort(type, dir = AGENTS_DIR) {
   }
 }
 
-// Efforts of the Agent/Task tool_use blocks in the parent transcript, by tool_use id (only for ids in `want`).
-function launchEfforts(transcript, want) {
-  const out = {};
-  if (!want.size) return out;
-  let text = "";
-  try {
-    text = readFileSync(transcript, "utf8");
-  } catch {}
-  for (const line of text.split("\n")) {
-    if (!line.includes('"tool_use"')) continue;
-    let e;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    for (const b of Array.isArray(e?.message?.content) ? e.message.content : [])
-      if (b?.type === "tool_use" && want.has(b.id) && typeof b.input?.effort === "string") out[b.id] = b.input.effort;
-  }
-  return out;
-}
-
 function agentOf(id, role, desc, model, f, effort = "") {
   const a = { id, role, desc, model, effort, calls: 0, input: 0, read: 0, write_5m: 0, write_1h: 0, output: 0, peak: f.peak,
     tools: { ...f.tools }, largest_result: f.largest };
@@ -229,7 +208,7 @@ function agentOf(id, role, desc, model, f, effort = "") {
   return a;
 }
 
-export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead: 0 }) {
+export function collectSession(transcript, cache = { v: 3, files: {}, bytesRead: 0 }) {
   cache.bytesRead = 0;
   const mf = readNew(transcript, cache, true);
   const agents = { main: agentOf("main", "coordinator", "", mf.model, mf) };
@@ -255,11 +234,10 @@ export function collectSession(transcript, cache = { v: 2, files: {}, bytesRead:
       return {};
     }
   });
-  const launched = launchEfforts(transcript, new Set(metas.map((m) => m.toolUseId).filter(Boolean)));
   for (const [i, [dir, name]] of files.entries()) {
     const id = name.slice("agent-".length, -".jsonl".length);
     const meta = metas[i];
-    const effort = launched[meta.toolUseId] ?? frontmatterEffort(meta.agentType);
+    const effort = (mf.efforts ??= {})[meta.toolUseId] ?? frontmatterEffort(meta.agentType);
     const f = readNew(join(dir, name), cache, false);
     agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f, effort);
     for (const c of f.commits) if (!commits.some((x) => x.hash === c.hash)) commits.push(c);
