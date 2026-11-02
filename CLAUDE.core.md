@@ -44,11 +44,15 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   change (layout, copy, style: no change in what a user can do or what is decided for them, no rule or data) is
   summarized by the main session without it: 1. Problem · 2.
   Recommendation (one, with rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data,
-  other modules) · 5. Standard it sets or follows. Touches an owner decision → show the summary and wait for a go;
-  otherwise show it and go on with the recommendation; BA assumptions go to Decided. A choice whose reasons must be
-  kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names) with the default status, same
-  commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
-  a BA request by the user is always run; unsure → summarize.
+  other modules) · 5. Standard it sets or follows. Touches an owner decision → show the summary and wait for a go.
+  The design is still under discussion (the request asks how something would work or be built, not to change it;
+  the user answered the last summary with a question, objection or correction to the design; or the design changed
+  since they saw it) → show the summary or design, end the turn, and edit no code and launch no committer until
+  the user says to build; that go is not put to the decider, and a debugging or UI tweak iterated with the user
+  watching is not held by it. Otherwise show it and go on with the recommendation; BA assumptions go to Decided. A
+  choice whose reasons must be kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names)
+  with the default status, same commit. Small jobs (typo, copy, one style value on one screen, move-only refactor,
+  docs) skip both, except that a BA request by the user is always run; unsure → summarize.
 - **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
   effort, `ai-kit:committer` on sonnet at medium effort, all from their agent frontmatter; the Agent call passes no
   model or effort for them. A general-purpose fallback for a kit agent (type not loaded) passes that agent's
@@ -85,12 +89,12 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   needs stays. A general-purpose subagent gets `model: "sonnet"` (a kit-agent fallback follows the Agent model
   bullet); a typed agent (Explore, web-fetch) keeps its own model. It returns evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
-  done, or the files are named for a change that needs neither, the change goes out as `ai-kit:committer` batches
-  per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the paths, lines and decisions
-  already found. The main session edits code itself only for: at most `review.skip_lines` code lines with no new
-  file and no `review.always` path; a small job (list under the summary rule); debugging or a UI tweak iterated
-  with the user watching each step (settled and over the limit → one committer); the large-refactor exception of
-  §Coordinator pipeline. Review fixes follow §Coordinator pipeline.
+  done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
+  out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying
+  the paths, lines and decisions already found. The main session edits code itself only for: at most
+  `review.skip_lines` code lines with no new file and no `review.always` path; a small job (list under the summary
+  rule); debugging or a UI tweak iterated with the user watching each step (settled and over the limit → one
+  committer); the large-refactor exception of §Coordinator pipeline. Review fixes follow §Coordinator pipeline.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `ai-kit/docs/plan-batching.md`.
 - **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.22.1
+
+- Core: while the design is still under discussion (the request asks how something would work, the user answered
+  the last summary with a question, objection or correction, or the design changed since they saw it), the summary
+  ends the turn and no code is edited or sent to a committer until the user says to build (#37).
+- `review-before-stop.sh`: after a `cd` into the repo, a `>` or `|` inside quotes (a grep pattern `"x =>"`, a commit
+  message `<a@b>`) no longer counts as a repo write, and a quoted `/tmp` target passes; the false write had turned
+  on the whole-tree diff, so a stopped committer's leftover edits blocked every stop (seen in #38).
+
 ## 2.22.0
 
 - Usage records each agent's `effort` (the launching call's, else the agent frontmatter's) and a `decider` role; the
