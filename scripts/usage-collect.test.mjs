@@ -68,6 +68,27 @@ writeFileSync(
   ),
 );
 writeFileSync(join(sub, "agent-x2.meta.json"), JSON.stringify({ description: "Review the change", agentType: "ai-kit:change-reviewer" }));
+const finding = (verdict) => ({ where: "a:1", what: "w", rule: "r", fix: "f", verdict, dataRule: "" });
+writeFileSync(
+  join(sub, "agent-x4.jsonl"),
+  lines(
+    asst("d1", "2026-01-01T00:00:04Z", text("PLAUSIBLE draft"), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+    asst("d2", "2026-01-01T00:00:05Z", tool("so1", "StructuredOutput", {
+      findings: [finding("CONFIRMED"), finding("CONFIRMED"), finding("PLAUSIBLE")], reviewed: [], checked: [],
+    }), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+  ),
+);
+writeFileSync(
+  join(sub, "agent-x5.jsonl"),
+  lines(
+    asst("e1", "2026-01-01T00:00:04Z", text("CONFIRMED in text"), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+    asst("e1", "2026-01-01T00:00:04Z", tool("so2", "StructuredOutput", {
+      findings: [finding("PLAUSIBLE")], reviewed: [], checked: [],
+    }), usage(1, 1, 1, 1, 1), { isSidechain: true }),
+  ),
+);
+writeFileSync(join(sub, "agent-x5.meta.json"), JSON.stringify({ description: "review: [b2] t", agentType: "ai-kit:change-reviewer" }));
+writeFileSync(join(sub, "agent-x4.meta.json"), JSON.stringify({ description: "review: [b1] t", agentType: "ai-kit:change-reviewer" }));
 writeFileSync(join(sub, "agent-x3.jsonl"), lines(asst("c1", "2026-01-01T00:00:04Z", text("hi"), usage(1, 1, 1, 1, 1), { isSidechain: true })));
 const wf = join(sub, "workflows", "wf_1");
 mkdirSync(wf, { recursive: true });
@@ -91,6 +112,8 @@ eq("prompts: real user text only, kept as a length (the text is never stored)",
 eq("commit hashes from git commit output", s.commits.map((c) => c.hash), ["a1b2c3d"]);
 eq("subagent role from meta", s.agents.x1.role, "commit");
 eq("reviewer findings from its last reply", s.agents.x2.findings, { confirmed: 2, plausible: 1 });
+eq("reviewer findings from a StructuredOutput reply", s.agents.x4.findings, { confirmed: 2, plausible: 1 });
+eq("text and StructuredOutput lines of one message add up", s.agents.x5.findings, { confirmed: 1, plausible: 1 });
 eq("no meta → other, still counted", [s.agents.x3.role, s.agents.x3.calls], ["other", 1]);
 eq("a workflow run's agent is counted with its role", [s.agents.w1?.role, s.agents.w1?.output], ["commit", 7]);
 

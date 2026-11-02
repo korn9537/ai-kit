@@ -14,8 +14,9 @@ command is the user's opt-in to that workflow.
    - `batches`, in plan order: `{id, title, brief, verify, waitsFor, heavy, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (paths and lines already found), the
      decisions and requirements it follows. `verify` holds the project's verify commands for it. `waitsFor` lists
-     the ids it needs. `heavy: true` when it touches a DB schema or migration, a calculation, a permission or a
-     decision recorded as final. `alsoInScope` lists each item the main session added beyond the request.
+     the ids it needs. `heavy: true` (committer, fix, reviewer and re-check on opus) when the batch itself meets
+     the committer rule of CLAUDE.core.md Agent model; `heavy: "review"` (reviewer and re-check only) when it meets
+     only the reviewer rule there. `alsoInScope` lists each item the main session added beyond the request.
 3. **Run**: Workflow with `scriptPath` `${CLAUDE_PLUGIN_ROOT}/workflows/run-plan.js` and those `args`. While it
    runs, do not edit the repo; keep answering the user. Asked how it is going: run
    `node ${CLAUDE_PLUGIN_ROOT}/scripts/run-plan-status.mjs <Transcript dir from the Workflow result>` and answer from

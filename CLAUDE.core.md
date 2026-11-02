@@ -44,9 +44,14 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   commit. Small jobs (typo, copy, one style value on one screen, move-only refactor, docs) skip both, except that
   a BA request by the user is always run; unsure → summarize.
 - **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on sonnet at medium
-  effort (agent frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"`
-  when the change or question touches a DB schema or migration, a calculation, a permission, or a decision recorded
-  as final; no other model or effort override.
+  effort (agent frontmatter), `ai-kit:committer` commit subagents on sonnet. Pass `model: "opus"` and `effort: "high"`:
+  - to the reviewer, BA and decider when the change or question touches a DB schema or migration, a calculation, a
+    permission or a decision recorded as final, or a changed path matches `review.always`; unsure → opus.
+  - to a committer only when its batch itself writes a DB schema change or migration, changes how a calculation
+    computes its result (formula, rounding, a total), adds, removes or changes a role, guard, policy or an owner or
+    tenant row filter, or implements a decision recorded as final. Code that only uses these stays on sonnet; unsure
+    → sonnet, its reviewer is the check.
+  - No other model or effort override, except `model: "sonnet"` on a general-purpose heavy-read subagent.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for
@@ -75,7 +80,15 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   or a search likely to need more than about five reads or greps. The brief names what to check or find and what
   comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report, never the
   pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next edit
-  needs stays.
+  needs stays. A general-purpose subagent gets `model: "sonnet"`; a typed agent (Explore, web-fetch) keeps its own
+  model. It returns evidence; the main session judges.
+- **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
+  done, or the files are named for a change that needs neither, the change goes out as `ai-kit:committer` batches
+  per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the paths, lines and decisions
+  already found. The main session edits code itself only for: at most `review.skip_lines` code lines with no new
+  file and no `review.always` path; a small job (list under the summary rule); debugging or a UI tweak iterated
+  with the user watching each step (settled and over the limit → one committer); the large-refactor exception of
+  §Coordinator pipeline. Review fixes follow §Coordinator pipeline.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `ai-kit/docs/plan-batching.md`.
 - **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read

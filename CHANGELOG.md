@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.21.0
+
+- `scripts/usage-collect.mjs`: reviewer findings returned through `StructuredOutput` (the run-plan REVIEW schema)
+  count toward the digest's confirmed/plausible per review; before, only text verdicts counted, so workflow reviews
+  showed near zero. Records written before this version keep the old count (#34).
+- `CLAUDE.core.md` Agent model: the opus rule splits by role. A committer goes to opus only when its batch itself
+  writes a schema change or migration, a calculation, an access rule or row filter, or a final decision (unsure →
+  sonnet); the reviewer, BA and decider keep the wider rule plus a `review.always` path match (unsure → opus). A
+  general-purpose heavy-read subagent runs on sonnet. run-plan takes `heavy: "review"` for an opus reviewer over a
+  sonnet committer (#35).
+- `CLAUDE.core.md`: code past `review.skip_lines` goes to a commit subagent even for one item; the main session
+  edits only small changes, small jobs, debugging or UI tweaks iterated with the user, and the large-refactor
+  exception. `docs/plan-batching.md`: past `handoff.max_context` the one item just asked for still goes to one
+  committer (#36).
+
 ## 2.20.0
 
 - `scripts/run-plan-status.mjs`: live status of a run-plan workflow from its `journal.jsonl`, one line per batch

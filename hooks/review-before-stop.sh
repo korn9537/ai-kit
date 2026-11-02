@@ -179,7 +179,7 @@ fi
 launch="launch a fresh Agent with subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit,
 never an earlier commit's reviewer (sonnet, medium effort from its frontmatter; pass model \"opus\" and effort
 \"high\" only when the commit touches a DB schema or migration, a calculation, a permission or a decision recorded
-as final). Agent type not loaded (plugin
+as final, or a changed path matches review.always; unsure → opus). Agent type not loaded (plugin
 enabled mid-session): general-purpose, description containing \"review\", told to follow
 $kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
 words, the changed files and their \`git diff -- . ':(exclude)ai/usage'\` (or this session's commits, read with

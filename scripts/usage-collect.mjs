@@ -104,19 +104,25 @@ function absorb(f, e, isMain) {
     }
     if (msg.model) f.model = msg.model;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
+    const id = msg.id ?? e.uuid;
+    // A reply's verdicts: CONFIRMED/PLAUSIBLE in its text, or the findings of a StructuredOutput call (run-plan REVIEW).
+    const verdicts = (confirmed, plausible) => {
+      if (f.last?.id !== id) f.last = { id, confirmed: 0, plausible: 0 };
+      f.last.confirmed += confirmed;
+      f.last.plausible += plausible;
+    };
     for (const b of blocks) {
       if (b?.type !== "tool_use" || b.id in f.tu) continue;
       f.tu[b.id] = b.name;
       const k = toolKey(b);
       f.tools[k] = (f.tools[k] ?? 0) + 1;
+      const found = b.name === "StructuredOutput" && b.input?.findings;
+      if (Array.isArray(found)) {
+        verdicts(found.filter((x) => x?.verdict === "CONFIRMED").length, found.filter((x) => x?.verdict === "PLAUSIBLE").length);
+      }
     }
     const t = textOf(blocks);
-    if (t) {
-      const id = msg.id ?? e.uuid;
-      if (f.last?.id !== id) f.last = { id, confirmed: 0, plausible: 0 };
-      f.last.confirmed += (t.match(/\bCONFIRMED\b/g) ?? []).length;
-      f.last.plausible += (t.match(/\bPLAUSIBLE\b/g) ?? []).length;
-    }
+    if (t) verdicts((t.match(/\bCONFIRMED\b/g) ?? []).length, (t.match(/\bPLAUSIBLE\b/g) ?? []).length);
   } else if (e.type === "user" && msg) {
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     for (const b of blocks) {
