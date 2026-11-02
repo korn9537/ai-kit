@@ -17,8 +17,11 @@ command is the user's opt-in to that workflow.
      the ids it needs. `heavy: true` when it touches a DB schema or migration, a calculation, a permission or a
      decision recorded as final. `alsoInScope` lists each item the main session added beyond the request.
 3. **Run**: Workflow with `scriptPath` `${CLAUDE_PLUGIN_ROOT}/workflows/run-plan.js` and those `args`. While it
-   runs, do not edit the repo; keep answering the user. Its progress is in the workflow view and in `git log`; the
-   main session sees nothing of it until it ends, so say so when asked.
+   runs, do not edit the repo; keep answering the user. Asked how it is going: run
+   `node ${CLAUDE_PLUGIN_ROOT}/scripts/run-plan-status.mjs <Transcript dir from the Workflow result>` and answer from
+   its lines (one per batch id). A batch of `args` with no line is not started yet, or skipped because a batch it
+   waits for was not committed in full. Tell the user a `⚠` line (an owner decision, a blocker, an agent with no
+   transcript write for 15 minutes) before the run ends; the final report still comes from the result.
 4. **Report** from its result, one final report (CLAUDE.core.md):
    - Checked, per batch: a skipped review as `review skipped, move-only or comment-only`; the CONFIRMED findings
      fixed and the re-check's findings; `Review closed: re-checked once, no third pass` only where `review` says

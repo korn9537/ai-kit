@@ -128,7 +128,7 @@ async function reviewChain(b, r, need) {
     return
   }
   const rv = await agent(reviewPrompt(b, r.hash), {
-    label: `review: ${b.title}`, phase: 'Review', agentType: 'ai-kit:change-reviewer', schema: REVIEW, ...tier(b),
+    label: `review: [${b.id}] ${b.title}`, phase: 'Review', agentType: 'ai-kit:change-reviewer', schema: REVIEW, ...tier(b),
   })
   if (!rv || !rv.reviewed) {
     r.review = `not reviewed: ${rv ? rv.checked : 'reviewer failed or was skipped'}`
@@ -144,7 +144,7 @@ async function reviewChain(b, r, need) {
   log(`${b.title}: ${confirmed.length} CONFIRMED → fix`)
   const fx = await exclusive(() =>
     agent(fixPrompt(b, r.hash, confirmed), {
-      label: `commit: fix ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT, ...tier(b),
+      label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT, ...tier(b),
     }),
   )
   if (!fx || !fx.hash) {
@@ -157,7 +157,7 @@ async function reviewChain(b, r, need) {
   r.fix = pick(fx)
   const fresh = confirmed.some((f) => f.dataRule)
   const rc = await agent(recheckPrompt(b, r.hash, fx.hash, confirmed, fresh), {
-    label: `review: recheck ${b.title}`, phase: 'Fix', agentType: 'ai-kit:change-reviewer', schema: REVIEW, ...tier(b),
+    label: `review: [${b.id} recheck] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:change-reviewer', schema: REVIEW, ...tier(b),
   })
   if (!(rc && rc.reviewed)) {
     r.recheck = `not re-checked: ${rc ? rc.checked : 'reviewer failed or was skipped'}`
@@ -186,7 +186,7 @@ for (const [i, b] of batches.entries()) {
   }
   const c = await exclusive(() =>
     agent(commitPrompt(b), {
-      label: `commit: ${b.title}`, phase: 'Commit', agentType: 'ai-kit:committer', schema: COMMIT, ...tier(b),
+      label: `commit: [${b.id}] ${b.title}`, phase: 'Commit', agentType: 'ai-kit:committer', schema: COMMIT, ...tier(b),
     }),
   )
   if (!c || !c.hash) {

@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.20.0
+
+- `scripts/run-plan-status.mjs`: live status of a run-plan workflow from its `journal.jsonl`, one line per batch
+  id (commit hash, review findings, fix, re-check, owner decisions and blockers, an agent with no transcript write
+  for 15 minutes); `/ai-kit:run-plan` runs it when the user asks how the plan is going, instead of saying the main
+  session sees nothing until the workflow ends.
+- `workflows/run-plan.js`: agent labels carry the batch id (`commit: [b1] title`, `commit: [b1 fix] title`,
+  `review: [b1] title`, `review: [b1 recheck] title`), so a title starting `fix` or `recheck` is not read as a
+  fix or re-check step.
+- Not yet tried: a full `/ai-kit:run-plan` run with the new labels (tested with fixtures and a one-agent workflow),
+  and Windows (the Git Bash path mapping has a unit test only).
+
 ## 2.19.2
 
 - `CLAUDE.core.md`: heavy reads (browser checks, searches past about five reads) go to a subagent in any session;
