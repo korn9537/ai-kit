@@ -9,10 +9,10 @@ export const meta = {
   ],
 }
 
-// args: { request, plugin, repo?, batches: [{ id, title, brief, verify?, waitsFor?: [id], alsoInScope?: [item] }] }
+// args: { request, plugin, job, repo?, batches: [{ id, title, brief, verify?, waitsFor?: [id], alsoInScope?: [item] }] }
 // in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
 const batches = (args && args.batches) || []
-if (!batches.length || !args.plugin) throw new Error('run-plan needs args.plugin and args.batches')
+if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
 
 const COMMIT = {
   type: 'object',
@@ -60,6 +60,8 @@ const exclusive = (fn) => {
 }
 const needed = `bash "${args.plugin}/scripts/review-needed.sh"`
 const where = args.repo ? `Repo: ${args.repo} (run every command there).` : ''
+// one job per user request: every commit of the plan, fixes included, ends with this trailer (shared-checkout.md §Jobs)
+const job = `End the commit message with the trailer line \`Job: ${args.job}\` (before any Co-Authored-By line).`
 const report = [
   `After the commit run \`${needed} <hash>\` from the project root and put the word it prints in \`review\`.`,
   'Report in the structured output: hash ("" when nothing was committed), files, choices, owner (owner decisions',
@@ -75,7 +77,7 @@ const later = (b) => {
   return rest.length ? ['', 'Later batches of this plan:', ...rest, ''].join('\n') : ''
 }
 const commitPrompt = (b) =>
-  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', later(b), report].join('\n')
+  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', job, later(b), report].join('\n')
 
 const scope = (b) => (b.alsoInScope || []).map((s) => `also in scope: ${s} (coordinator)`).join('\n')
 const reviewPrompt = (b, hash) =>
@@ -100,6 +102,7 @@ const fixPrompt = (b, hash, fs) =>
   [
     `Review findings on commit ${hash} (batch ${b.id}: ${b.title}). Fix only these, verify the same way and make one`,
     `commit "${fixSubject(b.title)}".`,
+    job,
     where,
     '',
     list(fs),

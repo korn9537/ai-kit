@@ -45,8 +45,9 @@ kept small. The user naming a runner wins.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
-- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands and
-  anything the coordinator already found (paths, line numbers), so the subagent does not search for it again.
+- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands,
+  the request's job id (`shared-checkout.md` §Jobs; one for the whole plan) and anything the coordinator already
+  found (paths, line numbers), so the subagent does not search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for
   the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the

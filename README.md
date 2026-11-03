@@ -16,9 +16,12 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
 | `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`      |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions` |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
 | `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
+| `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
+| `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
+| `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
@@ -114,7 +117,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
@@ -154,11 +157,11 @@ when the key is absent in a repo that looks like web or mobile, and when it is s
 Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate` inside Claude Code).
 
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
-  writes the `.githooks/pre-commit` shim when missing (rewrites a 1.x shim; warns about any other hook there) and
-  sets `core.hooksPath` to `.githooks` unless another path is set (warns), writes `<git-common-dir>/ai-kit-root`
-  for the shim, adds `"autoMemoryEnabled": false` to `.claude/settings.json` when the key is absent, and appends
-  `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to `.gitattributes` when git does not already read those
-  paths as LF (a Windows `core.autocrlf` checkout would give `sh` a CRLF shim).
+  writes the `.githooks/pre-commit` and `.githooks/commit-msg` shims when missing (rewrites a 1.x shim; warns about
+  any other hook there) and sets `core.hooksPath` to `.githooks` unless another path is set (warns), writes
+  `<git-common-dir>/ai-kit-root` for the shim, adds `"autoMemoryEnabled": false` to `.claude/settings.json` when
+  the key is absent, and appends `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to `.gitattributes` when
+  git does not already read those paths as LF (a Windows `core.autocrlf` checkout would give `sh` a CRLF shim).
 - `node <plugin>/scripts/kit.mjs check` exits 1 when `ai/kit/config.json` is missing, malformed or not an object,
   when `conventions` is not an array or names a file `conventions/` lacks, when the shim is missing or not the kit
   shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`, `.claude/settings.local.json`

@@ -11,6 +11,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   kit-written token records: never edit, stage, revert or search them; the pre-commit adds them, so commit with
   `git add <files>` then `git commit` with no paths (`git commit -- <paths>` and `-o` leave them behind). Details:
   `ai-kit/docs/shared-checkout.md`.
+- **Every commit carries one `Job: <yyyy-mm-dd>-<slug>` trailer**: one id per user request, picked by the main
+  session at its first commit and named in every committer brief; a review-fix commit copies the job of the commit
+  it fixes. Finding or reverting a request's commits starts from `/ai-kit:jobs` (`ai-kit/docs/shared-checkout.md`
+  §Jobs; `.githooks/commit-msg` enforces).
 
 ## Language
 

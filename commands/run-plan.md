@@ -10,6 +10,7 @@ command is the user's opt-in to that workflow.
 2. **Args**: one JSON value, not a string:
    - `request`: the user's request in their words.
    - `plugin`: `${CLAUDE_PLUGIN_ROOT}`.
+   - `job`: the request's job id, one for the whole plan (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
    - `repo`: only when the repo is not the session's working directory.
    - `batches`, in plan order: `{id, title, brief, verify, waitsFor, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (paths and lines already found), the

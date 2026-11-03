@@ -29,6 +29,10 @@ Commit: stage the files you changed by name (`git add <files>`), read `git diff 
 `git commit` with no paths (a path-limited commit leaves the pre-commit's records behind). A pre-commit failure is
 yours to fix; never `--no-verify`.
 
+The message ends with the brief's `Job: <id>` trailer, before any `Co-Authored-By`; a fix commit takes the job of
+the commit it fixes (`git log -1 --format='%(trailers:key=Job,valueonly)' <hash>`). No job in the brief and no
+commit it fixes → do not commit; report it under Open (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
+
 When the coordinator sends review findings back to you, fix only those, verify the same way and commit the fix.
 
 Reply with only these four, no summary of the work:

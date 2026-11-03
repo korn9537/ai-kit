@@ -46,6 +46,14 @@ quiet() {
 [ -f ai/kit/pre-commit.sh ] && . ai/kit/pre-commit.sh
 exit 0
 `;
+const MSG_SHIM = `#!/usr/bin/env sh
+# ai-kit shim (core.hooksPath): runs the plugin's githooks/commit-msg; session-start.sh records its path.
+kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
+if [ -n "$kit" ] && [ -f "$kit/githooks/commit-msg" ]; then
+  exec sh "$kit/githooks/commit-msg" "$@"
+fi
+exit 0
+`;
 
 // every call runs at the repo root, so pathspecs and output are root-relative from a subdirectory too
 const gitIn = (cwd, a) =>
@@ -70,6 +78,7 @@ const tryGit = (...a) => tryGitIn(root, a);
 const at = (...p) => join(root, ...p);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const shimPath = at(".githooks", "pre-commit");
+const msgShimPath = at(".githooks", "commit-msg");
 const isShim = (s) => s?.includes(MARK) ?? false;
 // only the 1.x wiring: ${CLAUDE_PROJECT_DIR}/ai-kit/hooks/, $CLAUDE_PROJECT_DIR/..., or a relative ai-kit/hooks/
 const KIT_HOOK =
@@ -237,6 +246,19 @@ function layoutWarnings() {
       (e) =>
         `ai/${e} is not an ai/ category (fix: when next touched, move it into the category that fits, or out of ai/ when humans read it, move-only commit; the plugin's docs/ai-layout.md)`,
     );
+}
+// warning, not a problem: a project before 2.23.0 must keep committing (docs/shared-checkout.md §Jobs)
+function jobWarnings() {
+  const shim = read(msgShimPath);
+  if (shim === null)
+    return [
+      ".githooks/commit-msg is missing, so commits carry no Job: trailer check (fix: node <plugin>/scripts/kit.mjs init; the plugin's docs/shared-checkout.md §Jobs)",
+    ];
+  if (!isShim(shim))
+    return [
+      ".githooks/commit-msg is not the ai-kit shim (fix: move its checks elsewhere, delete it, then run init)",
+    ];
+  return [];
 }
 // warnings, not problems: a UI project before 2.8.0 must keep committing (docs/screen-specs.md)
 function uiWarnings() {
@@ -438,6 +460,20 @@ function initFiles(created = []) {
     writeFileSync(shimPath, SHIM, { mode: 0o755 });
     console.log("~ .githooks/pre-commit (shim updated)");
   }
+  const msgShim = read(msgShimPath);
+  if (msgShim === null) {
+    mkdirSync(at(".githooks"), { recursive: true });
+    writeFileSync(msgShimPath, MSG_SHIM, { mode: 0o755 });
+    created.push(".githooks/commit-msg");
+    console.log("+ .githooks/commit-msg");
+  } else if (!isShim(msgShim))
+    console.log(
+      "! .githooks/commit-msg exists and does not run the kit: move its checks elsewhere, delete it, then rerun init",
+    );
+  else if (msgShim !== MSG_SHIM) {
+    writeFileSync(msgShimPath, MSG_SHIM, { mode: 0o755 });
+    console.log("~ .githooks/commit-msg (shim updated)");
+  }
 
   // another hooks path (husky) would be switched off silently: leave it to the user
   const hp = tryGit("config", "core.hooksPath") ?? "";
@@ -493,6 +529,7 @@ function init() {
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
   eolWarnings().forEach((w) => console.log(`! ${w}`));
+  jobWarnings().forEach((w) => console.log(`! ${w}`));
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
@@ -844,6 +881,7 @@ function migrate() {
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
   eolWarnings().forEach((w) => console.log(`! ${w}`));
+  jobWarnings().forEach((w) => console.log(`! ${w}`));
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
@@ -959,6 +997,7 @@ else if (cmd === "check") {
   out.forEach((p) => console.log(`ai-kit: ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   eolWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  jobWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));

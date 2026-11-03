@@ -1,7 +1,7 @@
-// Tests for kit.mjs init and check on line endings: the LF rules a Windows checkout (core.autocrlf) needs.
+// Tests for kit.mjs init and check on line endings (the LF rules a Windows checkout needs) and the commit-msg shim.
 // Usage: node scripts/kit-init.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -37,6 +37,19 @@ try {
   run(repo, "init");
   eq("init: a second run adds nothing", readFileSync(join(repo, ".gitattributes"), "utf8").split("eol=lf").length, 3);
   eq("check: no warning once set", run(repo, "check").includes("eol=lf attribute"), false);
+  const fresh = join(tmp, "fresh");
+  execFileSync("git", ["init", "-q", fresh]);
+  eq("check: a missing commit-msg shim is warned", run(fresh, "check").includes(".githooks/commit-msg is missing"), true);
+  run(fresh, "init");
+  eq("init: writes the commit-msg shim", readFileSync(join(fresh, ".githooks", "commit-msg"), "utf8").includes("githooks/commit-msg"), true);
+  eq("check: no warning once the shim is there", run(fresh, "check").includes(".githooks/commit-msg"), false);
+  const own = join(tmp, "own-hook");
+  execFileSync("git", ["init", "-q", own]);
+  execFileSync("mkdir", ["-p", join(own, ".githooks")]);
+  writeFileSync(join(own, ".githooks", "commit-msg"), "#!/bin/sh\nexit 0\n");
+  eq("init: leaves a project's own commit-msg alone", run(own, "init").includes("commit-msg exists and does not run the kit"), true);
+  eq("init: the project's hook is kept", readFileSync(join(own, ".githooks", "commit-msg"), "utf8"), "#!/bin/sh\nexit 0\n");
+  eq("init: no shim written over it", existsSync(join(own, ".githooks", "commit-msg")), true);
   const bare = join(tmp, "no-attrs");
   execFileSync("git", ["init", "-q", bare]);
   run(bare, "init");

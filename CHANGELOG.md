@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.23.0
+
+- Jobs (#39): every commit carries one `Job: <yyyy-mm-dd>-<slug>` trailer, one id per user request shared by all
+  its batches and review fixes, so a later session finds and reverts the whole request. `githooks/commit-msg`
+  enforces it through a `.githooks/commit-msg` shim that `kit.mjs init` writes (`check` warns while it is missing);
+  `/ai-kit:jobs` (`scripts/jobs.mjs`) lists jobs, or one job's commits, files, migrations (`jobs.migrations` in
+  `ai/kit/config.json`), later commits of other jobs on the same files and the revert command. run-plan takes a
+  `job` arg and puts it in every committer and fix prompt; rules in `docs/shared-checkout.md` §Jobs.
+
 ## 2.22.1
 
 - Core: while the design is still under discussion (the request asks how something would work, the user answered
