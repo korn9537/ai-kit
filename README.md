@@ -163,15 +163,17 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   the key is absent, and appends `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to `.gitattributes` when
   git does not already read those paths as LF (a Windows `core.autocrlf` checkout would give `sh` a CRLF shim).
 - `node <plugin>/scripts/kit.mjs check` exits 1 when `ai/kit/config.json` is missing, malformed or not an object,
-  when `conventions` is not an array or names a file `conventions/` lacks, when the shim is missing or not the kit
-  shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`, `.claude/settings.local.json`
-  or `~/.claude/settings.json` enables `ai-kit@korn9537` (the project file is recommended, so teammates get it),
-  when `code_dirs` lists `ai-kit` or `shared_checkout_doc` names a missing file (1.x leftovers), when settings still
+  when `conventions` is not an array or names a file `conventions/` lacks, when the `.githooks/pre-commit` shim is
+  missing or not the kit shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`,
+  `.claude/settings.local.json` or `~/.claude/settings.json` enables `ai-kit@korn9537` (the project file is
+  recommended, so teammates get it), when `code_dirs` lists `ai-kit` or `shared_checkout_doc` names a missing file
+  (1.x leftovers), when settings still
   run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
   `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. It warns (`!`, exit unchanged)
   when auto-memory is not off (no `autoMemoryEnabled: false` in the highest scope that sets it, or
   `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`), and
-  when the shim or `ai/kit/*.sh` has no `eol=lf` attribute.
+  when the shim or `ai/kit/*.sh` has no `eol=lf` attribute, and when `.githooks/commit-msg` is missing or not the
+  kit shim.
   The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
   `.claude/agents/` or `CLAUDE.md` are staged.
 - `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside

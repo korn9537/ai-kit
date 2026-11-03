@@ -1,7 +1,7 @@
 // Lists jobs (the `Job:` commit trailer, one per user request) and, for one job, what reverting it involves.
 //   node scripts/jobs.mjs              recent jobs: id, commits, dates, first subject
 //   node scripts/jobs.mjs <id|text>    that job's commits, files, migrations, later commits on the same files, revert
-// Run inside the project; ai/kit/config.json `jobs.migrations` (regex on the path) names its migration files.
+// Run inside the project; ai/kit/config.json `jobs.migrations` (regex on the path) overrides the migration default.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -10,7 +10,9 @@ const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "
 const git = (...args) =>
   execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 const config = join(root, "ai", "kit", "config.json");
-let MIGRATION = null;
+// default: the migration heuristic of kit.mjs inventory, minus EF designer and snapshot files
+let MIGRATION =
+  /(^|\/)(migrations?|db\/migrate|alembic\/versions)\/(?!.*(\.Designer\.cs|ModelSnapshot\.cs)$).+\.(sql|ts|js|py|rb|go|cs)$/i;
 try {
   const re = existsSync(config) && JSON.parse(readFileSync(config, "utf8"))?.jobs?.migrations;
   if (typeof re === "string" && re) MIGRATION = new RegExp(re);

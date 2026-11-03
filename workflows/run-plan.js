@@ -13,6 +13,8 @@ export const meta = {
 // in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
 const batches = (args && args.batches) || []
 if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
+// the same format githooks/commit-msg accepts: a bad id would fail every committer's commit
+if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(args.job)) throw new Error(`run-plan args.job is not <yyyy-mm-dd>-<slug>: ${args.job}`)
 
 const COMMIT = {
   type: 'object',
