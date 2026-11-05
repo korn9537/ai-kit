@@ -34,7 +34,8 @@ script applies the rules below, so no batch report enters the main session's con
 in one go, with no context limit to hand over at. The main session plans, passes the batches as args and writes the
 one report. Fewer batches (their reports cost little, and the main session can still answer between them), no
 Workflow tool, or the call refused: the main session is the coordinator and applies these rules itself, its context
-kept small. The user naming a runner wins.
+kept small. The user naming a runner wins. `/ai-kit:continuous` runs the same workflow at any batch count for a user
+who leaves: it tries failed committers again and writes the one report when nothing is left to run.
 
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
   implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for

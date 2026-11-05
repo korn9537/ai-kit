@@ -16,7 +16,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
 | `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`      |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs` |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
 | `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
@@ -30,6 +30,8 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
+| `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
+| `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check |
 | `scripts/run-plan-status.mjs` | live status of a run-plan workflow from its journal, one line per batch; test `scripts/run-plan-status.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |

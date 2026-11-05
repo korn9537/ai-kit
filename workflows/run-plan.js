@@ -78,8 +78,10 @@ const later = (b) => {
   const rest = batches.slice(batches.indexOf(b) + 1).map((x) => `- ${x.id}: ${x.title}`)
   return rest.length ? ['', 'Later batches of this plan:', ...rest, ''].join('\n') : ''
 }
+// the Batch trailer lets scripts/continuous.mjs find a commit whose agent died before it could report the hash
+const trailer = (b) => `Add the trailer line \`Batch: ${b.id}\` just above the Job trailer.`
 const commitPrompt = (b) =>
-  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', job, later(b), report].join('\n')
+  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
 
 const scope = (b) => (b.alsoInScope || []).map((s) => `also in scope: ${s} (coordinator)`).join('\n')
 const reviewPrompt = (b, hash) =>

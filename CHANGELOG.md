@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.24.0
+
+- `/ai-kit:continuous` (`commands/continuous.md`, `scripts/continuous.mjs`): work runs to its end with nobody watching.
+  It asks every owner decision at the start, runs the run-plan workflow at any batch count, keeps the Mac awake and
+  checks every 30 minutes from a session cron. A batch whose committer returned nothing runs again, up to six times an
+  hour apart so a usage limit can reset, with the batches that waited for it; a batch with a commit, an owner decision
+  or a reported blocker does not. Before a retry, the edits a dead committer left are stashed under a named entry when
+  the tree was clean at the start; otherwise new edits hold the retry. The commit check rests on the trailer
+  below, so a commit of the job with no such trailer stops the retries. A failed reviewer or fixer is reported, not
+  retried. State lives in `<git dir>/claude-review/continuous-<job>.json`; the script reads the workflow's run file
+  itself, and a run with nothing moving for two hours ends with a report.
+- `workflows/run-plan.js`: the committer is told to add a `Batch: <id>` trailer, how `continuous.mjs` finds a commit
+  whose agent died before reporting it.
+- `commands/run-plan.md`: a re-run with the batches left drops committed ids from `waitsFor`; the workflow counted
+  them as not committed and skipped every batch that named one.
+
 ## 2.23.0
 
 - Jobs (#39): every commit carries one `Job: <yyyy-mm-dd>-<slug>` trailer, one id per user request shared by all its
