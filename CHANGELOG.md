@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.25.0
+
+- Plan files (`scripts/plan.mjs`, `docs/plan-batching.md` §Plan file): a plan of two batches or more is committed to
+  `ai/plans/<job>.md` before its first batch, so a lost session loses no batch. Until now a plan lived in the chat and
+  the workflow's args; 8 of 10 projects had never held a plan file. The file holds the batches, the status comes from
+  the job's commits by their `Batch:` trailer, so no one keeps it up to date and two sessions never edit it.
+  `write` refuses what would fail later and adds to a plan on a second run; `close` deletes it in its own commit.
+- `/ai-kit:run-plan resume [job]`: the batches left go back to the workflow, with what the lost run left shown first
+  (edits in the tree, commits with no batch, a continuous run still going, commits with no recorded review). A batch
+  waiting on a commit of unknown end is held until that commit's review is clean.
+- `hooks/session-start.sh` names each plan not closed, with its status; the session goes on only on the user's word.
+- `/ai-kit:check` warns of a plan with nothing left, the hand-written ones included.
+- `agents/committer.md`, the coordinator brief: the `Batch:` trailer holds outside the workflow too, so a plan of two
+  or three batches has a status.
+- `scripts/continuous.mjs`: a commit of the plan file is not a commit with no batch, which would stop the retries,
+  and neither is a fix commit from before a resume. `abandon <state>` clears a run known to be over, which `init`
+  refused for good after a lost session. `readRepo` reports a failed log instead of reading it as no commits.
+
 ## 2.24.0
 
 - `/ai-kit:continuous` (`commands/continuous.md`, `scripts/continuous.mjs`): work runs to its end with nobody watching.

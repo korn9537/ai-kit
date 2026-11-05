@@ -33,6 +33,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
 | `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check |
+| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close; test `scripts/plan.test.mjs` |
 | `scripts/run-plan-status.mjs` | live status of a run-plan workflow from its journal, one line per batch; test `scripts/run-plan-status.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage-*.test.mjs`    | fixture tests for the usage modules: `node scripts/usage-<name>.test.mjs`                      |

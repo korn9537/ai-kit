@@ -13,8 +13,11 @@ In this file `<plugin>` is the plugin root (`${CLAUDE_PLUGIN_ROOT}` at the start
    batch truly needs, so one stuck batch stops as little as possible. Going on with an earlier job: reuse its id,
    with batch ids new to that job.
 2. **State**: `mkdir -p` the folder of `<state>`, write the args to a temp file, then run
-   `node <plugin>/scripts/continuous.mjs init <state> <args file>`. A refusal names what to fix in the plan; fix it
-   now, while the user is here.
+   `node <plugin>/scripts/continuous.mjs init <state> <args file>`, then `node <plugin>/scripts/plan.mjs write <args
+   file>`, `init` first so a refusal commits nothing. A refusal names what to fix; fix it now, while the user is here.
+   A batch renamed or dropped after `write` took the plan: `write --replace`.
+   Going on with a plan a lost session left: skip step 1, clear `commands/run-plan.md` §Resume, and its `argsFile` is
+   the args file here, `repo` added to it when needed; only `init` runs, no `write`.
 3. **Awake**: where `caffeinate` exists, run `caffeinate -i -t 604800` as a background Bash command.
 4. **Schedule**: CronCreate (load it by ToolSearch when deferred), `recurring: true`, cron every 30 minutes on an
    off-minute (`7,37 * * * *`), prompt `Continuous run <job>: follow §Tick of <plugin>/commands/continuous.md, plugin
@@ -41,16 +44,19 @@ says the workflow did not complete, and act on the printed `action`:
   the turn. The
   call refused, or no Workflow tool: say so and do §Close, every batch of those args under Open.
 - `stopped`: the workflow failed, nothing moved for two hours, or a turn was lost around its launch. TaskStop it if it
-  still runs (`task` in `<state>`). Commits may exist that `<state>` does not hold, so run nothing again: report what
-  `node <plugin>/scripts/jobs.mjs <job>` prints from the project root, and do §Close. Under Open: each printed `open`
-  batch as not run, each id in `commits` and hash in `loose` as committed but not reviewed.
+  still runs (`task` in `<state>`), then `node <plugin>/scripts/continuous.mjs abandon <state>`. Commits may exist
+  that `<state>` does not hold, so run nothing again: report what `node <plugin>/scripts/jobs.mjs <job>` prints from
+  the project root, and do §Close. Under Open: each printed `open` batch as not run, each id in `commits` and hash in
+  `loose` as committed but not reviewed.
 - `done`: do §Close, each batch in the printed `open` under Open, the printed `dirty` paths as edits a dead agent or
   someone else left in the tree.
 
 ## Close
 
-CronDelete this run's cron (CronList finds it), stop `caffeinate` (`pkill -f "caffeinate -i -t 604800"`), then write one
-final report per `<plugin>/commands/run-plan.md` step 4 from the `batches` of `<state>`, which hold every run's results.
-Each name in its `stashes` goes under Open: the edits a dead committer left, in `git stash list`. To go on after
-answering, the user runs this command again with what is left and the same job. A batch reported with a commit stays in
-`<state>`; what is left of one under Open takes a new batch id, and batches that waited for it wait for that id.
+CronDelete this run's cron (CronList finds it) and stop `caffeinate` (`pkill -f "caffeinate -i -t 604800"`). No batch
+would go under Open: from the project root, `node <plugin>/scripts/plan.mjs close <job>`, that commit under Git. Then
+write one final report per `<plugin>/commands/run-plan.md` step 4 from the `batches` of `<state>`, which hold every
+run's results. Each name in its `stashes` goes under Open: the edits a dead committer left, in `git stash list`. To go
+on after answering, the user runs this command again with what is left and the same job. A batch reported with a
+commit stays in `<state>`; what is left of one under Open takes a new batch id, and batches that waited for it wait
+for that id.

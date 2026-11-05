@@ -58,5 +58,6 @@ Project knowledge lives in the repo, never in auto-memory; same commit as the wo
   lifecycle (soft delete, retention, purge, PII).
 - Feature: `trigger` · `input` · steps · `output` · `errors` and retry · `data` touched · `reqs`.
 - Plan: goal · tasks `T-<n>` with status `todo | doing | done` and files · open questions. Deleted in the commit
-  that finishes it.
+  that finishes it. A multi-commit plan is `ai/plans/<job>.md`, written by `scripts/plan.mjs`: batches in place of
+  tasks, status from the job's commits, deleted in a commit of its own (`plan-batching.md` §Plan file).
 - Notes: one `- R<n>: <what> → <where>` line each.

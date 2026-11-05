@@ -50,6 +50,13 @@ try {
   eq("init: leaves a project's own commit-msg alone", run(own, "init").includes("commit-msg exists and does not run the kit"), true);
   eq("init: the project's hook is kept", readFileSync(join(own, ".githooks", "commit-msg"), "utf8"), "#!/bin/sh\nexit 0\n");
   eq("init: no shim written over it", existsSync(join(own, ".githooks", "commit-msg")), true);
+  const planned = join(tmp, "planned");
+  execFileSync("git", ["init", "-q", planned]);
+  execFileSync("mkdir", ["-p", join(planned, "ai", "plans")]);
+  writeFileSync(join(planned, "ai", "plans", "old.md"), "# Plan old\n\n| T-1 x | done | a |\n");
+  writeFileSync(join(planned, "ai", "plans", "live.md"), "# Plan live\n\n| T-1 x | todo | a |\n");
+  eq("check: a plan with no task left is warned", run(planned, "check").includes("ai/plans/old.md has no task left"), true);
+  eq("check: a plan with work left is not", run(planned, "check").includes("ai/plans/live.md"), false);
   const bare = join(tmp, "no-attrs");
   execFileSync("git", ["init", "-q", bare]);
   run(bare, "init");

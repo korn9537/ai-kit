@@ -49,5 +49,20 @@ echo kept >"$snap/s3"
 printf '{"session_id":"s3","source":"startup"}' | bash "$HOOK" >/dev/null 2>&1
 check "an existing snapshot is kept" "$([[ "$(cat "$snap/s3")" == kept ]] && echo 0 || echo 1)"
 
+
+# plans not closed are named; a hand-written plan is not
+job=2026-11-05-demo
+git -C "$REPO" -c user.email=t@e.c -c user.name=t commit -q --allow-empty -m base
+mkdir -p "$REPO/ai/plans"
+printf '# Plan x\n\n| T-1 x | todo | a |\n' >"$REPO/ai/plans/hand.md"
+bash "$HOOK" </dev/null >"$TMP/hand.out"
+check "a hand-written plan is not named" "$(grep -q 'not closed' "$TMP/hand.out" && echo 1 || echo 0)"
+printf '{"job":"%s","plugin":"p","batches":[{"id":"a","title":"A","brief":"B"}]}' "$job" >"$TMP/args.json"
+git -C "$REPO" config user.email t@e.c
+git -C "$REPO" config user.name t
+PLAN="$PWD/../scripts/plan.mjs"
+(cd "$REPO" && node "$PLAN" write "$TMP/args.json" >/dev/null)
+bash "$HOOK" </dev/null >"$TMP/plan.out"
+check "an open plan is named with its status" "$(grep -q "$job: 0 of 1 batches committed; ready a" "$TMP/plan.out" && echo 0 || echo 1)"
 echo "$pass passed, $fail failed"
 ((fail == 0))

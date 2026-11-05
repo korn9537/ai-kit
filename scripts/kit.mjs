@@ -16,6 +16,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { planWarnings } from "./plan.mjs";
 
 const kit = join(import.meta.dirname, "..");
 const PLUGIN = "ai-kit@korn9537";
@@ -533,6 +534,7 @@ function init() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
+  planWarnings(root).forEach((w) => console.log(`! ${w}`));
   usageWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
@@ -885,6 +887,7 @@ function migrate() {
   uiWarnings().forEach((w) => console.log(`! ${w}`));
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
+  planWarnings(root).forEach((w) => console.log(`! ${w}`));
   usageWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? `check: ${left.length} problem(s)` : "check: passed");
   // the tree was clean, so status lists exactly what migrate changed that git tracks or would add
@@ -1001,6 +1004,7 @@ else if (cmd === "check") {
   uiWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
+  planWarnings(root).forEach((w) => console.log(`! ai-kit: ${w}`));
   usageWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
 } else {

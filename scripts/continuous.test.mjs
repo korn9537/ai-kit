@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { HUNG_AFTER, init, MAX_TRIES, next, readRepo, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
+import { abandon, HUNG_AFTER, init, MAX_TRIES, next, readRepo, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -33,6 +33,16 @@ const clean = { commits: new Map(), loose: [], dirty: [] };
 const finished = (...batches) => ({ status: "completed", result: { batches }, idle: 0 });
 const none = { status: "", idle: Infinity };
 const live = () => started(next(plan(), none, clean, 0).state, "dir", "t", T);
+
+const orphan = abandon({ ...plan(), running: true, launching: true, pending: ["a"] });
+ok("abandon lets init take the job again", init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).args.batches.length === 1, orphan);
+ok("an abandoned run launches nothing on a late tick", next(orphan, none, clean, T).step.action === "stopped", orphan);
+ok("init clears the abandoned mark", !init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).abandoned);
+const resumed = started(next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }, undefined, [], ["fix1"]), none, clean, 0).state, "dir", "t", T);
+const retried = next(resumed, finished(failedAgent("a")), { ...clean, loose: ["fix1"] }, T + RETRY_GAP);
+ok("a fix commit from before the resume stops no retry", retried.step.action === "wait" && retried.step.open.join() === "a", retried);
+const sibling = next(started(next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, clean, 0).state, "dir", "t", T), finished(failedAgent("a")), { ...clean, loose: ["new1"] }, T + RETRY_GAP);
+ok("a new commit with no batch still stops the retry", sibling.step.action === "done", sibling);
 
 let r = next(plan(), none, clean, T);
 ok("a new plan runs every batch", r.step.action === "run" && ids(r.step).length === 4, r);

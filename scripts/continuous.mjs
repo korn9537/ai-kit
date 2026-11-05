@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Next step of a /ai-kit:continuous run, from a state file that outlives /compact and the workflow's run file.
-// Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <transcript dir> <task id>
+// Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task id> | abandon <state>
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -17,7 +17,7 @@ const agentFailed = (r) =>
   r?.status === "blocked" && !r.owner?.length && r.blockers?.length === 1 && r.blockers[0] === "agent failed";
 
 // a new plan on the same job keeps every result with a commit: its waitsFor may name them, the report lists them
-export function init(args, old, base = []) {
+export function init(args, old, base = [], baseLoose = []) {
   if (old?.running || old?.launching) throw new Error("a run of this job is still going");
   if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(args.job || "")) throw new Error(`bad job id: ${args.job}`);
   if (!args.plugin || !args.batches?.length) throw new Error("args need plugin and batches");
@@ -31,8 +31,12 @@ export function init(args, old, base = []) {
       if (!ids.has(w) && kept[w]?.status !== "committed") throw new Error(`${b.id} waits for ${w}, not committed in full`);
     }
   }
-  return { args, base, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
+  return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
 }
+
+// the run is known to be over (lost session, stopped report): without this, init refuses the job for good; next
+// stays at stopped, so a tick that fires before the cron is deleted launches nothing
+export const abandon = (state) => ({ ...state, running: false, launching: false, pending: [], abandoned: true });
 
 // run: what the workflow left ({ status, result, idle, failed }); repo: { commits: Map of batch id → hash, loose:
 // hashes of this job with no Batch trailer, dirty: paths, noStash: a stash was tried or cannot help }
@@ -45,7 +49,7 @@ export function next(state, run, repo, now = Date.now()) {
     return { state: s, step: { action: "stopped", open, commits: [...repo.commits.keys()], loose: repo.loose } };
   };
   // a turn lost between `run` and `started`: a workflow may be going, and a second one would commit everything twice
-  if (s.launching) return stopped();
+  if (s.launching || s.abandoned) return stopped();
   if (s.running) {
     if (run.failed) return stopped();
     if (run.status !== "completed" || !Array.isArray(run.result?.batches)) {
@@ -61,7 +65,10 @@ export function next(state, run, repo, now = Date.now()) {
   const retry = [];
   const again = new Set();
   const known = Object.values(s.batches).flatMap((r) => [r.hash, r.fix?.hash]).filter(Boolean);
-  const loose = repo.loose.filter((h) => !known.some((k) => k.startsWith(h) || h.startsWith(k)));
+  // a resumed job holds the fix commits of its lost run: none of them is this run's lost batch
+  const loose = repo.loose
+    .filter((h) => !(s.baseLoose || []).some((k) => k.startsWith(h) || h.startsWith(k)))
+    .filter((h) => !known.some((k) => k.startsWith(h) || h.startsWith(k)));
   const dirty = repo.dirty.filter((p) => !(s.base || []).includes(p));
   const lost = (r, id) => ({ ...r, id, status: "partial", hash: repo.commits.get(id), review: "not reviewed: no agent reported this commit" });
   // plan order: a batch's waitsFor come before it, so a skipped batch sees what will run ahead of it
@@ -139,27 +146,38 @@ export function readRun(dir, since = 0, now = Date.now()) {
   return { ...run, idle: now - last };
 }
 
-export function readRepo(cwd, job) {
-  const git = (...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+// logFailed: the log could not be read, so `commits` says nothing; an unborn HEAD is not that
+export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
   const commits = new Map();
   const loose = [];
+  let logFailed = false;
   try {
     // the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Batch line from it
     const log = git("log", "-E", `--grep=^Job: ${job}$`, "--format=%h%n%B%x00");
     for (const entry of log.split("\0").map((e) => e.trim()).filter(Boolean)) {
       const hash = entry.split("\n")[0];
+      // plan.mjs commits the plan file under the job: no batch's work, so never a sign of a lost commit
+      if (/^Plan-File: /m.test(entry)) continue;
       const id = entry.match(/^Batch: (\S+)$/m)?.[1];
       if (id) commits.set(id, hash);
       else loose.push(hash);
     }
-  } catch {
-    // a repo with no commit yet has none of this job
+  } catch (e) {
+    try {
+      git("rev-parse", "-q", "--verify", "HEAD");
+      logFailed = true;
+    } catch {
+      // a repo with no commit yet has none of this job; out of time says nothing about that
+      logFailed = e.code === "ETIMEDOUT";
+    }
   }
+  if (!dirty) return { commits, loose, dirty: [], logFailed };
   try {
     const status = git("status", "--porcelain", "--", ".", ":(exclude)ai/usage");
-    return { commits, loose, dirty: status.split("\n").filter(Boolean).map((l) => l.slice(3)) };
+    return { commits, loose, dirty: status.split("\n").filter(Boolean).map((l) => l.slice(3)), logFailed };
   } catch {
-    return { commits, loose, dirty: ["(git status failed)"] };
+    return { commits, loose, dirty: ["(git status failed)"], logFailed };
   }
 }
 
@@ -179,12 +197,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (cmd === "init" && path && arg) {
     try {
       const args = read(arg);
-      const base = readRepo(args.repo || process.cwd(), args.job).dirty;
-      write(path, init(args, existsSync(path) ? read(path) : undefined, base));
+      const { dirty, loose } = readRepo(args.repo || process.cwd(), args.job);
+      write(path, init(args, existsSync(path) ? read(path) : undefined, dirty, loose));
     } catch (e) {
       console.error(e.message);
       process.exit(1);
     }
+  } else if (cmd === "abandon" && path) {
+    if (!existsSync(path)) {
+      console.error(`no state ${path}`);
+      process.exit(1);
+    }
+    write(path, abandon(read(path)));
   } else if (cmd === "started" && path && arg) {
     write(path, started(read(path), arg, process.argv[5]));
   } else if (cmd === "next" && path) {
@@ -203,7 +227,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const { args, ...shown } = step;
     console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json` } : shown));
   } else {
-    console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task>");
+    console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task> | abandon <state>");
     process.exit(2);
   }
 }

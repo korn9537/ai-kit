@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # SessionStart: records the plugin path for the git pre-commit shim (<git-common-dir>/ai-kit-root) and injects
 # CLAUDE.core.md with its ai-kit/ paths made absolute (plain text without jq), flushes other sessions' token
-# buffers idle for 6 hours into ai/usage/, and records a new session's review snapshot. Silent without ai/kit/.
+# buffers idle for 6 hours into ai/usage/, records a new session's review snapshot and names the plans not closed.
+# Silent without ai/kit/.
 set -euo pipefail
 
 . "$(dirname "$0")/lib.sh"
@@ -49,6 +50,13 @@ rep="$kit_plugin/"
 core="$(sed "s|ai-kit/|$(printf '%s' "$rep" | sed 's/[|&\\]/\\&/g')|g" "$kit_plugin/CLAUDE.core.md")"
 if [[ -s "$kit_root/ai/kit/kit-proposals.md" ]]; then
   core+=$'\n\n'"Unfiled kit proposals in ai/kit/kit-proposals.md: file them per ${rep}docs/kit-proposals.md §Filing, then remove each filed entry (delete the file when empty)."
+fi
+# silent with no plan of plan.mjs: a hand-written plan has no batches to go on with
+if command -v node >/dev/null 2>&1 && compgen -G "$kit_root/ai/plans/*.md" >/dev/null; then
+  plans="$(cd "$kit_root" && node "$kit_plugin/scripts/plan.mjs" status --quick 2>/dev/null || true)"
+  if [[ -n "$plans" ]]; then
+    core+=$'\n\n'"Plans in ai/plans not closed, status from their commits:"$'\n'"$plans"$'\n'"Tell the user in your first reply. Go on only when they say so, per ${rep}docs/plan-batching.md §Plan file: another session may be running one."
+  fi
 fi
 mem="$(kit_memory_dir)"
 # MEMORY.md counts only when it holds more than index links (kit.mjs memoryFiles)

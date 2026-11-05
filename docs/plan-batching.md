@@ -15,8 +15,33 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 4. **Order**: a batch waits for another only when it needs that batch's code, schema or output, or shares a file or
    resource with it. Show the plan (batches, their items, what waits for what). An owner decision open → wait
    for the owner's go; none → go on, the user may correct it.
-5. **Hot files** most items would touch (plan and state docs, decision log, roadmap, changelog, lockfile, generated
+5. **Plan file**: two batches or more, or any run of `/ai-kit:run-plan` or `/ai-kit:continuous` → `plan.mjs write`
+   before the first batch (§Plan file). One batch in the main session: none.
+6. **Hot files** most items would touch (plan and state docs, decision log, roadmap, changelog, lockfile, generated
    clients): update once per batch, or once at the end of the plan, not once per item.
+
+## Plan file
+
+A plan lives in `ai/plans/<job>.md`, so a lost session loses no batch. `scripts/plan.mjs` owns the file: the batches
+sit in it, the status does not. A batch has a commit when a commit of the job carries its `Batch: <id>` trailer, so no
+one updates a status and no two sessions edit it. All of it runs from the project root (the repo, when `repo` is set).
+
+- **Write**: the args of `commands/run-plan.md` step 2 go to a temp file, then `plan.mjs write <file>` before the first
+  batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a
+  commit or with no title or brief) and commits the plan. It also refuses while other files are staged: commit those
+  first. Run again on the same job, it adds new batches and updates known ones by id. `--replace` also drops the
+  batches with no commit that the args leave out, for a plan renamed or cut after a refusal.
+- **Status**: `plan.mjs status [job]`. A new session is told of every plan not closed; it says so to the user and
+  goes on only on their word.
+- **Resume**: `/ai-kit:run-plan resume [job]` (`commands/run-plan.md` §Resume).
+- **Close**: `plan.mjs close <job>` deletes the plan in its own commit, once every batch has a commit and the report
+  holds no batch under Open. Other Open items (notes, PLAUSIBLE findings) do not hold a plan open.
+- **Left work**: a commit says the batch ran, not that it ended clean. What is left of a `partial` batch goes back in
+  as a new batch id through `write`, with what waited for it now waiting for that id. An owner's answer goes into the
+  brief of its `blocked` batch through `write`, same id. The owner giving up the rest: `close <job> --drop`.
+- A reverted batch still counts as committed: say so under Open and add a new batch id for it.
+- `/ai-kit:check` warns of a plan with nothing left. A plan written by hand (`templates/ai/plan.md`) keeps its status
+  table and is the author's to update; the script only gives that warning.
 
 ## While changing code
 
@@ -47,8 +72,9 @@ who leaves: it tries failed committers again and writes the one report when noth
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
 - The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands,
-  the request's job id (`shared-checkout.md` §Jobs; one for the whole plan) and anything the coordinator already
-  found (paths, line numbers), so the subagent does not search for it again.
+  the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id for its `Batch: <id>`
+  trailer (§Plan file; a fix commit has none) and anything the coordinator already found (paths, line numbers), so
+  the subagent does not search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for
   the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
@@ -72,9 +98,11 @@ who leaves: it tries failed committers again and writes the one report when noth
   `handoff-nudge.sh` notes it on the next Agent or SendMessage call. The running batches finish, with their
   reviews, fixes and re-checks, and the final report's "Next session" item holds the batches left so the plan
   continues in a fresh session. This is the one stop the next bullet allows besides an owner decision or a blocker.
-  The limit stops new plan batches; the one item the user just asked for still goes to one committer.
+  The limit stops new plan batches; the one item the user just asked for still goes to one committer. The prompt
+  names the job: the plan file holds the batches left.
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every
   planned commit then runs to the end in one run with one report: never stop between commits to ask whether to
   continue; stop early only for an owner decision, a blocker or the context limit above.
+- After the last batch, before the final report: close the plan per §Plan file and name that commit under Git.
 - Exception: commits that share too much context to hand over (one large refactor) → say so and run in the main
   session.
