@@ -9,21 +9,34 @@ import { readRepo } from "./continuous.mjs";
 
 const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 const relPath = (job) => `ai/plans/${job}.md`;
-// a repo's doc check allows 120 columns: a value this wide fits on a batch's line beside a key of up to 11 characters
-const WIDTH = 96;
+// what a repo's doc check allows
+const COLUMNS = 120;
 const width = (s) => JSON.stringify(s).length - 2;
 const wrapped = (v) => Array.isArray(v?.lines) && Object.keys(v).length === 1;
 
 // cut at whitespace, inside a word only when it alone is too wide (Thai has no spaces); joined, it is the text again
-function chunks(text) {
+function chunks(text, max) {
   const out = [""];
   for (const word of text.split(/(?<=\s)/)) {
-    for (const piece of width(word) > WIDTH ? [...word] : [word]) {
-      if (width(out.at(-1) + piece) > WIDTH) out.push("");
+    for (const piece of width(word) > max ? [...word] : [word]) {
+      if (width(out.at(-1) + piece) > max) out.push("");
       out[out.length - 1] += piece;
     }
   }
   return out;
+}
+
+// a string that passes COLUMNS where JSON.stringify would put it, as { lines }: lead is its quoted key and ": ", 3 is
+// its own quotes and comma, 4 the indent of the items
+function fold(v, indent = 0, lead = 0) {
+  if (typeof v === "string") {
+    return indent + lead + width(v) + 3 > COLUMNS ? { lines: chunks(v, COLUMNS - indent - 4 - 3) } : v;
+  }
+  if (Array.isArray(v)) return v.map((x) => fold(x, indent + 2));
+  if (v && typeof v === "object") {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fold(x, indent + 2, width(k) + 4)]));
+  }
+  return v;
 }
 
 // every word a person wrote stays in the fence: check-docs reads ai/*.md strictly (Thai, dates, bold) outside one;
@@ -39,7 +52,7 @@ export function render(plan) {
     "status: the commits of this job, by their Batch trailer (`plan.mjs status`); never edited here.",
     "",
     "```json",
-    JSON.stringify({ job, request, batches }, (_, v) => (typeof v === "string" && width(v) > WIDTH ? { lines: chunks(v) } : v), 2),
+    JSON.stringify(fold({ job, request, batches }), null, 2),
     "```",
     "",
   ].join("\n");
@@ -215,6 +228,16 @@ const committed = (root, rel) => {
   }
 };
 
+// status skips a plan that does not parse, and a doc check refuses the commit of one too wide: neither shows at the start
+function refuseFile(text, plan, isNew) {
+  const back = parse(text);
+  if (!back) throw new Error("the plan would not parse back: an id that is not a string, or a waitsFor that is not a list");
+  if (JSON.stringify(back) !== JSON.stringify(plan)) throw new Error("a field shaped { lines } would come back as a string");
+  const over = text.split("\n").find((l) => l.length > COLUMNS);
+  // a job id cannot be renamed once commits carry it, so a plan already in the repo stays writable
+  if (over && isNew) throw new Error(`a plan line passes ${COLUMNS} columns, shorten its job, key or nesting: ${over.slice(0, 60)}`);
+}
+
 export function write(root, args, replace = false) {
   const rel = relPath(args.job);
   const path = join(root, rel);
@@ -223,6 +246,7 @@ export function write(root, args, replace = false) {
   if (before !== null && !old) throw new Error(`${rel} is not a plan this script wrote`);
   const plan = merge(old, args, commitsOf(root, args.job), replace);
   const text = render(plan);
+  refuseFile(text, plan, !old);
   // parsed, not as text: a formatter in the pre-commit rewrites the block
   if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false };
   // a failed commit leaves no plan behind, and the run must not start as if it had one

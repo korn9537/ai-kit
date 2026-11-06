@@ -27,11 +27,13 @@ sit in it, the status does not. A batch has a commit when a commit of the job ca
 one updates a status and no two sessions edit it. All of it runs from the project root (the repo, when `repo` is set).
 
 - **Write**: the args of `commands/run-plan.md` step 2 go to a temp file, then `plan.mjs write <file>` before the first
-  batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a
-  commit or with no title or brief) and commits the plan. It also refuses while other files are staged: commit those
-  first. Run again on the same job, it adds new batches and updates known ones by id. `--replace` also drops the
-  batches with no commit that the args leave out, for a plan renamed or cut after a refusal. A text too long for one
-  line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc check; `parse` joins it back.
+  batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a commit
+  or with no title or brief), or a file that would not come back as the plan or has a line over 120 columns (a job over
+  113 characters, a very long key; a plan already in the repo is not refused for width), and commits the plan. It also
+  refuses while other files are staged: commit those first. Run again on the same job, it adds new batches and updates
+  known ones by id. `--replace` also drops the batches with no commit that the args leave out, for a plan renamed or cut
+  after a refusal. A text too long for one line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc
+  check; `parse` joins it back.
 - **Status**: `plan.mjs status [job]`. A new session is told of every plan not closed; it says so to the user and
   goes on only on their word.
 - **Resume**: `/ai-kit:run-plan resume [job]` (`commands/run-plan.md` §Resume).

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.27.2
+
+- `scripts/plan.mjs`: a string wraps by where it really sits, indent and escaped key included, so nesting or a long key
+  keeps its line within 120 columns. `write` refuses a plan that would not parse back and a field shaped `{ lines }`,
+  instead of committing a plan that `status` skips or changing the field. A new plan with a line still over 120 (a job
+  over 113 characters, a key over about 109) is refused too; a plan already in the repo stays writable.
+- Tests: `unattended.test.mjs` compares what the index stages and its flags, not its file, whose stat cache any
+  `git status` may refresh. `usage-record.test.mjs` counts the comparisons `uniqueCommits` makes instead of timing it:
+  every timing failed under load. `uniqueCommits` takes the comparison as an optional argument for that.
+
 ## 2.27.1
 
 - `conventions/typeorm.md` item 2: every migration has a unique timestamp; a duplicate that has run is renumbered and

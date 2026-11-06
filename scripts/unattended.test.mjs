@@ -33,7 +33,8 @@ const commit = (m) => {
   git("add", "-A");
   git("-c", "core.hooksPath=/dev/null", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", m);
 };
-const state = () => [git("rev-parse", "HEAD"), git("status", "--porcelain"), readFileSync(at(".git", "index")).toString("hex")];
+// the index by what it stages and its flags: its file also caches stat data, which any git status may refresh
+const state = () => [git("rev-parse", "HEAD"), git("status", "--porcelain"), git("ls-files", "-s", "-v")];
 // a project check in the template's shape: fails when a changed file is named bad
 const projectCheck = () =>
   writeFileSync(
