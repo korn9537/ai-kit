@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.26.0
+
+- Runs without the plugin (`scripts/unattended.mjs`, `docs/ai-layout.md` §Runs without the plugin): `"unattended": true`
+  in `ai/kit/config.json`, off by default, gives a `claude -p` run the conventions snapshot, a `CLAUDE.md` pointer and
+  `ai/kit/check.sh <base-ref>`; `/ai-kit:check` warns of a stale or hand-edited copy and nothing refreshes it on its
+  own. `check.sh` passes files through `AI_KIT_FILES` and never touches HEAD or the index; each runner defines
+  `changed`, which the pre-commit template gates on. Left out: a reviewer prompt in the snapshot, a pipeline writes
+  its own (#43). Left open: `check.sh` refuses any `--cached` or `--staged` in code, `git rm --cached` included, and
+  a project on an older shim needs `init` once, which `check` names.
+
 ## 2.25.1
 
 - `scripts/check-size.mjs`: the `partial` a C# split adds to its class line no longer needs `ALLOW_LARGE_EDIT=1`; the

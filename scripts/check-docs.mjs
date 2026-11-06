@@ -165,7 +165,8 @@ for (const l of (
 }
 // keep only removed lines the rules saw in HEAD; their text marks a moved line
 // an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added
-const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f);
+// ai/kit/conventions/ is a generated copy of the kit's conventions, outside any repo's docs.skip
+const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f) && !f.startsWith("ai/kit/conventions/");
 // HEAD text of each path, one git process for all; a missing blob reads as ""
 const heads = (paths) => {
   const out = new Map();

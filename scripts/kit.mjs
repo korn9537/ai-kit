@@ -1,5 +1,5 @@
 // Wires the ai-kit plugin into a project, cwd in the project:
-// node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>
+// node <plugin>/scripts/kit.mjs <init|check|sync|migrate|inventory>
 // What each command does: README.md §Commands.
 import { execFileSync } from "node:child_process";
 import {
@@ -17,6 +17,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { planWarnings } from "./plan.mjs";
+import { HELPERS, snapshotWarnings, syncSnapshot } from "./unattended.mjs";
 
 const kit = join(import.meta.dirname, "..");
 const PLUGIN = "ai-kit@korn9537";
@@ -33,17 +34,8 @@ fi
 echo "warn: ai-kit plugin path unknown: open Claude Code in this repo once"
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
-# same helper as the plugin's githooks/pre-commit, which ai/kit/pre-commit.sh may call
-quiet() {
-  out=$("$@" 2>&1); rc=$?
-  if [ $rc -ne 0 ]; then printf '%s\\n' "$out"
-  else
-    n=$(printf '%s\\n' "$out" | grep -c '^!')
-    [ "$n" -gt 0 ] && echo "warn: $n warning(s) from: $* (run it alone for details)"
-  fi
-  return $rc
-}
-# shellcheck source=/dev/null
+# same helpers as the plugin's githooks/pre-commit, which ai/kit/pre-commit.sh may call
+${HELPERS}# shellcheck source=/dev/null
 [ -f ai/kit/pre-commit.sh ] && . ai/kit/pre-commit.sh
 exit 0
 `;
@@ -526,6 +518,7 @@ function initFiles(created = []) {
 
 function init() {
   initFiles();
+  syncSnapshot(root, kit);
   const left = problems();
   left.forEach((p) => console.log(`! ${p}`));
   memoryWarnings().forEach((w) => console.log(`! ${w}`));
@@ -535,6 +528,7 @@ function init() {
   docsWarnings().forEach((w) => console.log(`! ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ${w}`));
   planWarnings(root).forEach((w) => console.log(`! ${w}`));
+  snapshotWarnings(root, kit).forEach((w) => console.log(`! ${w}`));
   usageWarnings().forEach((w) => console.log(`! ${w}`));
   console.log(left.length ? "init done; problems above" : "ai-kit ready");
   console.log(
@@ -1005,9 +999,13 @@ else if (cmd === "check") {
   docsWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   layoutWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   planWarnings(root).forEach((w) => console.log(`! ai-kit: ${w}`));
+  snapshotWarnings(root, kit).forEach((w) => console.log(`! ai-kit: ${w}`));
   usageWarnings().forEach((w) => console.log(`! ai-kit: ${w}`));
   if (out.length) process.exit(1);
+} else if (cmd === "sync") {
+  const left = syncSnapshot(root, kit);
+  console.log(left === null ? "unattended is off" : left ? `${left} file(s) left, see above` : "in sync");
 } else {
-  console.log("usage: node <plugin>/scripts/kit.mjs <init|check|migrate|inventory>");
+  console.log("usage: node <plugin>/scripts/kit.mjs <init|check|sync|migrate|inventory>");
   process.exit(2);
 }

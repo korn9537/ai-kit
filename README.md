@@ -42,6 +42,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit    |
 | `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
 | `scripts/check-size.mjs`      | pre-commit: blocks an edit to a code file over 40 KB at HEAD that is not a move-only split     |
+| `scripts/unattended.mjs`      | `kit.mjs sync` and its `check` warnings: what runs without the plugin read from the repo       |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
 | `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |
@@ -125,14 +126,16 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |
 | `analysis-sources.md` | `ai-kit:business-analyst`                                                                                                                                                                                                                   |
+| `check.sh`            | a project gate, with `unattended`: generated, `docs/ai-layout.md` §Runs without the plugin                                                                                                                                                  |
+| `conventions/`        | runs without the plugin, with `unattended`: generated copies, same section                                                                                                                                                                  |
 
-`conventions` lists the language files in `conventions/` that apply to the project, without `.md` (e.g.
-`["go", "sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception
-for one project goes in its `review-checklist.md`, with its reason. `shared_checkout_doc` defaults to this
-plugin's `docs/shared-checkout.md`. `review.skip_lines` defaults to 10 changed lines, + and − counted apart (0
-reviews every change); `review.always` (a JS-style regex) to migration, schema, auth, permission and policy paths
-and `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its
-re-check.
+`conventions` lists the language files in `conventions/` that apply to the project, without `.md` (e.g. `["go",
+"sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception for one
+project goes in its `review-checklist.md`, with its reason. `unattended` (default `false`) turns on what runs without
+the plugin read from the repo: `docs/ai-layout.md` §Runs without the plugin. `shared_checkout_doc` defaults to this
+plugin's `docs/shared-checkout.md`. `review.skip_lines` defaults to 10 changed lines, + and − counted apart (0 reviews
+every change); `review.always` (a JS-style regex) to migration, schema, auth, permission and policy paths and
+`.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its re-check.
 
 `usage.enabled` (default `true`) turns the token records off with `false`; `usage.money` (default `true`)
 set to `false` (a subscription, where dollars are not billed) shows the round and session summary in
@@ -179,6 +182,9 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   kit shim.
   The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
   `.claude/agents/` or `CLAUDE.md` are staged.
+- `node <plugin>/scripts/kit.mjs sync`, with `"unattended": true` in `ai/kit/config.json`, writes `ai/kit/conventions/`,
+  `ai/kit/check.sh` and the `CLAUDE.md` pointer (`docs/ai-layout.md` §Runs without the plugin); `init` runs it too,
+  and `check` warns of a stale, hand-edited or missing copy. Off, it writes nothing.
 - `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside
   the layout, schema sources, screen files with a `ui.include` suggestion, API spec and route files, decision docs
   and other `.md` outside `ai/`, grouped by folder. `/ai-kit:retrofit` (`commands/retrofit.md`) uses it to plan,

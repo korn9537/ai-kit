@@ -19,6 +19,11 @@ quiet() {
   fi
   return $rc
 }
+# the files to check: AI_KIT_FILES when ai/kit/check.sh set it, else the staged ones
+changed() {
+  if [ -n "${AI_KIT_FILES+set}" ]; then [ -z "$AI_KIT_FILES" ] || printf '%s\n' "$AI_KIT_FILES"
+  else git diff --cached --name-only --diff-filter=ACMR; fi
+}
 
 if ! command -v node >/dev/null 2>&1; then
   echo "commit blocked: 'node' is not on PATH for this git client."
@@ -89,6 +94,8 @@ if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --
   # paths are literal below: a Next.js route `app/[id]/page.tsx` is a glob to git
   whole="" partial=""
   while IFS= read -r f; do
+    # a generated copy keeps the text its hash covers (scripts/unattended.mjs)
+    case "$f" in ai/kit/conventions/*) continue ;; esac
     if printf '%s\n' "$unstaged" | grep -qxF -- "$f"; then partial="$partial$f
 "; else whole="$whole$f
 "; fi

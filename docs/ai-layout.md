@@ -26,6 +26,32 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 - Outside `ai/`: human-read docs (customer requirements, meeting notes), generated files, history (git log).
   A doc under `ai/` points to its human source, never copies it.
 
+## Runs without the plugin
+
+For a project with `claude -p` runs that do not load the plugin (a CI job, a queue worker), opted in with
+`"unattended": true` in `ai/kit/config.json`, default off. The plugin stays the source of the rules.
+
+- `kit.mjs sync` (and `init`) writes `ai/kit/conventions/` (`general.md`, the `conventions` files, what each adds to),
+  `ai/kit/check.sh`, and one line in `CLAUDE.md` that sends the run to `ai/kit/conventions/` before it writes code.
+  All generated, never edited; commit them. `sync` replaces a hand-edited copy still in the list; it leaves a file
+  with no generated header, and a hand-edited copy no longer in the list, and says so.
+- `kit.mjs check` warns of a missing, stale or hand-edited copy; nothing refreshes them on its own, so the tree only
+  changes when someone runs `sync`. Stale means the text differs, so a kit release that leaves a file alone is silent.
+- A gate runs `sh ai/kit/check.sh <base-ref>` before merging: `ai/kit/pre-commit.sh` on the files changed since the
+  merge base, exit 1 on a failure. It reads HEAD and the index and changes neither.
+- `ai/kit/pre-commit.sh` gates each check on `changed`, which every runner defines: staged files in a commit, the
+  range in `check.sh`, passed through `AI_KIT_FILES`. `check.sh` refuses a script with `--cached` or `--staged` in its
+  code, and one that does not parse. A script it calls that reads staged files itself sees none there: pass it the
+  output of `changed`.
+- `check.sh` runs the project's checks only, on committed files, and prints how many it covered. The kit's own
+  (comments, docs, 40 KB) live in the plugin.
+- A path starting `ai-kit/` inside a copy is a plugin doc, not in the repo.
+- Turning `unattended` off stops the warnings only: delete the copies, `check.sh` and the `CLAUDE.md` line by hand.
+- Not carried over: plugin hooks, agents, the Job trailer, `CLAUDE.core.md`. Enabling the plugin at project level is
+  not the way to get them: such a run leaves `ai/usage/` records in the clone, and its conversational rules conflict
+  with a run that returns schema-bound output. A pipeline writes its own review prompt and reads
+  `ai/kit/review-checklist.md` and `ai/kit/conventions/` from the repo.
+
 ## Where a fact goes
 
 Project knowledge lives in the repo, never in auto-memory; same commit as the work.

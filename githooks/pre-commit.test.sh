@@ -179,6 +179,12 @@ git -C "$REPO" commit -qm fmt -- fmt.ts 2>&1
 check "path-limited commit holds the formatted file" "$(git -C "$REPO" show HEAD:fmt.ts)" LOWER
 check "path-limited commit leaves the formatted file clean in the index" \
   "$(git -C "$REPO" status --porcelain -- fmt.ts)" ""
+# a generated copy keeps the text its hash covers
+mkdir -p "$REPO/ai/kit/conventions"
+echo lower >"$REPO/ai/kit/conventions/copy.ts"
+git -C "$REPO" add ai/kit/conventions/copy.ts
+git -C "$REPO" commit -qm copy 2>&1
+check "prettier leaves ai/kit/conventions/ alone" "$(git -C "$REPO" show HEAD:ai/kit/conventions/copy.ts)" lower
 
 echo "$pass passed, $fail failed"
 ((fail == 0))
