@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.27.3
+
+- `scripts/plan.mjs`: `write` lets through only the wide lines a plan's file already holds, not every line of an
+  existing plan, so a new wide key is refused there too and a job that cannot be renamed still is not.
+- `usage-record.test.mjs`: three hashes share a prefix and the count must be above 0, so a change that bypasses the
+  counted comparison fails. A quadratic copy of the whole list is still out of its sight.
+
 ## 2.27.2
 
 - `scripts/plan.mjs`: a string wraps by where it really sits, indent and escaped key included, so nesting or a long key

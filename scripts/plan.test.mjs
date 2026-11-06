@@ -135,6 +135,10 @@ try {
   git(oldRepo, "add", "ai");
   git(oldRepo, "commit", "-q", "-m", "older plan");
   ok("a plan already in the repo stays writable, however wide", write(oldRepo, oldArgs).committed === false);
+  ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d" }] }).committed === true);
+  const narrow = repoAt("narrow");
+  write(narrow, args());
+  throws("a plan already in the repo refuses a new wide line", () => write(narrow, { ...args(), batches: [{ id: "e", title: "E", brief: "do e", ["k".repeat(130)]: 1 }] }), /passes 120 columns/);
   throws("write refuses a key too long for the file", () => write(repoAt("wide-key"), args([{ id: "a", ["k".repeat(130)]: 1 }])), /passes 120 columns/);
   ok("the refused plan leaves no file", !existsSync(join(tmp, "shaped", "ai", "plans", `${JOB}.md`)));
   const rel = `ai/plans/${JOB}.md`;

@@ -229,13 +229,13 @@ const committed = (root, rel) => {
 };
 
 // status skips a plan that does not parse, and a doc check refuses the commit of one too wide: neither shows at the start
-function refuseFile(text, plan, isNew) {
+function refuseFile(text, plan, before) {
   const back = parse(text);
   if (!back) throw new Error("the plan would not parse back: an id that is not a string, or a waitsFor that is not a list");
   if (JSON.stringify(back) !== JSON.stringify(plan)) throw new Error("a field shaped { lines } would come back as a string");
-  const over = text.split("\n").find((l) => l.length > COLUMNS);
-  // a job id cannot be renamed once commits carry it, so a plan already in the repo stays writable
-  if (over && isNew) throw new Error(`a plan line passes ${COLUMNS} columns, shorten its job, key or nesting: ${over.slice(0, 60)}`);
+  // a line the file already holds passes: a job id cannot be renamed once commits carry it
+  const over = text.split("\n").find((l) => l.length > COLUMNS && !before?.includes(l));
+  if (over) throw new Error(`a plan line passes ${COLUMNS} columns, shorten its job, key or nesting: ${over.slice(0, 60)}`);
 }
 
 export function write(root, args, replace = false) {
@@ -246,7 +246,7 @@ export function write(root, args, replace = false) {
   if (before !== null && !old) throw new Error(`${rel} is not a plan this script wrote`);
   const plan = merge(old, args, commitsOf(root, args.job), replace);
   const text = render(plan);
-  refuseFile(text, plan, !old);
+  refuseFile(text, plan, before);
   // parsed, not as text: a formatter in the pre-commit rewrites the block
   if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false };
   // a failed commit leaves no plan behind, and the run must not start as if it had one

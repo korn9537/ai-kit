@@ -29,7 +29,7 @@ one updates a status and no two sessions edit it. All of it runs from the projec
 - **Write**: the args of `commands/run-plan.md` step 2 go to a temp file, then `plan.mjs write <file>` before the first
   batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a commit
   or with no title or brief), or a file that would not come back as the plan or has a line over 120 columns (a job over
-  113 characters, a very long key; a plan already in the repo is not refused for width), and commits the plan. It also
+  113 characters, a very long key; a line the plan's file already holds is not refused), and commits the plan. It also
   refuses while other files are staged: commit those first. Run again on the same job, it adds new batches and updates
   known ones by id. `--replace` also drops the batches with no commit that the args leave out, for a plan renamed or cut
   after a refusal. A text too long for one line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc

@@ -102,15 +102,16 @@ eq("no session id throws", threw, true);
 eq("session id taken from a prior record", buildRecord(sessionMore, [rA], { ...ctx, session: undefined }).session, "s1");
 eq("a commit a prior record spelled shorter is not counted again",
   buildRecord({ ...session, commits: [{ ts: "t", hash: "abc12345" }, { ts: "t", hash: "def5678" }] }, [{ ...r1, agents: [], commits: ["abc1234"] }], ctx).commits, ["def5678"]);
-// comparisons, not wall time: any timing of this failed under load; prefixes spread like real hashes
+// comparisons, not wall time: any timing of this failed under load; prefixes spread like real hashes, and three share
+// one so the count is above 0, which shows the comparisons went through the counter
 const hashes = (k) => Array.from({ length: k }, (_, i) => (Math.imul(i + 1, 2654435761) >>> 0).toString(16).padStart(8, "0"));
 const compares = (k) => {
   let n = 0;
-  uniqueCommits(hashes(k), (a, b) => (n++, sameCommit(a, b)));
+  uniqueCommits([...hashes(k), "abcdef01", "abcdef02", "abcdef03"], (a, b) => (n++, sameCommit(a, b)));
   return n;
 };
 eq("uniqueCommits: 10000 distinct hashes stay distinct", uniqueCommits(hashes(10000)).length, 10000);
-eq("uniqueCommits: a hash is compared only within its prefix, not with every other", compares(10000) < 10000, true);
+eq("uniqueCommits: a hash is compared only within its prefix, not with every other", (() => { const n = compares(10000); return n > 0 && n < 10000; })(), true);
 eq("uniqueCommits: one commit per prefix family, the longest spelling kept", uniqueCommits(["abc1234", "abc12345", "def5678"]), ["abc12345", "def5678"]);
 eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
 
