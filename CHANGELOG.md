@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.25.1
+
+- `scripts/check-size.mjs`: the `partial` a C# split adds to its class line no longer needs `ALLOW_LARGE_EDIT=1`; the
+  line must equal one removed from the same file, once per removed line (#42). Left open: with two files over 40 KB
+  in one commit a removed line can pay in both, as moved lines already could; an attribute on the class's own line
+  is not read as a modifier, so that split still needs the escape.
+- `conventions/general.md` item 15: a request type declares only what the caller decides (#41).
+- `conventions/nestjs.md` item 2: `@Cron` names its `timeZone`; replicas claim `(job, slot)` by scheduled time (#40).
+
 ## 2.25.0
 
 - Plan files (`scripts/plan.mjs`, `docs/plan-batching.md` §Plan file): a plan of two batches or more is committed to

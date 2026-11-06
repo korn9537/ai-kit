@@ -127,6 +127,43 @@ git -C "$REPO" add big3.ts
 check "a C# using statement is code, not wiring" "$(size)" blocked
 git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- big3.ts
 
+# check-size alone: the `partial` a C# split adds to its class line is paid by that line, and nothing else is
+{
+  echo 'public class Orders(Db db)'
+  echo '{'
+  for i in $(seq 1 1200); do echo "    public int Value$i() => Compute($i, \"argument value\");"; done
+  echo '    public string Kind() => "class";'
+  echo '}'
+} >"$REPO/Orders.cs"
+git -C "$REPO" add Orders.cs && git -C "$REPO" commit -qm orders 2>&1
+sed -i.bak '1s/public class/public partial class/' "$REPO/Orders.cs" && rm "$REPO/Orders.cs.bak"
+git -C "$REPO" add Orders.cs
+check "a C# class line that only gains partial passes" "$(size)" pass
+sed -i.bak '1s/(Db db)/(Db db, Clock clock)/' "$REPO/Orders.cs" && rm "$REPO/Orders.cs.bak"
+git -C "$REPO" add Orders.cs
+check "a C# class line that gains partial and a parameter is blocked" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- Orders.cs
+sed -i.bak -e '1s/public class/public partial class/' -e '$a\
+public partial class Orders(Db db)' "$REPO/Orders.cs" && rm "$REPO/Orders.cs.bak"
+git -C "$REPO" add Orders.cs
+check "one removed class line pays for one partial line" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- Orders.cs
+sed -i.bak -e '3d' -e '$a\
+    public int Value1() => Compute(1, "argument value");' "$REPO/Orders.cs" && rm "$REPO/Orders.cs.bak"
+git -C "$REPO" add Orders.cs
+check "a line moved inside the same file is not paid by its own removal" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- Orders.cs
+sed -i.bak 's/=> "class"/=> "partial class"/' "$REPO/Orders.cs" && rm "$REPO/Orders.cs.bak"
+git -C "$REPO" add Orders.cs
+check "partial inside a C# string is an edit" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- Orders.cs
+cp "$REPO/Orders.cs" "$REPO/Orders.ts"
+git -C "$REPO" add Orders.ts && git -C "$REPO" commit -qm orders-ts 2>&1
+sed -i.bak '1s/public class/public partial class/' "$REPO/Orders.ts" && rm "$REPO/Orders.ts.bak"
+git -C "$REPO" add Orders.ts
+check "partial pays only in a C# file" "$(size)" blocked
+git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- Orders.ts
+
 # prettier in a path-limited commit: the real index gets the formatted copy too, so the file ends clean
 mkdir -p "$REPO/node_modules/prettier/bin"
 cat >"$REPO/node_modules/prettier/bin/prettier.cjs" <<'EOF2'

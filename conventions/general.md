@@ -40,8 +40,9 @@ on a conflict and is where a repo writes an exception, with its reason.
 12. **Large files** — a source file over 40 KB that you need to edit is split first, move-only, in its own commit.
     A lint error the move surfaces is fixed in a follow-up commit, or its suppression names the real reason the rule
     does not apply; "moved verbatim" is no reason (pre-commit rejects it). Pre-commit also rejects an edit to a
-    code file over 40 KB at HEAD that adds more than moved lines and imports (`ALLOW_LARGE_EDIT=1` when it cannot
-    wait). How: `typescript.md` item 11, `csharp.md` item 11, `nestjs.md` item 1.
+    code file over 40 KB at HEAD that adds more than moved lines, imports and the `partial` a C# split puts on its
+    class line (`ALLOW_LARGE_EDIT=1` when it cannot wait). How: `typescript.md` item 11, `csharp.md` item 11,
+    `nestjs.md` item 1.
 13. **Limits and thresholds** — compare a value with a threshold, limit or gate unrounded; round only to format
     for display, never before the decision (`10.004` rounded to `10.00` passes a `<= 10.00` check it fails). A
     number shown next to its limit (a daily total beside its cap) comes from the same function that enforces the
@@ -49,3 +50,10 @@ on a conflict and is where a repo writes an exception, with its reason.
 14. **Client IP** — a forwarding header (`X-Forwarded-For`, `X-Real-IP`) is read only when the TCP peer is inside a
     configured trusted-proxy CIDR list, empty by default; otherwise the client is the TCP peer. Never a middleware
     that trusts the header from any peer: a client could pick its own rate-limit or audit key.
+15. **Request bodies** — a request type declares only what the caller decides, never a field the server overwrites
+    or ignores: the call returns 2xx, the value is lost, the API docs say it counts, and a handler that skips the
+    reset lets a caller forge it. A value the server sets (origin, actor, status) stays out of the request type: the
+    endpoint has its own type, mapped to the internal one in one place, and an internal or domain type is never a
+    request body. Wrong: `Refund(amount, approved_by)` as the body of `POST /orders/{id}/refunds`, the handler
+    resetting `approved_by`. Right: `RefundRequest(amount)`, and one mapper builds the internal `Refund` with the
+    actor the server sets.

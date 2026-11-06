@@ -26,6 +26,7 @@ const WIRING =
   /^(import\b|export\s*(\*|\{[^}]*\}|type\s*\{[^}]*\})\s*(as\s+\w+\s+)?from\b|export\s*(type\s*)?\{$|using\s+(static\s+)?[\w.]+\s*;$|using\s+(?!var\b)\w+\s*=\s*[\w.<>,\s]+;$|(const|let|var)\b.*=\s*require\(|from\s+\S+\s+import\b|require(_relative)?\s+['"])/;
 const OPEN = /^(import|export)\b[^;]*\{$|^from\s+\S+\s+import\s*\($/;
 const CLOSE = /^\}.*\bfrom\b|^\)$/;
+const PARTIAL = /^((?:[a-z]+\s+)*)partial\s+(?=(class|struct|interface|record)\b)/;
 
 const big = git("diff", "--cached", "--name-only", "--diff-filter=M", "-z")
   .split("\0")
@@ -56,11 +57,17 @@ const lines = (f) => {
 const staged = git("diff", "--cached", "--name-only", "--no-renames", "-z").split("\0").filter(Boolean);
 const diffs = new Map(staged.map((f) => [f, lines(f)]));
 
-// each removed line elsewhere pays for one added line (a multiset: `}` removed once covers one `}`)
+const add = (bag, t) => bag.set(t, (bag.get(t) ?? 0) + 1);
+const pay = (bag, t) => !!bag.get(t) && !!bag.set(t, bag.get(t) - 1);
+
+// each removed line elsewhere pays for one added line (a multiset: `}` removed once covers one `}`); a C# split also
+// adds `partial` to the class line it keeps (csharp.md item 11), paid by that line removed from the same file
 const moveOnly = (f) => {
   const left = new Map();
+  const own = new Map();
   for (const [g, d] of diffs)
-    if (g !== f) for (const t of d["-"]) left.set(t, (left.get(t) ?? 0) + 1);
+    if (g !== f) for (const t of d["-"]) add(left, t);
+  if (f.endsWith(".cs")) for (const t of diffs.get(f)["-"]) add(own, t);
   let open = false;
   for (const t of diffs.get(f)["+"]) {
     // an import whose `} from` line is context ends with its hunk
@@ -72,8 +79,8 @@ const moveOnly = (f) => {
       open = open ? !CLOSE.test(t) : OPEN.test(t);
       continue;
     }
-    if (!left.get(t)) return false;
-    left.set(t, left.get(t) - 1);
+    const plain = t.replace(PARTIAL, "$1");
+    if (!pay(left, t) && (plain === t || !pay(own, plain))) return false;
   }
   return true;
 };
