@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.27.0
+
+- `$AI_KIT_RANGE` (`docs/ai-layout.md` §Runs without the plugin): a project check on the diff itself passes it to
+  `git diff`, `--cached` in a commit and `<base-ref>...HEAD` in `ai/kit/check.sh`; it is exported, so a called script
+  reads it too. `changed` gives names only and `xargs` cannot call a shell function, so a check on added lines had no
+  way to run under `check.sh`. `check.sh` now refuses a diff of the index and `--staged`, not every `--cached`, and a
+  base ref with a space. Each project moves over by hand: `diff --cached` becomes `diff $AI_KIT_RANGE`, then `init`;
+  all 11 projects on this machine are still refused until then. Left open: a script `pre-commit.sh` calls that reads
+  the index itself finds nothing and passes, and no check can see it; neither `--cached` on a second line nor one held
+  in a variable is caught; nothing refuses a check that writes the index, the doc tells it to skip itself.
+
 ## 2.26.0
 
 - Runs without the plugin (`scripts/unattended.mjs`, `docs/ai-layout.md` §Runs without the plugin): `"unattended": true`

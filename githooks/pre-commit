@@ -24,6 +24,8 @@ changed() {
   if [ -n "${AI_KIT_FILES+set}" ]; then [ -z "$AI_KIT_FILES" ] || printf '%s\n' "$AI_KIT_FILES"
   else git diff --cached --name-only --diff-filter=ACMR; fi
 }
+# what a check that reads the diff passes to git diff, unquoted; ai/kit/check.sh replaces it with its range
+export AI_KIT_RANGE=--cached
 
 if ! command -v node >/dev/null 2>&1; then
   echo "commit blocked: 'node' is not on PATH for this git client."

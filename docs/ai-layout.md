@@ -38,11 +38,18 @@ For a project with `claude -p` runs that do not load the plugin (a CI job, a que
 - `kit.mjs check` warns of a missing, stale or hand-edited copy; nothing refreshes them on its own, so the tree only
   changes when someone runs `sync`. Stale means the text differs, so a kit release that leaves a file alone is silent.
 - A gate runs `sh ai/kit/check.sh <base-ref>` before merging: `ai/kit/pre-commit.sh` on the files changed since the
-  merge base, exit 1 on a failure. It reads HEAD and the index and changes neither.
+  merge base, exit 1 on a failure. It reads HEAD and the index and changes neither, unless a project check does.
 - `ai/kit/pre-commit.sh` gates each check on `changed`, which every runner defines: staged files in a commit, the
-  range in `check.sh`, passed through `AI_KIT_FILES`. `check.sh` refuses a script with `--cached` or `--staged` in its
-  code, and one that does not parse. A script it calls that reads staged files itself sees none there: pass it the
-  output of `changed`.
+  range in `check.sh`, passed through `AI_KIT_FILES`. A check on the diff itself (added lines, deleted files) passes
+  `$AI_KIT_RANGE` to `git diff`, unquoted: `--cached` in a commit, `<base-ref>...HEAD` in `check.sh`.
+- `check.sh` refuses a script whose code runs a diff with `--cached`, passes `--staged` to anything, or does not
+  parse. Other index reads (`git show :file`, `git grep --cached`) stay: in a clean clone they read HEAD.
+- A script it calls cannot be seen from `pre-commit.sh`. One that reads staged files itself finds none and passes: give
+  it the output of `changed`, or have it read `AI_KIT_RANGE` from the environment.
+- A check that writes the index (`git add`, a generator that stages its output) skips itself under `check.sh`:
+  `[ -n "${AI_KIT_FILES+set}" ] ||` before it.
+- Moving a project over: `diff --cached` becomes `diff $AI_KIT_RANGE` in `pre-commit.sh` and in the scripts it calls,
+  a `--staged` flag goes, then `kit.mjs init`.
 - `check.sh` runs the project's checks only, on committed files, and prints how many it covered. The kit's own
   (comments, docs, 40 KB) live in the plugin.
 - A path starting `ai-kit/` inside a copy is a plugin doc, not in the repo.
