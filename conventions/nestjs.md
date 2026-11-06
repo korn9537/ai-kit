@@ -14,3 +14,7 @@ Reader: agents writing or reviewing NestJS code. Adds to `general.md` and `types
    work. The slot is the scheduled time computed in the business zone, never the fire time (`new Date()`), which
    differs per replica and never conflicts. Right: `@Cron('0 9 * * *', { name: 'digest', timeZone: BUSINESS_TZ })`,
    then claim `('digest', <today 09:00 in BUSINESS_TZ>)`.
+3. **Nested routes** — a handler on a route with a parent path param reads that param and scopes its lookup by it.
+   One that ignores it answers for a child of any other parent, and a permission check made on the parent protects
+   nothing. Wrong: on `teams/:team_id/members/:id`, `find(@Param('id') id: string)` with `where: { id }`. Right:
+   `find(@Param('team_id') teamId: string, @Param('id') id: string)` with `where: { id, team_id: teamId }`.

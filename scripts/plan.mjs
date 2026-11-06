@@ -9,8 +9,25 @@ import { readRepo } from "./continuous.mjs";
 
 const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 const relPath = (job) => `ai/plans/${job}.md`;
+// a repo's doc check allows 120 columns: a value this wide fits on a batch's line beside a key of up to 11 characters
+const WIDTH = 96;
+const width = (s) => JSON.stringify(s).length - 2;
+const wrapped = (v) => Array.isArray(v?.lines) && Object.keys(v).length === 1;
 
-// every word a person wrote stays in the fence: check-docs reads ai/*.md strictly (Thai, dates, bold) outside one
+// cut at whitespace, inside a word only when it alone is too wide (Thai has no spaces); joined, it is the text again
+function chunks(text) {
+  const out = [""];
+  for (const word of text.split(/(?<=\s)/)) {
+    for (const piece of width(word) > WIDTH ? [...word] : [word]) {
+      if (width(out.at(-1) + piece) > WIDTH) out.push("");
+      out[out.length - 1] += piece;
+    }
+  }
+  return out;
+}
+
+// every word a person wrote stays in the fence: check-docs reads ai/*.md strictly (Thai, dates, bold) outside one;
+// a JSON string cannot wrap, so a long one is written as { lines } and parse joins it
 export function render(plan) {
   const title = plan.job.replace(/^\d{4}-\d{2}-\d{2}-/, "");
   const { job, request, batches } = plan;
@@ -22,7 +39,7 @@ export function render(plan) {
     "status: the commits of this job, by their Batch trailer (`plan.mjs status`); never edited here.",
     "",
     "```json",
-    JSON.stringify({ job, request, batches }, null, 2),
+    JSON.stringify({ job, request, batches }, (_, v) => (typeof v === "string" && width(v) > WIDTH ? { lines: chunks(v) } : v), 2),
     "```",
     "",
   ].join("\n");
@@ -33,7 +50,7 @@ export function parse(text) {
   const m = /^```json\r?\n([\s\S]*?)\r?\n```\r?$/m.exec(text);
   if (!m) return null;
   try {
-    const plan = JSON.parse(m[1]);
+    const plan = JSON.parse(m[1], (_, v) => (wrapped(v) ? v.lines.join("") : v));
     const fine = JOB.test(plan?.job ?? "") && Array.isArray(plan.batches) && plan.batches.every(
       (b) => typeof b?.id === "string" && (b.waitsFor === undefined || Array.isArray(b.waitsFor)),
     );

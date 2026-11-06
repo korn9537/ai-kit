@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.27.1
+
+- `conventions/typeorm.md` item 2: every migration has a unique timestamp; a duplicate that has run is renumbered and
+  its `up()` is safe to run again (#44).
+- `scripts/plan.mjs`: a text too long for one line is written as `{ "lines": [...] }` and `parse` joins it, so a plan
+  file fits a 120-column doc check; every long string in the plan, not only `brief`. Plans already written still parse
+  (#45).
+- `conventions/nestjs.md` item 3: a handler on a nested route reads the parent param and scopes its lookup by it (#46).
+
 ## 2.27.0
 
 - `$AI_KIT_RANGE` (`docs/ai-layout.md` §Runs without the plugin): a project check on the diff itself passes it to

@@ -30,7 +30,8 @@ one updates a status and no two sessions edit it. All of it runs from the projec
   batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a
   commit or with no title or brief) and commits the plan. It also refuses while other files are staged: commit those
   first. Run again on the same job, it adds new batches and updates known ones by id. `--replace` also drops the
-  batches with no commit that the args leave out, for a plan renamed or cut after a refusal.
+  batches with no commit that the args leave out, for a plan renamed or cut after a refusal. A text too long for one
+  line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc check; `parse` joins it back.
 - **Status**: `plan.mjs status [job]`. A new session is told of every plan not closed; it says so to the user and
   goes on only on their word.
 - **Resume**: `/ai-kit:run-plan resume [job]` (`commands/run-plan.md` §Resume).

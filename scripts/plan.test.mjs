@@ -44,6 +44,17 @@ ok("a hand-written plan parses to null", parse("# Plan x\n\n| T-1 x | todo | a |
 ok("a broken block parses to null", parse("```json\n{nope\n```\n") === null);
 ok("a brief holding a fence survives", parse(render(merge(null, args([{ id: "a", brief: "x\n```\ny" }])))).batches[0].brief === "x\n```\ny");
 
+const long = `Change "the handlers"  so that\n\tthe codes stay ${"word ".repeat(200)}${"ส่งออกใบแจ้งหนี้".repeat(40)} ${"\"".repeat(150)} ${"😀".repeat(150)} \u0001\ud83d\u2028 `;
+const wide = merge(null, { ...args([{ id: "a", title: long, brief: long, verify: long, alsoInScope: [long, "short"] }]), request: long });
+const wideText = render(wide);
+ok("no line of a plan with long text passes 120 characters", wideText.split("\n").every((l) => l.length <= 120), wideText);
+ok("long text comes back exact", JSON.stringify(parse(wideText)) === JSON.stringify(wide), parse(wideText));
+ok("a text at the width stays one string, one wider is wrapped", ["x".repeat(96), "x".repeat(97)].map((brief) => /"lines"/.test(render(merge(null, args([{ id: "a", brief }]))))).join() === "false,true");
+ok("a batch's own lines field is left alone", parse(render(merge(null, args([{ id: "a", lines: ["x"] }]))))?.batches[0].lines[0] === "x");
+ok("resume args hold long text as strings", resumeArgs(parse(wideText), new Map(), "/plugin").batches[0].brief === long);
+ok("a short brief stays a plain string", /"brief": "do a"/.test(render(plan)), render(plan));
+ok("a plan written with one long line still parses", parse(`\`\`\`json\n${JSON.stringify(wide)}\n\`\`\`\n`)?.batches[0].brief === long);
+
 throws("a bad job is refused", () => merge(null, { ...args(), job: "x" }), /yyyy-mm-dd/);
 throws("no batches are refused", () => merge(null, args([])), /batches/);
 throws("a spaced id is refused", () => merge(null, args([{ id: "a b" }])), /space/);
@@ -101,6 +112,10 @@ try {
   ok("write commits the plan", write(repo, args()).committed === true && count(repo) === 2);
   ok("the tree is clean after write", git(repo, "status", "--porcelain") === "");
   ok("the same plan again makes no commit", write(repo, args()).committed === false && count(repo) === 2);
+  const longRepo = repoAt("long");
+  const longArgs = args([{ id: "a", brief: long }]);
+  write(longRepo, longArgs);
+  ok("the same long plan again makes no commit", write(longRepo, longArgs).committed === false);
   const rel = `ai/plans/${JOB}.md`;
   ok("the plan commit carries the job", git(repo, "log", "-1", "--format=%B").includes(`Job: ${JOB}`));
   const seen = readRepo(repo, JOB);
