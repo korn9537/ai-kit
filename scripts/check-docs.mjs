@@ -81,28 +81,35 @@ const counts = (name, all, t) => {
   return c;
 };
 // the closing line index of a leading frontmatter block, -1 when there is none: a `---` rule opening a doc with a
-// later `---` is no frontmatter unless every line between reads as YAML (a key, quoted or with spaces; an indented,
-// list or comment line; a line inside an open [ ] / { } flow collection). Not a YAML parser; its limits: the line
-// after the opening `---` must not be blank, and a block of one key whose value holds `<` (`Note: <200 chars>`) is
-// prose, not frontmatter, unless a second key joins it.
+// later `---` is no frontmatter unless the first non-blank line is a key and every line between reads as YAML (a key,
+// quoted or of at most three words; an indented, list or comment line; a line inside an open [ ] / { } flow
+// collection), with every flow collection closed. Not a YAML parser; its limits: the line after the opening `---`
+// must not be blank, and a block of one key whose value holds `<` (`Note: <200 chars>`) is prose unless a second key joins.
 const KEY = /^("[^"]+"|'[^']+'|[A-Za-z_][\w -]*?)\s*:(\s|$)/;
+const isKey = (l) => {
+  const m = KEY.exec(l);
+  return !!m && (/^["']/.test(m[1]) || m[1].trim().split(/\s+/).length <= 3);
+};
 const frontEnd = (ls) => {
   if (ls[0] !== "---") return -1;
   const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
   if (end < 0) return -1;
   const body = ls.slice(1, end);
   if (body.length && !body[0].trim()) return -1;
+  const first = body.find((l) => l.trim());
+  if (first !== undefined && !isKey(first)) return -1;
   let depth = 0;
   let keys = 0;
   for (const l of body) {
     const inFlow = depth > 0;
     if (!inFlow && l.trim() && !/^(\s|-\s|#)/.test(l)) {
-      if (!KEY.test(l)) return -1;
+      if (!isKey(l)) return -1;
       keys++;
       if (keys === 1 && body.length === 1 && l.includes("<")) return -1;
     }
     for (const c of l.replace(/"[^"]*"|'[^']*'/g, "")) depth = Math.max(0, depth + (c === "[" || c === "{") - (c === "]" || c === "}"));
   }
+  if (depth > 0 || (keys === 0 && first !== undefined)) return -1;
   return end;
 };
 // a fence marker line: ``` or ~~~ (3 or more), a backtick fence's info string holding no backtick (```x``` is inline)

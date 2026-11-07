@@ -96,6 +96,17 @@ try {
   g("commit", "-q", "--allow-empty", "-m", "split trailer", "-m", "Job: 2026-01-09-theta", "-m", "Co-Authored-By: a <a@b>");
   out = jobs("theta");
   ok("a Job: line above a Co-Authored-By paragraph is read", out.includes("Job 2026-01-09-theta: 1 commit(s)"), out);
+
+  // a Job: line inside a prose paragraph is no job
+  g("commit", "-q", "--allow-empty", "-m", "prose", "-m", "We discuss it.\nJob: 2026-01-10-iota\nMore words.");
+  out = jobs();
+  ok("a Job: line in a prose paragraph is no job", !out.includes("iota"), out);
+
+  // a file outside cwd is listed
+  writeFileSync(join(tmp, "db", "outside.txt"), "1\n");
+  commit("outside cwd", "2026-01-11-kappa");
+  out = jobs("kappa");
+  ok("a file outside the working directory is listed", out.includes("db/outside.txt"), out);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

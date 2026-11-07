@@ -30,12 +30,31 @@ export function init(args, old, base = [], baseLoose = []) {
     // run-plan.js counts an id outside the run as not committed and would skip this batch, long after the user left;
     // plan.mjs write refuses a committed one too
     for (const w of b.waitsFor || []) {
+      if (kept[w]?.status === "partial")
+        throw new Error(`${b.id} waits for ${w}, partial: wait on the new batch id that holds the left work`);
       if (kept[w]) throw new Error(`${b.id} waits for ${w}, committed: drop it from waitsFor`);
       if (!ids.has(w)) throw new Error(`${b.id} waits for ${w}, not in this run`);
     }
   }
   return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
 }
+
+// a state file of the old version holds `newdir/` and git-quoted "caf\303\251.txt" in base; dirty now lists files
+// unquoted, so a base entry ending in / is a prefix and a quoted one is decoded
+const unquote = (e) => {
+  if (!/^".*"$/.test(e)) return e;
+  const bytes = [];
+  const esc = { n: 10, t: 9, r: 13, a: 7, b: 8, f: 12, v: 11 };
+  const t = e.slice(1, -1);
+  for (let i = 0; i < t.length; i++) {
+    const m = /^[0-7]{3}/.exec(t.slice(i + 1));
+    if (t[i] !== "\\") bytes.push(...Buffer.from(t[i]));
+    else if (m) (bytes.push(parseInt(m[0], 8)), (i += 3));
+    else (bytes.push(esc[t[i + 1]] ?? t.charCodeAt(i + 1)), i++);
+  }
+  return Buffer.from(bytes).toString("utf8");
+};
+const inBase = (base, p) => base.some((e) => (e.endsWith("/") ? p.startsWith(e) : unquote(e) === p));
 
 const MAX_LOG_FAILS = 3;
 // the run is known to be over (lost session, stopped report): without this, init refuses the job for good; next
@@ -81,7 +100,7 @@ export function next(state, run, repo, now = Date.now()) {
   const loose = repo.loose
     .filter((h) => !(s.baseLoose || []).some((k) => k.startsWith(h) || h.startsWith(k)))
     .filter((h) => !known.some((k) => k.startsWith(h) || h.startsWith(k)));
-  const dirty = repo.dirty.filter((p) => !(s.base || []).includes(p));
+  const dirty = repo.dirty.filter((p) => !inBase(s.base || [], p));
   const lost = (r, id) => ({ ...r, id, status: "partial", hash: repo.commits.get(id), review: "not reviewed: no agent reported this commit" });
   // plan order: a batch's waitsFor come before it, so a skipped batch sees what will run ahead of it
   for (const b of s.args.batches) {

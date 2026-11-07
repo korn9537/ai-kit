@@ -5,10 +5,14 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { projectRoot } from "./plan.mjs";
 
-// the project root, as kit.mjs and plan.mjs find it: ai/kit may sit below the top of the repo
-const root = projectRoot(process.cwd());
+const root = (() => {
+  try {
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return process.cwd();
+  }
+})();
 const git = (...args) =>
   execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 const tryGit = (...args) => {
@@ -37,7 +41,12 @@ const LATER_MAX = 30;
 
 // the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Job line from it (continuous.mjs
 // reads the body too); a repo with no commit yet has no jobs
-const trailers = (body, key) => [...body.matchAll(new RegExp(`^${key}: (\\S+)[ \\t]*$`, "gm"))].map((m) => m[1]);
+// only a paragraph made entirely of `Key: value` lines counts, so a `Job: x` line in prose is no job
+const trailers = (body, key) =>
+  body
+    .split(/\r?\n\s*\r?\n/)
+    .filter((p) => p.split(/\r?\n/).every((l) => /^[A-Za-z][\w-]*: \S/.test(l)))
+    .flatMap((p) => [...p.matchAll(new RegExp(`^${key}: (\\S+)[ \\t]*$`, "gm"))].map((m) => m[1]));
 const log = (tryGit("rev-parse", "--verify", "-q", "HEAD") === null
   ? ""
   : git("log", "--date=short", "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%b%x1e"))
@@ -146,12 +155,11 @@ for (const c of [...commits].reverse()) {
     "core.quotePath=false",
     "show",
     "--no-renames",
-    "--relative",
     "--name-status",
     "--format=",
     c.hash,
     "--",
-    ".",
+    ":/",
     ":(exclude)ai/usage",
   ).split("\n")) {
     const [status, path] = line.split("\t");

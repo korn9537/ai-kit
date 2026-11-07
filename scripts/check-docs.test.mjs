@@ -29,6 +29,30 @@ const CASES = [
     want: [],
   },
   {
+    desc: "a --- rule, a heading, a blank and a list before the closing --- is prose",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\n# Title **bold** 2026-01-02\n\n- item **bold**\n---\n" },
+    want: ["ai/a.md:2 bold", "ai/a.md:2 dated", "ai/a.md:4 bold"],
+  },
+  {
+    desc: "a long prose first line with a colon is no frontmatter key",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nThis doc is about: **bold** 2026-01-02\n---\nbody\n" },
+    want: ["ai/a.md:2 bold", "ai/a.md:2 dated"],
+  },
+  {
+    desc: "an unclosed [ before the closing --- is prose",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nNote: see [this\n  more\n---\nin **bold**\n" },
+    want: ["ai/a.md:5 bold"],
+  },
+  {
+    desc: "a one-key frontmatter with a date is still skipped",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nLast updated: 2026-01-02\n---\nbody\n" },
+    want: [],
+  },
+  {
     desc: "a blank line after the opening --- means no frontmatter",
     head: { "ai/a.md": "ok\n" },
     work: { "ai/a.md": "---\n\nStatus: **done** 2026-01-02\n\n---\nbody\n" },

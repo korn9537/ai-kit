@@ -19,7 +19,7 @@ import {
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { isMain } from "./is-main.mjs";
-import { planWarnings, projectRoot } from "./plan.mjs";
+import { planWarnings } from "./plan.mjs";
 import { transcriptsDir } from "./usage-collect.mjs";
 
 const LINE = "Before writing code, read `ai/kit/conventions/`.";
@@ -210,7 +210,7 @@ fi
 exit 0
 `;
 
-// every call runs at the project root, so pathspecs and output are root-relative from a subdirectory too
+// every call runs at the repo top, so pathspecs and output are root-relative from a subdirectory too
 const gitIn = (cwd, a) =>
   execFileSync("git", a, {
     cwd,
@@ -227,8 +227,8 @@ const tryGitIn = (cwd, a) => {
   }
 };
 
-// the nearest directory up to the git top that holds ai/kit, else the top (plan.mjs projectRoot, shared with jobs.mjs)
-const root = projectRoot(process.cwd());
+// the git top: core.hooksPath resolves from there, and the shims and check.sh cd to it, so ai/kit must sit there
+const root = tryGitIn(process.cwd(), ["rev-parse", "--show-toplevel"]) ?? process.cwd();
 const tryGit = (...a) => tryGitIn(root, a);
 const at = (...p) => join(root, ...p);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);

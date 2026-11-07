@@ -110,6 +110,14 @@ r = next(init({ job: "2026-11-05-j", plugin: "p", batches: [{ id: "a" }] }), non
 ok("a commit the state does not hold: never sent again", r.step.action === "done" && r.step.open.join() === "a", r);
 
 const dirty = { ...clean, dirty: ["f"], noStash: true };
+const oldBase = (base, paths) => {
+  const st = { ...live(), base };
+  const x = next(st, finished(failedAgent("a"), skipped("b"), skipped("c"), committed("d")), { ...clean, dirty: paths, noStash: true }, T);
+  return next(x.state, none, { ...clean, dirty: paths, noStash: true }, T + RETRY_GAP);
+};
+ok("an old base `newdir/` holds the files below it", oldBase(["newdir/"], ["newdir/a.txt"]).step.action === "run");
+ok("an old quoted base entry matches the unquoted path", oldBase(['"caf\\303\\251.txt"'], ["café.txt"]).step.action === "run");
+ok("a path outside the old base still counts", oldBase(["newdir/"], ["other/a.txt"]).step.action === "wait");
 r = next(live(), finished(failedAgent("a"), skipped("b"), skipped("c"), committed("d")), { ...dirty, noStash: false }, T);
 const toStash = next(r.state, none, { ...dirty, noStash: false }, T + RETRY_GAP);
 ok("a tree clean at the start: the retry stashes the edits", toStash.step.action === "stash" && toStash.state.stashes.length === 1, toStash);
@@ -169,7 +177,7 @@ ok("a batch id with a space is refused", refused({ ...J, batches: [{ id: "n 1" }
 ok("waiting on a kept commit is refused, as plan.mjs write does", refused({ ...J, batches: [{ id: "b", waitsFor: ["a"] }] }, old).includes("committed: drop it"));
 ok("waiting on an id outside the run is refused", refused({ ...J, batches: [{ id: "b", waitsFor: ["zz"] }] }, old).includes("not in this run"));
 const unsure = { batches: { p: { id: "p", status: "partial", hash: "h" } } };
-ok("waiting on a partial batch is refused", refused({ ...J, batches: [{ id: "n", waitsFor: ["p"] }] }, unsure).includes("waits"));
+ok("waiting on a partial batch is refused", refused({ ...J, batches: [{ id: "n", waitsFor: ["p"] }] }, unsure).includes("partial: wait on the new batch id"));
 
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), "continuous-")));
 const dir = join(tmp, "s", "subagents", "workflows", "wf_1");

@@ -55,12 +55,12 @@ try {
   writeFileSync(join(cfg, "settings.json"), JSON.stringify({ enabledPlugins: { "ai-kit@korn9537": true } }));
   const withCfg = spawnSync("node", [SCRIPT, "check"], { cwd: fresh, encoding: "utf8", env: { ...process.env, HOME: fresh, CLAUDE_CONFIG_DIR: cfg } });
   eq("check: the plugin enabled under CLAUDE_CONFIG_DIR is found", withCfg.stdout.includes("the plugin is not enabled"), false);
-  // ai/kit below the top of the repo: the project root is the folder holding it
+  // ai/kit below the top of the repo never worked (git hooks resolve from the top): check fails loudly
   const mono = join(tmp, "mono");
   execFileSync("git", ["init", "-q", mono]);
   mkdirSync(join(mono, "app", "ai", "kit"), { recursive: true });
   writeFileSync(join(mono, "app", "ai", "kit", "config.json"), "{}");
-  eq("check: from repo/app, the config under app/ai/kit is found", run(join(mono, "app"), "check").includes("config.json is missing"), false);
+  eq("check: from repo/app, the config under app/ai/kit is not found at the top", run(join(mono, "app"), "check").includes("ai/kit/config.json is missing"), true);
   const own = join(tmp, "own-hook");
   execFileSync("git", ["init", "-q", own]);
   execFileSync("mkdir", ["-p", join(own, ".githooks")]);
