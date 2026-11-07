@@ -19,7 +19,8 @@ Context is the cost. Every result you read stays in your context and is re-read 
 - Locate with `grep -n` (several patterns in one call), then read only the needed line range; send independent
   reads and searches in one message. Never read a whole large file to find one symbol, never one `sed -n` per call
   when several ranges are known.
-- Verify with the project's verify commands (CLAUDE.md) on what changed only. Cut their output: a passing run needs
+- Verify with the project's verify commands (CLAUDE.md) on what changed only, once, right before the commit. A command
+  CLAUDE.md says the pre-commit runs is not run by hand first: the commit runs it. Cut their output: a passing run needs
   its last lines (`2>&1 | tail -n 20`); on a failure, rerun the one failing file or test, not the whole suite.
 - A lint or type check over a whole app prints every finding: filter it to the files you changed
   (`| grep -F -e <file> ...`) or to the rule you are fixing, and cap it (`| head -n 40`).

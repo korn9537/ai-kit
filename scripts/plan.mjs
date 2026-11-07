@@ -330,6 +330,17 @@ export function projectRoot(dir) {
   }
 }
 
+// paths two or more briefs name (a slash and an extension): such batches read the same lines, so plan-batching.md
+// wants one batch unless a separate commit is called for. A hint only: a brief may name a file it does not touch
+export function sharedFiles(batches) {
+  const by = new Map();
+  for (const b of batches ?? []) {
+    const paths = String(b.brief ?? "").matchAll(/(?:^|[\s`'"(])([\w@.-]+(?:\/[\w@.[\]-]+)+\.[A-Za-z0-9]+)/g);
+    for (const f of new Set([...paths].map((m) => m[1]))) by.set(f, [...(by.get(f) ?? []), b.id]);
+  }
+  return [...by].filter(([, ids]) => ids.length > 1).map(([file, batches]) => ({ file, batches }));
+}
+
 export function write(root, args, replace = false) {
   const rel = relPath(args.job);
   const path = join(root, rel);
@@ -339,8 +350,10 @@ export function write(root, args, replace = false) {
   const plan = merge(old, args, commitsOf(root, args.job), replace);
   const text = render(plan);
   refuseFile(text, plan, before);
+  const shared = sharedFiles(args.batches);
+  const hint = shared.length ? { shared } : {};
   // parsed, not as text: a formatter in the pre-commit rewrites the block
-  if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false };
+  if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false, ...hint };
   // a failed commit leaves no plan behind, and the run must not start as if it had one
   commit(root, args.job, `docs: plan ${args.job}`, "write", () => {
     mkdirSync(dirname(path), { recursive: true });
@@ -350,7 +363,7 @@ export function write(root, args, replace = false) {
     if (before === null) rmSync(path, { force: true });
     else writeFileSync(path, before);
   });
-  return { plan: rel, committed: true };
+  return { plan: rel, committed: true, ...hint };
 }
 
 export function close(root, job, drop = false) {

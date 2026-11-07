@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, status, write } from "./plan.mjs";
+import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, sharedFiles, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -120,6 +120,10 @@ try {
   ok("write commits the plan", write(repo, args()).committed === true && count(repo) === 2);
   ok("the tree is clean after write", git(repo, "status", "--porcelain") === "");
   ok("the same plan again makes no commit", write(repo, args()).committed === false && count(repo) === 2);
+  const briefs = [{ id: "a", brief: "Edit `src/x/a.ts` and src/x/b.ts" }, { id: "b", brief: "see (src/x/a.ts), not a.ts or v1.2" }, { id: "c", brief: "docs/c.md" }];
+  ok("sharedFiles names a path two briefs hold", JSON.stringify(sharedFiles(briefs)) === JSON.stringify([{ file: "src/x/a.ts", batches: ["a", "b"] }]));
+  ok("sharedFiles: one brief naming a path twice is no share", sharedFiles([{ id: "a", brief: "src/a.ts src/a.ts" }]).length === 0);
+  ok("a plan with no shared file has no shared key", !("shared" in write(repo, args())));
   const longRepo = repoAt("long");
   const longArgs = args([{ id: "a", brief: long }]);
   write(longRepo, longArgs);

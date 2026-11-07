@@ -10,6 +10,8 @@ turns woken by a finished agent 33%. No project needs to edit anything.
   search to a subagent. It never blocks.
 - A plan of two batches or more now runs as the run-plan workflow; it was four. `docs/plan-batching.md`,
   `CLAUDE.core.md`. The user naming a runner still wins.
+- `plan.mjs write` lists in `shared` the files two briefs name, so batches that would read the same lines get merged.
+- `ai-kit:committer` verifies once before the commit and does not run by hand what CLAUDE.md says the pre-commit runs.
 
 ## 2.29.0
 
