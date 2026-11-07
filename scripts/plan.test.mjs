@@ -4,8 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readRepo } from "./continuous.mjs";
-import { close, merge, ordered, parse, planWarnings, progress, projectRoot, render, resume, resumeArgs, status, write } from "./plan.mjs";
+import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");

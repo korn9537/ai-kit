@@ -23,7 +23,8 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
-| `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
+| `scripts/kit.mjs`             | `init` / `check` / `sync` / `inventory` (§Commands); `sync` and the `unattended` warnings are in it |
+| `scripts/kit-migrate.mjs`     | `kit.mjs migrate`: a clean 1.x repo to the plugin; test `scripts/kit-migrate.test.mjs`         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `usage-collect` and `usage-digest` |
@@ -33,14 +34,12 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
 | `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check |
-| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close; test `scripts/plan.test.mjs` |
-| `scripts/run-plan-status.mjs` | live status of a run-plan workflow from its journal, one line per batch; test `scripts/run-plan-status.test.mjs` |
+| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record): `node scripts/<name>.test.mjs`                   |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite in parallel: `node scripts/test-all.mjs` |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
 | `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
-| `scripts/unattended.mjs`      | `kit.mjs sync` and its `check` warnings: what runs without the plugin read from the repo       |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit; `--wrap`: kit clone only, added prose lines over 120 characters, run by `.githooks/pre-commit` |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
 | `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |

@@ -119,7 +119,7 @@ try {
   writeFileSync(at(".githooks", "pre-commit"), "# ai-kit shim, older\nchanged() { :; }\n");
   eq("check: a shim with changed but no range is named", warned("is an older shim"), true);
   rmSync(at(".githooks"), { recursive: true });
-  const { HELPERS } = await import("./unattended.mjs");
+  const { HELPERS } = await import("./kit.mjs");
   const helper = HELPERS.slice(HELPERS.indexOf("changed() {"));
   eq("hook: its changed is the runners' changed", readFileSync(join(import.meta.dirname, "..", "githooks", "pre-commit"), "utf8").includes(helper), true);
   const gate = "if git diff --cached --name-only | grep -q bad; then exit 1; fi\n";

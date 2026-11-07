@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // The plan file: batches in ai/plans/<job>.md, status from the job's commits, so a lost session loses no batch.
 // Usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop]
+//        | live <workflow transcript dir>
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./is-main.mjs";
-import { readRepo } from "./continuous.mjs";
 
-const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
+export const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 const relPath = (job) => `ai/plans/${job}.md`;
 // what a repo's doc check allows
 const COLUMNS = 120;
@@ -146,12 +146,74 @@ export function resumeArgs(plan, commits, plugin) {
   return { request: plan.request, plugin, job: plan.job, batches };
 }
 
-export function statusLine(plan, commits) {
+function statusLine(plan, commits) {
   const p = progress(plan, commits);
   const head = `${plan.job}: ${p.done.length} of ${plan.batches.length} batches committed`;
   if (!p.left.length) return `${head}, none left`;
   const held = p.left.filter((id) => !p.ready.includes(id));
   return `${head}; ready ${p.ready.join(", ")}${held.length ? `; waiting ${held.join(", ")}` : ""}`;
+}
+
+// logFailed: the log could not be read, so `commits` says nothing; an unborn HEAD is not that
+export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
+  const commits = new Map();
+  const loose = [];
+  let logFailed = false;
+  try {
+    // the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Batch line from it
+    const log = git("log", "-E", `--grep=^Job: ${job}$`, "--format=%h%n%B%x00");
+    for (const entry of log.split("\0").map((e) => e.trim()).filter(Boolean)) {
+      const hash = entry.split("\n")[0];
+      // plan.mjs commits the plan file under the job: no batch's work, so never a sign of a lost commit
+      if (/^Plan-File: /m.test(entry)) continue;
+      const id = entry.match(/^Batch: (\S+)$/m)?.[1];
+      if (id) commits.set(id, hash);
+      else loose.push(hash);
+    }
+  } catch (e) {
+    // only a repo that answers and has no commit yet has none of this job; no repo, out of time, or any other
+    // failure says nothing about it
+    logFailed = true;
+    if (e.code !== "ETIMEDOUT") {
+      try {
+        git("rev-parse", "--git-dir");
+        // unborn: HEAD names a branch with no commit; a failed rev-parse alone proves nothing
+        const ref = git("symbolic-ref", "-q", "HEAD").trim();
+        try {
+          git("show-ref", "--verify", "-q", ref);
+        } catch (e) {
+          // status 1 may also be a ref git cannot read (a zero-byte file), so a missing ref needs proof: no loose
+          // file and no packed-refs entry (`show-ref --exists` needs git 2.43). 128 is a ref whose object is gone.
+          if (e.status === 1 && refAbsent(git, cwd, ref)) logFailed = false;
+        }
+      } catch {
+        // no repo, or a detached HEAD (symbolic-ref fails)
+      }
+    }
+  }
+  if (!dirty) return { commits, loose, dirty: [], logFailed };
+  try {
+    const status = git("-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=all", "--", ".", ":(exclude)ai/usage");
+    return { commits, loose, dirty: status.split("\n").filter(Boolean).map((l) => l.slice(3)), logFailed };
+  } catch {
+    return { commits, loose, dirty: ["(git status failed)"], logFailed };
+  }
+}
+
+// the ref has no loose file and no packed-refs line
+function refAbsent(git, cwd, ref) {
+  try {
+    const dir = resolve(cwd, git("rev-parse", "--git-common-dir").trim());
+    try {
+      if (statSync(join(dir, ref)).isFile()) return false;
+    } catch {}
+    const packed = join(dir, "packed-refs");
+    if (!existsSync(packed)) return true;
+    return !readFileSync(packed, "utf8").split("\n").some((l) => l.endsWith(` ${ref}`));
+  } catch {
+    return false;
+  }
 }
 
 const planFiles = (root) => {
@@ -167,7 +229,7 @@ const planFiles = (root) => {
 
 // a log that failed is not a plan with no commits: that would offer every batch again
 function commitsOf(root, job) {
-  const repo = readRepo(root, job);
+  const repo = readRepo(root, job, { dirty: false });
   if (repo.logFailed) throw new Error(`git log failed, the status of ${job} is not known`);
   return repo.commits;
 }
@@ -383,6 +445,97 @@ export function status(root, job, budget = 0) {
     });
 }
 
+const IDLE_MIN = 15;
+
+const short = (h) => (h || "").slice(0, 7);
+const mtime = (p) => {
+  try {
+    return statSync(p).mtimeMs;
+  } catch {
+    return 0;
+  }
+};
+
+// Git Bash hands Node on Windows /c/Users/...; Node needs C:/Users/... (as hooks/lib.sh kit_path)
+export const nodePath = (p, platform = process.platform) =>
+  platform === "win32" ? p.replace(/^\/([a-zA-Z])(?=\/|$)/, "$1:") : p;
+
+// label → { key, title, step }; a label run-plan.js does not set is its own key and title
+export function parseLabel(label) {
+  const m = /^(commit|review): \[([^\]\s]+)(?: (fix|recheck))?\] (.*)$/.exec(label || "");
+  const step = m && (m[3] ? (m[1] === "commit") === (m[3] === "fix") && m[3] : m[1]);
+  if (!step) return { key: label || "(no label)", title: label || "(no label)", step: "agent" };
+  return { key: m[2], title: m[4], step };
+}
+
+function agentDone(step, raw) {
+  let r = raw;
+  if (typeof r === "string") {
+    try {
+      r = JSON.parse(r);
+    } catch {}
+  }
+  if (r === null || r === undefined) return `${step} failed or skipped`;
+  if (typeof r !== "object") return `${step} done`;
+  if (step === "commit" || step === "fix") {
+    if (!r.hash) return `${step}: not committed${r.blockers?.length ? ` (${r.blockers[0]})` : ""}`;
+    const open = [...(r.owner || []).map((o) => `owner: ${o}`), ...(r.blockers || []).map((b) => `blocker: ${b}`)];
+    const skip = step === "commit" && r.review === "skip" ? " · review skipped, move-only or comment-only" : "";
+    return `${step} ${short(r.hash)}${open.length ? ` ⚠ ${open.join("; ")}` : ""}${skip}`;
+  }
+  if (step === "review" || step === "recheck") {
+    if (!r.reviewed) return `${step}: not reviewed${r.checked ? ` (${r.checked})` : ""}`;
+    const c = (r.findings || []).filter((f) => f.verdict === "CONFIRMED").length;
+    const p = (r.findings || []).length - c;
+    return c || p ? `${step} ${c} CONFIRMED, ${p} PLAUSIBLE` : `${step} clean`;
+  }
+  return `${step} done`;
+}
+
+// live: one line per batch id, from the agent labels run-plan.js sets (`commit: [<id>]`, `commit: [<id> fix]`,
+// `review: [<id>]`, `review: [<id> recheck]`); a batch not started yet, or skipped, has no agent and so no line.
+// dir: the workflow transcript dir (journal.jsonl, agent-<id>.jsonl); now: ms, for the idle time of running agents
+export function liveStatus(where, now) {
+  const dir = resolve(where);
+  const journal = join(dir, "journal.jsonl");
+  const events = readFileSync(journal, "utf8").split("\n").filter(Boolean).flatMap((l) => {
+    try {
+      return [JSON.parse(l)];
+    } catch {
+      return [];
+    }
+  });
+  const agents = new Map();
+  for (const e of events) {
+    if (e.type === "started" && e.agentId) agents.set(e.agentId, { ...parseLabel(e.label), id: e.agentId, running: true });
+    if (e.type === "result" && agents.has(e.agentId)) Object.assign(agents.get(e.agentId), { running: false, result: e.result });
+  }
+  // <session>/subagents/workflows/<runId> → <session>/workflows/<runId>.json, holding the run's status
+  const run = join(dirname(dirname(dirname(dir))), "workflows", `${basename(dir)}.json`);
+  let state = "";
+  try {
+    state = JSON.parse(readFileSync(run, "utf8")).status || "";
+  } catch {}
+  const over = state && state !== "running";
+  const batches = new Map();
+  let running = 0;
+  for (const a of agents.values()) {
+    let text;
+    if (a.running && over) text = `${a.step} stopped, no result`;
+    else if (a.running) {
+      running++;
+      const idle = Math.max(0, Math.round((now - (mtime(join(dir, `agent-${a.id}.jsonl`)) || now)) / 60000));
+      text = idle >= IDLE_MIN ? `${a.step} ⚠ no transcript write for ${idle}m` : `${a.step} running`;
+    } else text = agentDone(a.step, a.result);
+    if (!batches.has(a.key)) batches.set(a.key, { title: a.title, steps: [] });
+    batches.get(a.key).steps.push(text);
+  }
+  const finished = [...agents.values()].filter((a) => !a.running).length;
+  const lines = [`${basename(dir)}: ${state || (running ? "running" : "no agent running")}, ${finished} agent(s) done, ${running} running`];
+  for (const [key, b] of batches) lines.push(`${key === b.title ? key : `${key} ${b.title}`}: ${b.steps.join(" · ")}`);
+  return lines;
+}
+
 if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2);
   const flags = argv.filter((a) => a.startsWith("--"));
@@ -398,8 +551,12 @@ if (isMain(import.meta.url)) {
       console.log(JSON.stringify(resume(projectRoot(process.cwd()), arg, plugin)));
     } else if (cmd === "close" && arg) {
       console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
+    } else if (cmd === "live" && arg) {
+      const dir = nodePath(arg);
+      if (!existsSync(join(dir, "journal.jsonl"))) throw new Error(`no workflow journal in ${dir}`);
+      console.log(liveStatus(dir, Date.now()).join("\n"));
     } else {
-      console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop]");
+      console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop] | live <dir>");
       process.exit(2);
     }
   } catch (e) {

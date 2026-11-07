@@ -5,10 +5,23 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { projectRoot } from "./plan.mjs";
 
-const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
+// the project root, as kit.mjs and plan.mjs find it: ai/kit may sit below the top of the repo
+const root = projectRoot(process.cwd());
 const git = (...args) =>
-  execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+const tryGit = (...args) => {
+  try {
+    return git(...args);
+  } catch {
+    return null;
+  }
+};
+if (tryGit("rev-parse", "--git-dir") === null) {
+  console.log("jobs: not inside a git repo");
+  process.exit(1);
+}
 const config = join(root, "ai", "kit", "config.json");
 // default: the migration heuristic of kit.mjs inventory, minus EF designer and snapshot files
 let MIGRATION =
@@ -21,22 +34,18 @@ try {
 }
 const LIST_MAX = 40;
 const LATER_MAX = 30;
-const ids = (s) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
 
-const log = git(
-  "log",
-  "--date=short",
-  "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%(trailers:key=Job,valueonly,separator=%x2C)%x1f%(trailers:key=Reverts-Job,valueonly,separator=%x2C)%x1f%b%x1e",
-)
+// the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Job line from it (continuous.mjs
+// reads the body too); a repo with no commit yet has no jobs
+const trailers = (body, key) => [...body.matchAll(new RegExp(`^${key}: (\\S+)[ \\t]*$`, "gm"))].map((m) => m[1]);
+const log = (tryGit("rev-parse", "--verify", "-q", "HEAD") === null
+  ? ""
+  : git("log", "--date=short", "--format=%H%x1f%P%x1f%ad%x1f%s%x1f%b%x1e"))
   .split("\x1e")
   .map((r) => r.trim())
   .filter(Boolean)
   .map((r) => {
-    const [hash, parents, date, subject, job, reverts, body] = r.split("\x1f");
+    const [hash, parents, date, subject, body] = r.split("\x1f");
     const revertsHashes = [
       ...body.matchAll(/This reverts commit ([0-9a-f]{40})/g),
     ].map((m) => m[1]);
@@ -45,8 +54,8 @@ const log = git(
       merge: parents.trim().split(" ").length > 1,
       date,
       subject,
-      jobs: ids(job),
-      reverts: ids(reverts),
+      jobs: trailers(body, "Job"),
+      reverts: trailers(body, "Reverts-Job"),
       revertsHashes,
     };
   });
@@ -133,8 +142,11 @@ const migrations = new Set();
 // oldest first, renames as delete + add, so a migration re-stamped inside the job ends under its last name
 for (const c of [...commits].reverse()) {
   for (const line of git(
+    "-c",
+    "core.quotePath=false",
     "show",
     "--no-renames",
+    "--relative",
     "--name-status",
     "--format=",
     c.hash,
@@ -145,7 +157,7 @@ for (const c of [...commits].reverse()) {
     const [status, path] = line.split("\t");
     if (!path) continue;
     files.add(path);
-    if (!MIGRATION?.test(path)) continue;
+    if (!MIGRATION.test(path)) continue;
     const name = basename(path).replace(/\.[^.]+$/, "");
     if (status === "A") migrations.add(name);
     if (status === "D") migrations.delete(name);
@@ -177,14 +189,10 @@ if (migrations.size) {
 
 const oldest = commits.at(-1).hash;
 // literal pathspecs: a route folder like [id] is otherwise a glob character class
-const later = git(
-  "--literal-pathspecs",
-  "log",
-  "--format=%H%x1f%s",
-  `${oldest}..HEAD`,
-  "--",
-  ...files,
-)
+// a job with no files would run git log with no paths and list every commit
+const later = (files.size === 0
+  ? ""
+  : git("--literal-pathspecs", "log", "--format=%H%x1f%s", `${oldest}..HEAD`, "--", ...files))
   .split("\n")
   .filter(Boolean)
   .map((l) => l.split("\x1f"))

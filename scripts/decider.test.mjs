@@ -59,6 +59,12 @@ try {
   const logged = () => readdirSync(join(repo, "ai", "usage", "decisions", "2026-10")).sort();
 
   eq("guard: no decider yet", guard(input), "none");
+  // a decider that has not written a transcript yet: only its meta file exists
+  writeFileSync(join(subs, "agent-n0.meta.json"), JSON.stringify({ agentType: "ai-kit:decider" }));
+  eq("guard: a decider with no transcript yet is pending", guard(input), "pending");
+  utimesSync(join(subs, "agent-n0.meta.json"), (Date.now() - 45 * 60000) / 1000, (Date.now() - 45 * 60000) / 1000);
+  eq("guard: one with no transcript for 45 minutes is gone", guard(input), "none");
+  rmSync(join(subs, "agent-n0.meta.json"));
   agent("a1", "ai-kit:decider", block("DECIDED", "q1"), 3);
   agent("r1", "ai-kit:change-reviewer", block("OWNER", "x"), 2);
   eq("deciders: only the decider type, its last assistant text", deciders(subs).map((d) => [d.id, d.blocks.length, d.ts]), [["a1", 1, "2026-10-27T03:04:05Z"]]);
@@ -70,6 +76,8 @@ try {
   agent("a2", "ai-kit:decider", `${block("DECIDED", "q2")}\n---\n${block("OWNER", "q3")}`, 1);
   eq("guard: any OWNER block", guard(input), "owner");
   eq("guard: the OWNER call serves one ask, then the older DECIDED one shows", guard(input), "decided");
+  const stateDir = join(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: repo, encoding: "utf8" }).trim(), "claude-decider");
+  eq("guard: the used list is written whole, no tmp file left", readdirSync(stateDir), ["s1.json"]);
   agent("a3", "ai-kit:decider", block("OWNER", "q4", "low"), 45, "2026-10-27T05:00:00Z");
   eq("guard: an OWNER call older than 30 minutes does not count", guard(input), "decided");
   writeFileSync(join(subs, "agent-h1.meta.json"), JSON.stringify({ agentType: "ai-kit:decider" }));

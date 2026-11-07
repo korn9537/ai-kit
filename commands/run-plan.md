@@ -21,7 +21,7 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
    project root (`plan-batching.md` §Plan file; a refusal names what to fix). Then Workflow with `scriptPath`
    `${CLAUDE_PLUGIN_ROOT}/workflows/run-plan.js` and those `args`. While it runs, do not edit the repo; keep answering
-   the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/run-plan-status.mjs <Transcript dir from
+   the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from
    the Workflow result>` and answer from its lines (one per batch id). A batch of `args` with no line is not started
    yet, or skipped because a batch it waits for was not committed in full. Tell the user a `⚠` line (an owner
    decision, a blocker, an agent with no transcript write for 15 minutes) before the run ends; the final report still

@@ -1,10 +1,11 @@
 // Tests for continuous.mjs: which batches a continuous run sends back to run-plan, and which it leaves open.
 // Usage: node scripts/continuous.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { abandon, HUNG_AFTER, init, MAX_TRIES, next, readRepo, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
+import { abandon, HUNG_AFTER, init, MAX_TRIES, next, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
+import { readRepo } from "./plan.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -148,9 +149,9 @@ ok("a reported blocker is not retried", r.step.action === "done", r);
 
 const old = { batches: { a: committed("a"), b: failedAgent("b") } };
 const J = { job: "2026-11-05-j", plugin: "p" };
-s = init({ ...J, batches: [{ id: "b", waitsFor: ["a"] }] }, old);
+s = init({ ...J, batches: [{ id: "b" }] }, old);
 r = next(s, none, clean, T);
-ok("a new plan on the job keeps the commits only", r.step.action === "run" && !r.step.args.batches[0].waitsFor.length, r);
+ok("a new plan on the job keeps the commits only", r.step.action === "run" && r.step.args.batches.length === 1, r);
 const kept = init({ ...J, batches: [{ id: "n" }] }, { batches: { p: { id: "p", status: "partial", hash: "h" } } });
 ok("a partial batch with a commit is kept for the report", kept.batches.p.hash === "h", kept);
 const refused = (args, prior) => {
@@ -165,6 +166,8 @@ ok("a batch id reused in the job is refused", refused({ ...J, batches: [{ id: "a
 ok("a run still going is refused", refused({ ...J, batches: [{ id: "n" }] }, { running: true }).includes("still going"));
 ok("a bad job id is refused", refused({ job: "x", plugin: "p", batches: [{ id: "n" }] }).includes("bad job"));
 ok("a batch id with a space is refused", refused({ ...J, batches: [{ id: "n 1" }] }).includes("space"));
+ok("waiting on a kept commit is refused, as plan.mjs write does", refused({ ...J, batches: [{ id: "b", waitsFor: ["a"] }] }, old).includes("committed: drop it"));
+ok("waiting on an id outside the run is refused", refused({ ...J, batches: [{ id: "b", waitsFor: ["zz"] }] }, old).includes("not in this run"));
 const unsure = { batches: { p: { id: "p", status: "partial", hash: "h" } } };
 ok("waiting on a partial batch is refused", refused({ ...J, batches: [{ id: "n", waitsFor: ["p"] }] }, unsure).includes("waits"));
 
@@ -241,6 +244,20 @@ const after = JSON.parse(cli("next", st));
 ok("cli: a stash clears the tree and the retry runs", after.action === "run" && !existsSync(join(repo, "left")), after);
 ok("cli: the stash holds the work and is named", g("stash", "list").includes("continuous 2026-11-05-s"));
 ok("cli: the state names the stash", JSON.parse(readFileSync(st, "utf8")).stashes.length === 1);
+
+mkdirSync(join(repo, "newdir", "sub"), { recursive: true });
+writeFileSync(join(repo, "newdir", "sub", "a.txt"), "");
+writeFileSync(join(repo, "เอกสาร.txt"), "");
+const dirtyNames = readRepo(repo, "2026-11-05-x").dirty;
+ok("repo: a file under an untracked dir is listed by its path", dirtyNames.includes("newdir/sub/a.txt"), dirtyNames);
+ok("repo: a Thai path is not octal-quoted", dirtyNames.includes("เอกสาร.txt"), dirtyNames);
+rmSync(join(repo, "newdir"), { recursive: true });
+rmSync(join(repo, "เอกสาร.txt"));
+
+ok("cli: a write leaves no tmp file", !readdirSync(tmp).some((f) => f.endsWith(".tmp")), readdirSync(tmp));
+writeFileSync(st, '{"args":');
+const torn = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "next", st], { cwd: repo, encoding: "utf8" });
+ok("cli: a truncated state is one error line, not a stack", torn.status === 1 && !torn.stderr.includes("    at ") && torn.stderr.trim().split("\n").length === 1, torn);
 rmSync(tmp, { recursive: true, force: true });
 
 console.log(`\n${passed} passed, ${failed} failed`);

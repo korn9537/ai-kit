@@ -2,9 +2,10 @@
 // Next step of a /ai-kit:continuous run, from a state file that outlives /compact and the workflow's run file.
 // Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task id> | abandon <state>
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { isMain } from "./is-main.mjs";
+import { JOB, readRepo } from "./plan.mjs";
 
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
@@ -16,19 +17,21 @@ export const SLEPT_AFTER = 60 * 60 * 1000;
 const agentFailed = (r) =>
   r?.status === "blocked" && !r.owner?.length && r.blockers?.length === 1 && r.blockers[0] === "agent failed";
 
-// a new plan on the same job keeps every result with a commit: its waitsFor may name them, the report lists them
+// a new plan on the same job keeps every result with a commit: the report lists them, a waitsFor may not name one
 export function init(args, old, base = [], baseLoose = []) {
   if (old?.running || old?.launching) throw new Error("a run of this job is still going");
-  if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(args.job || "")) throw new Error(`bad job id: ${args.job}`);
+  if (!JOB.test(args.job || "")) throw new Error(`bad job id: ${args.job}`);
   if (!args.plugin || !args.batches?.length) throw new Error("args need plugin and batches");
   const kept = Object.fromEntries(Object.entries(old?.batches || {}).filter(([, r]) => r.hash));
   const ids = new Set(args.batches.map((b) => b.id));
   for (const b of args.batches) {
     if (/\s/.test(b.id)) throw new Error(`batch id holds a space: ${b.id}`);
     if (kept[b.id]) throw new Error(`batch id already has a commit in this job, pick a new one: ${b.id}`);
-    // run-plan.js would skip this batch, long after the user left
+    // run-plan.js counts an id outside the run as not committed and would skip this batch, long after the user left;
+    // plan.mjs write refuses a committed one too
     for (const w of b.waitsFor || []) {
-      if (!ids.has(w) && kept[w]?.status !== "committed") throw new Error(`${b.id} waits for ${w}, not committed in full`);
+      if (kept[w]) throw new Error(`${b.id} waits for ${w}, committed: drop it from waitsFor`);
+      if (!ids.has(w)) throw new Error(`${b.id} waits for ${w}, not in this run`);
     }
   }
   return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
@@ -135,7 +138,12 @@ export function started(state, dir, task = "", now = Date.now()) {
 }
 
 const read = (p) => JSON.parse(readFileSync(p, "utf8"));
-const write = (p, v) => writeFileSync(p, `${JSON.stringify(v, null, 2)}\n`);
+// tmp and rename: a killed write leaves the old file, not a torn one that next cannot parse
+const write = (p, v) => {
+  const tmp = `${p}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(v, null, 2)}\n`);
+  renameSync(tmp, p);
+};
 
 // <session>/subagents/workflows/<runId> → <session>/workflows/<runId>.json; only `completed` is known to end a run,
 // so any other status counts as running until nothing has moved for HUNG_AFTER
@@ -155,68 +163,6 @@ export function readRun(dir, since = 0, now = Date.now()) {
   return { ...run, idle: now - last };
 }
 
-// logFailed: the log could not be read, so `commits` says nothing; an unborn HEAD is not that
-export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
-  const git = (...a) => execFileSync("git", a, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
-  const commits = new Map();
-  const loose = [];
-  let logFailed = false;
-  try {
-    // the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Batch line from it
-    const log = git("log", "-E", `--grep=^Job: ${job}$`, "--format=%h%n%B%x00");
-    for (const entry of log.split("\0").map((e) => e.trim()).filter(Boolean)) {
-      const hash = entry.split("\n")[0];
-      // plan.mjs commits the plan file under the job: no batch's work, so never a sign of a lost commit
-      if (/^Plan-File: /m.test(entry)) continue;
-      const id = entry.match(/^Batch: (\S+)$/m)?.[1];
-      if (id) commits.set(id, hash);
-      else loose.push(hash);
-    }
-  } catch (e) {
-    // only a repo that answers and has no commit yet has none of this job; no repo, out of time, or any other
-    // failure says nothing about it
-    logFailed = true;
-    if (e.code !== "ETIMEDOUT") {
-      try {
-        git("rev-parse", "--git-dir");
-        // unborn: HEAD names a branch with no commit; a failed rev-parse alone proves nothing
-        const ref = git("symbolic-ref", "-q", "HEAD").trim();
-        try {
-          git("show-ref", "--verify", "-q", ref);
-        } catch (e) {
-          // status 1 may also be a ref git cannot read (a zero-byte file), so a missing ref needs proof: no loose
-          // file and no packed-refs entry (`show-ref --exists` needs git 2.43). 128 is a ref whose object is gone.
-          if (e.status === 1 && refAbsent(git, cwd, ref)) logFailed = false;
-        }
-      } catch {
-        // no repo, or a detached HEAD (symbolic-ref fails)
-      }
-    }
-  }
-  if (!dirty) return { commits, loose, dirty: [], logFailed };
-  try {
-    const status = git("status", "--porcelain", "--", ".", ":(exclude)ai/usage");
-    return { commits, loose, dirty: status.split("\n").filter(Boolean).map((l) => l.slice(3)), logFailed };
-  } catch {
-    return { commits, loose, dirty: ["(git status failed)"], logFailed };
-  }
-}
-
-// the ref has no loose file and no packed-refs line
-function refAbsent(git, cwd, ref) {
-  try {
-    const dir = resolve(cwd, git("rev-parse", "--git-common-dir").trim());
-    try {
-      if (statSync(join(dir, ref)).isFile()) return false;
-    } catch {}
-    const packed = join(dir, "packed-refs");
-    if (!existsSync(packed)) return true;
-    return !readFileSync(packed, "utf8").split("\n").some((l) => l.endsWith(` ${ref}`));
-  } catch {
-    return false;
-  }
-}
-
 // ai/usage stays: the kit writes it all the time, and it never holds an agent's work
 function stash(cwd, name) {
   try {
@@ -230,41 +176,38 @@ function stash(cwd, name) {
 
 if (isMain(import.meta.url)) {
   const [cmd, path, arg] = process.argv.slice(2);
-  if (cmd === "init" && path && arg) {
-    try {
+  try {
+    if (cmd === "init" && path && arg) {
       const args = read(arg);
       const { dirty, loose, logFailed } = readRepo(args.repo || process.cwd(), args.job);
       if (logFailed) throw new Error(`git log failed, the commits of ${args.job} are not known`);
       write(path, init(args, existsSync(path) ? read(path) : undefined, dirty, loose));
-    } catch (e) {
-      console.error(e.message);
-      process.exit(1);
+    } else if (cmd === "abandon" && path) {
+      if (!existsSync(path)) throw new Error(`no state ${path}`);
+      write(path, abandon(read(path)));
+    } else if (cmd === "started" && path && arg) {
+      write(path, started(read(path), arg, process.argv[5]));
+    } else if (cmd === "next" && path) {
+      const old = read(path);
+      const run = { ...readRun(old.dir, old.startedAt), failed: arg === "failed" };
+      const cwd = old.args.repo || process.cwd();
+      let { state, step } = next(old, run, readRepo(cwd, old.args.job));
+      if (step.action === "stash") {
+        const stashed = stash(cwd, step.name);
+        if (!stashed) state.stashes.pop();
+        ({ state, step } = next(state, run, { ...readRepo(cwd, old.args.job), noStash: true }));
+      }
+      write(path, state);
+      // the plan with its briefs is too long for command output, which is cut
+      if (step.args) write(`${path}.args.json`, step.args);
+      const { args, ...shown } = step;
+      console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json` } : shown));
+    } else {
+      console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task> | abandon <state>");
+      process.exit(2);
     }
-  } else if (cmd === "abandon" && path) {
-    if (!existsSync(path)) {
-      console.error(`no state ${path}`);
-      process.exit(1);
-    }
-    write(path, abandon(read(path)));
-  } else if (cmd === "started" && path && arg) {
-    write(path, started(read(path), arg, process.argv[5]));
-  } else if (cmd === "next" && path) {
-    const old = read(path);
-    const run = { ...readRun(old.dir, old.startedAt), failed: arg === "failed" };
-    const cwd = old.args.repo || process.cwd();
-    let { state, step } = next(old, run, readRepo(cwd, old.args.job));
-    if (step.action === "stash") {
-      const stashed = stash(cwd, step.name);
-      if (!stashed) state.stashes.pop();
-      ({ state, step } = next(state, run, { ...readRepo(cwd, old.args.job), noStash: true }));
-    }
-    write(path, state);
-    // the plan with its briefs is too long for command output, which is cut
-    if (step.args) write(`${path}.args.json`, step.args);
-    const { args, ...shown } = step;
-    console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json` } : shown));
-  } else {
-    console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task> | abandon <state>");
-    process.exit(2);
+  } catch (e) {
+    console.error(e.message);
+    process.exit(1);
   }
 }

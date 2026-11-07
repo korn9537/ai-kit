@@ -1,7 +1,7 @@
 // Tests for kit.mjs init and check on line endings (the LF rules a Windows checkout needs) and the commit-msg shim.
 // Usage: node scripts/kit-init.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -43,6 +43,24 @@ try {
   run(fresh, "init");
   eq("init: writes the commit-msg shim", readFileSync(join(fresh, ".githooks", "commit-msg"), "utf8").includes("githooks/commit-msg"), true);
   eq("check: no warning once the shim is there", run(fresh, "check").includes(".githooks/commit-msg"), false);
+  // a shim without the execute bit is skipped by git: check reports it, init repairs it
+  const hook = join(fresh, ".githooks", "pre-commit");
+  chmodSync(hook, 0o644);
+  eq("check: a non-executable shim is a problem", run(fresh, "check").includes(".githooks/pre-commit is not executable"), true);
+  eq("init: makes the shim executable", [run(fresh, "init").includes("made executable"), (statSync(hook).mode & 0o111) !== 0], [true, true]);
+  eq("check: no problem once executable", run(fresh, "check").includes("not executable"), false);
+  // CLAUDE_CONFIG_DIR holds the user scope: a plugin enabled there counts
+  const cfg = join(tmp, "cfg");
+  mkdirSync(cfg);
+  writeFileSync(join(cfg, "settings.json"), JSON.stringify({ enabledPlugins: { "ai-kit@korn9537": true } }));
+  const withCfg = spawnSync("node", [SCRIPT, "check"], { cwd: fresh, encoding: "utf8", env: { ...process.env, HOME: fresh, CLAUDE_CONFIG_DIR: cfg } });
+  eq("check: the plugin enabled under CLAUDE_CONFIG_DIR is found", withCfg.stdout.includes("the plugin is not enabled"), false);
+  // ai/kit below the top of the repo: the project root is the folder holding it
+  const mono = join(tmp, "mono");
+  execFileSync("git", ["init", "-q", mono]);
+  mkdirSync(join(mono, "app", "ai", "kit"), { recursive: true });
+  writeFileSync(join(mono, "app", "ai", "kit", "config.json"), "{}");
+  eq("check: from repo/app, the config under app/ai/kit is found", run(join(mono, "app"), "check").includes("config.json is missing"), false);
   const own = join(tmp, "own-hook");
   execFileSync("git", ["init", "-q", own]);
   execFileSync("mkdir", ["-p", join(own, ".githooks")]);

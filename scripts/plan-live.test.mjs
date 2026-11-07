@@ -1,9 +1,10 @@
-// Tests for run-plan-status.mjs: a fixture workflow journal to one status line per batch.
-// Usage: node scripts/run-plan-status.test.mjs
+// Tests for plan.mjs live (live status of a run-plan workflow): a fixture workflow journal to one status line per batch.
+// Usage: node scripts/plan-live.test.mjs
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { newestRun, nodePath, parseLabel, status } from "./run-plan-status.mjs";
+import { liveStatus as status, nodePath, parseLabel } from "./plan.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -74,13 +75,11 @@ try {
     "b1 Add table: commit a1b2c3d · review 1 CONFIRMED, 1 PLAUSIBLE · fix stopped, no result",
   ]);
 
-  const older = join(root, "s0", "subagents", "workflows", "wf_0");
-  mkdirSync(older, { recursive: true });
-  writeFileSync(join(older, "journal.jsonl"), "");
-  utimesSync(join(older, "journal.jsonl"), new Date(NOW - 3600000), new Date(NOW - 3600000));
-  utimesSync(join(dir, "journal.jsonl"), new Date(NOW), new Date(NOW));
-  eq("newest run across sessions", newestRun(root), dir);
-  eq("no project dir", newestRun(join(root, "missing")), "");
+  const cli = (...a) => spawnSync(process.execPath, [join(import.meta.dirname, "plan.mjs"), "live", ...a], { encoding: "utf8" });
+  const live = cli(dir);
+  eq("cli: live prints the lines", live.stdout.split("\n")[0], "wf_1: completed, 6 agent(s) done, 0 running");
+  const none = cli(join(root, "missing"));
+  eq("cli: no journal is one error line", [none.status, none.stderr.trim().split("\n").length], [1, 1]);
 } finally {
   rmSync(root, { recursive: true, force: true });
 }

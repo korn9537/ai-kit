@@ -7,7 +7,7 @@
 // of the last 30 minutes; owner marks it used. `report [--since
 // YYYY-MM-DD]` prints the log as markdown. Never fails: an error is one stderr line.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { isMain } from "./is-main.mjs";
 
@@ -61,7 +61,7 @@ export function subagentsDir(transcript) {
 }
 
 // ai-kit:decider, or the general-purpose fallback when that type is not loaded (description names the decider)
-export const isDecider = (type, description = "") =>
+const isDecider = (type, description = "") =>
   /(^|:)decider$/.test(type) || ((type === "" || type === "general-purpose") && /decider/i.test(description));
 
 // Every decider subagent of the session: id, the text and time of its last assistant message, its verdict blocks,
@@ -112,10 +112,16 @@ export function deciders(dir) {
         ts = typeof e.timestamp === "string" ? e.timestamp : "";
       }
     }
+    // no transcript yet: a call that just started, so its meta file's time stands in; 0 would drop it from the guard's
+    // fresh list and let a second decider start
     let mtime = 0;
     try {
       mtime = statSync(path).mtimeMs;
-    } catch {}
+    } catch {
+      try {
+        mtime = statSync(join(dir, n)).mtimeMs;
+      } catch {}
+    }
     // a text reply with no stop_reason (some transcripts) is final once the file has been idle for a minute
     if (quiet && Date.now() - mtime > 60000) done = true;
     out.push({ id, ts: ts || new Date(mtime).toISOString(), mtime, done, blocks: parseBlocks(text) });
@@ -125,7 +131,7 @@ export function deciders(dir) {
 
 // One file per finished decider call, created once ("wx": SubagentStop and Stop may race): no two branches,
 // worktrees or machines write the same name differently.
-export function logDeciders(root, session, list) {
+function logDeciders(root, session, list) {
   for (const d of list) {
     if (!d.done || d.blocks.length === 0) continue;
     const dir = join(root, "ai", "usage", "decisions", d.ts.slice(0, 7));
@@ -187,7 +193,10 @@ export function guard(input, now = Date.now()) {
   }
   if (statePath) {
     mkdirSync(dirname(statePath), { recursive: true });
-    writeFileSync(statePath, JSON.stringify({ used: [...used, owner.id] }) + "\n");
+    // tmp and rename: a torn file would read as no used list, and an owner verdict would count again
+    const tmp = `${statePath}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify({ used: [...used, owner.id] }) + "\n");
+    renameSync(tmp, statePath);
   }
   return "owner";
 }
