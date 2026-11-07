@@ -53,5 +53,45 @@ ctx 300000
 run Stop
 check "another event: nothing" "$(t test -z "$OUT")" "$OUT"
 
+# read <tool> [command] → one PostToolUse of that tool, stdout in $OUT
+read_tool() {
+  OUT="$(jq -n --arg t "$T" --arg n "$1" --arg c "${2:-}" --arg a "${3:-}" '{transcript_path: $t, session_id: "s2",
+    hook_event_name: "PostToolUse", tool_name: $n, tool_input: {command: $c}, cwd: "x"}
+    + (if $a == "" then {} else {agent_id: $a} end)' |
+    env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>&1)"
+}
+prompt2() {
+  jq -n --arg t "$T" '{transcript_path: $t, session_id: "s2", hook_event_name: "UserPromptSubmit", cwd: "x"}' |
+    env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" >/dev/null 2>&1
+}
+COUNT="$REPO/.git/claude-review/s2.reads"
+counted() { [[ "$(cat "$COUNT" 2>/dev/null)" == "$1" ]]; }
+
+ctx 120000
+for i in 1 2 3 4; do read_tool Bash "grep -n x src/a.ts"; done
+check "four reads: no note yet" "$(t test -z "$OUT")" "$OUT"
+read_tool Read
+check "the fifth read past reads_from: the subagent note" \
+  "$(t jq -e '.hookSpecificOutput.hookEventName == "PostToolUse" and (.hookSpecificOutput.additionalContext | test("Send the rest of this search"))' <<<"$OUT")" "$OUT"
+read_tool Grep
+check "the sixth: no repeat until the next five" "$(t test -z "$OUT")" "$OUT"
+for cmd in "git status" "cat > a.txt" "sed -i s/a/b/ f" "pnpm test" "cat <<X"; do read_tool Bash "$cmd"; done
+check "a Bash line that is no read is not counted" "$(t counted 6)" "$(cat "$COUNT")"
+read_tool Bash "cd src && sed -n '1,9p' a.ts"
+check "a read after a cd is counted" "$(t counted 7)" "$(cat "$COUNT")"
+read_tool Read "" sub1
+check "a subagent's read is not counted" "$(t counted 7)" "$(cat "$COUNT")"
+prompt2
+check "a new prompt starts the count again" "$(t test ! -f "$COUNT")"
+ctx 60000
+for i in 1 2 3 4 5; do read_tool Read; done
+check "below reads_from: counted, no note" "$(t test -z "$OUT")" "$OUT"
+prompt2
+ctx 120000
+echo '{"handoff": {"max_reads": 0}}' >"$REPO/ai/kit/config.json"
+for i in 1 2 3 4 5; do read_tool Read; done
+check "max_reads 0: off" "$(t test -z "$OUT")" "$OUT"
+rm -f "$REPO/ai/kit/config.json"
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

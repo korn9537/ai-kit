@@ -57,10 +57,10 @@ one updates a status and no two sessions edit it. All of it runs from the projec
 
 ## Coordinator pipeline
 
-A plan of four batches or more runs as the run-plan workflow (`/ai-kit:run-plan`, `workflows/run-plan.js`): a
-script applies the rules below, so no batch report enters the main session's context and the plan runs to its end
-in one go, with no context limit to hand over at. The main session plans, passes the batches as args and writes the
-one report. Fewer batches (their reports cost little, and the main session can still answer between them), no
+A plan of two batches or more runs as the run-plan workflow (`/ai-kit:run-plan`, `workflows/run-plan.js`): a
+script applies the rules below, so no batch report enters the main session's context, no agent's end wakes it (each
+wake re-reads that context) and the plan runs to its end in one go, with no context limit to hand over at. The main
+session plans, passes the batches as args, answers the user while it runs and writes the one report. One batch, no
 Workflow tool, or the call refused: the main session is the coordinator and applies these rules itself, its context
 kept small. The user naming a runner wins. `/ai-kit:continuous` runs the same workflow at any batch count for a user
 who leaves: it tries failed committers again and writes the one report when nothing is left to run.

@@ -2,6 +2,8 @@
 # UserPromptSubmit, and PostToolUse on Agent|Task|SendMessage (a coordinator gets no new prompt between batches): once
 # the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a note asking for a "Next
 # session" prompt; a coordinator launches no new batch. Never blocks; repeats only every further 50k.
+# PostToolUse on Bash|Read|Grep|Glob: every handoff.max_reads reads or searches of one turn past handoff.reads_from
+# tokens, a note to send the search to a subagent (CLAUDE.core.md, heavy reads). Off with max_reads 0.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -16,16 +18,46 @@ event="$(jq -r '.hook_event_name // "UserPromptSubmit"' <<<"$input")"
 # a subagent's own Agent or SendMessage call is no coordinator's
 [[ "$event" == UserPromptSubmit || -z "$(jq -r '.agent_id // empty' <<<"$input")" ]] || exit 0
 
-max="$(kit_conf '.handoff.max_context' 150000)"
-# context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
-used="$(tail -n 2000 "$transcript" | jq -R 'fromjson? // empty | select(.type == "assistant" and .isSidechain != true)
-  | .message.usage // empty | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)
-  | select(. > 0)' 2>/dev/null | tail -n 1)"
-[[ -n "$used" ]] || exit 0
+# a read or search: Read, Grep, Glob, or a Bash line that starts as one (after a cd); any other Bash line ends here
+reading=""
+case "$(jq -r '.tool_name // empty' <<<"$input")" in
+  Bash | Read | Grep | Glob)
+    jq -e '.tool_name != "Bash" or ((.tool_input.command // "") | sub("^\\s*cd\\s+\\S+\\s*(&&|;)\\s*"; "")
+      | test("^\\s*(grep|rg|find|awk|nl|sed\\s+-n|head|tail|cat\\s+[^<>]*$)(\\s|$)"))' <<<"$input" >/dev/null 2>&1 || exit 0
+    reading=1 ;;
+esac
 
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 [[ -n "$project" ]] && project="$(kit_project_root "$project")"
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0
+reads="$gitdir/claude-review/$session.reads"
+[[ "$event" == UserPromptSubmit ]] && rm -f "$reads"
+
+# context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
+context_used() {
+  tail -n 2000 "$transcript" | jq -R 'fromjson? // empty | select(.type == "assistant" and .isSidechain != true)
+  | .message.usage // empty | (.input_tokens // 0) + (.cache_read_input_tokens // 0) + (.cache_creation_input_tokens // 0)
+  | select(. > 0)' 2>/dev/null | tail -n 1
+}
+
+if [[ -n "$reading" ]]; then
+  limit="$(kit_conf '.handoff.max_reads' 5)"
+  ((limit > 0)) || exit 0
+  count=$(($(cat "$reads" 2>/dev/null || echo 0) + 1))
+  mkdir -p "$gitdir/claude-review"
+  printf '%s\n' "$count" >"$reads"
+  ((count % limit == 0)) || exit 0
+  used="$(context_used)"
+  [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 100000))) || exit 0
+  note="$count reads or searches this turn in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to a subagent (Explore, or general-purpose with model \"sonnet\") that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here."
+  jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $n}}'
+  exit 0
+fi
+
+max="$(kit_conf '.handoff.max_context' 150000)"
+used="$(context_used)"
+[[ -n "$used" ]] || exit 0
+
 # one mark per event: a prompt's note must not silence the coordinator's
 mark="$gitdir/claude-review/$session.handoff"
 [[ "$event" == PostToolUse ]] && mark+=".coord"

@@ -89,11 +89,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 
 ## Delegation and report
 
-- **Heavy reads go to a subagent**, plan or not: a browser check (screenshots, page reads, clicking through a flow)
-  or a search likely to need more than about five reads or greps. The brief names what to check or find and what
-  comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report, never the
-  pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next edit
-  needs stays. A general-purpose subagent gets `model: "sonnet"` (a kit-agent fallback follows the Agent model
+- **Heavy reads go to a subagent** (hook-nudged), plan or not: a browser check (screenshots, page reads, clicking
+  through a flow) or a search likely to need more than about five reads or greps. The brief names what to check or
+  find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report,
+  never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next
+  edit needs stays. A general-purpose subagent gets `model: "sonnet"` (a kit-agent fallback follows the Agent model
   bullet); a typed agent (Explore, web-fetch) keeps its own model. It returns evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
   done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
@@ -105,8 +105,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `ai-kit/docs/plan-batching.md`.
 - **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read
-  `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch. Four batches or more → the run-plan
-  workflow per `ai-kit/commands/run-plan.md` (the owner's standing opt-in to it); fewer, or the Workflow call
+  `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch. Two batches or more → the run-plan
+  workflow per `ai-kit/commands/run-plan.md` (the owner's standing opt-in to it); one, or the Workflow call
   refused → the main session as coordinator.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the

@@ -103,6 +103,16 @@
         ]
       },
       {
+        "matcher": "Bash|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-nudge.sh\"",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "Agent|Task|SendMessage",
         "hooks": [
           {

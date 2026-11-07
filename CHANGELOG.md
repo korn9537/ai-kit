@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.30.0
+
+Less work on the main session, from a measure of four projects' transcripts: searches there were 25% of its cost, and
+turns woken by a finished agent 33%. No project needs to edit anything.
+
+- `handoff-nudge.sh` also runs on PostToolUse of Bash, Read, Grep and Glob: every `handoff.max_reads` (default 5, 0 is
+  off) reads or searches of one turn past `handoff.reads_from` (default 100k) tokens of context, a note to send the
+  search to a subagent. It never blocks.
+- A plan of two batches or more now runs as the run-plan workflow; it was four. `docs/plan-batching.md`,
+  `CLAUDE.core.md`. The user naming a runner still wins.
+
 ## 2.29.0
 
 Runs without the plugin get the same rules, checks and review material as a session. A project edits nothing to keep
