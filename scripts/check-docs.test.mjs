@@ -122,6 +122,15 @@ const CASES = [
     args: ["--staged"],
     want: ["ai/a.md:2 bold"],
   },
+  {
+    desc: "--staged checks a file staged but deleted from the work tree",
+    head: { "ai/a.md": "x\n" },
+    work: { "ai/a.md": "x\n**staged**\n" },
+    run: [["add", "-A"]],
+    del: ["ai/a.md"],
+    args: ["--staged"],
+    want: ["ai/a.md:2 bold"],
+  },
 ];
 
 const put = (dir, files) => {
@@ -147,6 +156,7 @@ for (const c of CASES) {
     put(dir, c.work);
     for (const r of c.run ?? []) git(...r);
     put(dir, c.after);
+    for (const f of c.del ?? []) rmSync(join(dir, f));
     const out = execFileSync("node", [SCRIPT, ...(c.args ?? [])], { cwd: dir, encoding: "utf8" });
     const got = out
       .split("\n")

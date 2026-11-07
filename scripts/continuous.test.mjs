@@ -80,6 +80,16 @@ const blind = next(live(), finished(committed("a"), failedAgent("b")), { ...clea
 ok("a failed log stops the run, no batch is sent again", blind.step.action === "stopped" && !blind.step.args, blind);
 const blindDone = next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, { ...clean, logFailed: true }, T);
 ok("a failed log is marked reason log", blind.step.reason === "log" && !next(live(), none, clean, T).step.reason, blind);
+const failedBlind = next(live(), { failed: true }, { ...clean, logFailed: true }, T);
+ok("a stopped step before the log check still carries logFailed", failedBlind.step.logFailed === true && !next(live(), { failed: true }, clean, T).step.logFailed, failedBlind);
+let lg = init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] });
+const lgSteps = [1, 2, 3].map(() => {
+  const r = next(lg, none, { ...clean, logFailed: true }, T);
+  lg = r.state;
+  return r.step;
+});
+ok("the third failed log tick tells the session to close", !lgSteps[0].close && !lgSteps[1].close && lgSteps[2].close === true, lgSteps);
+ok("a readable log resets the count", next(lg, none, clean, T).state.logFails === 0);
 ok("a failed log never reads as done or run", blindDone.step.action === "stopped", blindDone);
 
 const second = next(started(tick.state, "d2", "t", T + RETRY_GAP), finished(committed("b"), committed("c")), clean, T + RETRY_GAP + 1);
@@ -178,6 +188,11 @@ g("config", "user.email", "t@t");
 g("config", "user.name", "t");
 ok("repo: no commit yet", readRepo(repo, "2026-11-05-x").commits.size === 0);
 ok("repo: an unborn HEAD is not a failed log", readRepo(repo, "2026-11-05-x").logFailed === false);
+const branch = g("symbolic-ref", "HEAD").trim();
+mkdirSync(join(repo, ".git", "refs", "heads"), { recursive: true });
+writeFileSync(join(repo, ".git", branch), "");
+ok("repo: an unreadable (zero-byte) ref is a failed log", readRepo(repo, "2026-11-05-x").logFailed === true);
+rmSync(join(repo, ".git", branch));
 const nogit = join(tmp, "nogit");
 mkdirSync(nogit);
 ok("repo: no repo at all is a failed log", readRepo(nogit, "2026-11-05-x").logFailed === true);

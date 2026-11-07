@@ -3,7 +3,7 @@
 // Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task id> | abandon <state>
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const MAX_TRIES = 6;
@@ -36,6 +36,7 @@ export function init(args, old, base = [], baseLoose = []) {
 
 // the run is known to be over (lost session, stopped report): without this, init refuses the job for good; next
 // stays at stopped, so a tick that fires before the cron is deleted launches nothing
+const MAX_LOG_FAILS = 3;
 export const abandon = (state) => ({ ...state, running: false, launching: false, pending: [], abandoned: true });
 
 // run: what the workflow left ({ status, result, idle, failed }); repo: { commits: Map of batch id → hash, loose:
@@ -46,7 +47,7 @@ export function next(state, run, repo, now = Date.now()) {
   s.lastTick = now;
   const stopped = (reason) => {
     const open = s.args.batches.filter((b) => s.batches[b.id]?.status !== "committed").map((b) => b.id);
-    return { state: s, step: { action: "stopped", open, commits: [...repo.commits.keys()], loose: repo.loose, ...(reason && { reason }) } };
+    return { state: s, step: { action: "stopped", open, commits: [...repo.commits.keys()], loose: repo.loose, ...(reason && { reason }), ...(repo.logFailed && { logFailed: true }) } };
   };
   // a turn lost between `run` and `started`: a workflow may be going, and a second one would commit everything twice
   if (s.launching || s.abandoned) return stopped();
@@ -62,7 +63,13 @@ export function next(state, run, repo, now = Date.now()) {
     s.lastEnd = now;
   }
   // `commits` says nothing: a batch whose agent died after its commit would look unrun, and run again
-  if (repo.logFailed) return stopped("log");
+  // a log that stays unreadable ends the retries: the third failed tick tells the session to close
+  s.logFails = repo.logFailed ? (s.logFails || 0) + 1 : 0;
+  if (repo.logFailed) {
+    const r = stopped("log");
+    if (s.logFails >= MAX_LOG_FAILS) r.step.close = true;
+    return r;
+  }
   const done = (id) => s.batches[id]?.status === "committed";
   const retry = [];
   const again = new Set();
@@ -177,11 +184,12 @@ export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
         try {
           git("show-ref", "--verify", "-q", ref);
         } catch (e) {
-          // status 1 is a ref that does not exist; 128 is a ref whose object is gone
-          if (e.status === 1) logFailed = false;
+          // status 1 may also be a ref git cannot read (a zero-byte file), so a missing ref needs proof: no loose
+          // file and no packed-refs entry (`show-ref --exists` needs git 2.43). 128 is a ref whose object is gone.
+          if (e.status === 1 && refAbsent(git, cwd, ref)) logFailed = false;
         }
       } catch {
-        // not a repo
+        // no repo, or a detached HEAD (symbolic-ref fails)
       }
     }
   }
@@ -191,6 +199,19 @@ export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
     return { commits, loose, dirty: status.split("\n").filter(Boolean).map((l) => l.slice(3)), logFailed };
   } catch {
     return { commits, loose, dirty: ["(git status failed)"], logFailed };
+  }
+}
+
+// the ref has no loose file and no packed-refs line
+function refAbsent(git, cwd, ref) {
+  try {
+    const dir = resolve(cwd, git("rev-parse", "--git-common-dir").trim());
+    if (existsSync(join(dir, ref))) return false;
+    const packed = join(dir, "packed-refs");
+    if (!existsSync(packed)) return true;
+    return !readFileSync(packed, "utf8").split("\n").some((l) => l.endsWith(` ${ref}`));
+  } catch {
+    return false;
   }
 }
 

@@ -186,5 +186,15 @@ git -C "$REPO" add ai/kit/conventions/copy.ts
 git -C "$REPO" commit -qm copy 2>&1
 check "prettier leaves ai/kit/conventions/ alone" "$(git -C "$REPO" show HEAD:ai/kit/conventions/copy.ts)" lower
 
+# a renamed big file with new code is blocked by the hook, though no file is staged as M
+git -C "$REPO" mv big3.ts big4.ts
+echo 'export const added = 1;' >>"$REPO/big4.ts"
+git -C "$REPO" add big4.ts
+before="$(git -C "$REPO" rev-parse HEAD)"
+git -C "$REPO" commit -qm rename-edit >/dev/null 2>&1
+check "git mv plus new code is blocked through git commit" \
+  "$([ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ] && echo blocked || echo committed)" blocked
+git -C "$REPO" reset -q --hard HEAD
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

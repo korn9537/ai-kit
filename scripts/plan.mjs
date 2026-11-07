@@ -241,7 +241,8 @@ function refuseFile(text, plan, before) {
   if (over) throw new Error(`a plan line passes ${COLUMNS} columns, shorten its job, key or nesting: ${over.slice(0, 60)}`);
 }
 
-// as hooks/lib.sh kit_project_root: the directory holding ai/kit, else the top of its git repo
+// like hooks/lib.sh kit_project_root, but that one only strips the git prefix (the top of the repo); this one walks
+// up from dir to the nearest directory holding ai/kit, and falls back to the top of the git repo
 export function projectRoot(dir) {
   if (existsSync(join(dir, "ai", "kit"))) return dir;
   try {
@@ -258,7 +259,9 @@ export function projectRoot(dir) {
     const depth = prefix.split("/").length;
     // the nearest directory up to the git top holding ai/kit, else the top
     for (let n = 0; n < depth; n++) if (existsSync(join(cut(n), "ai", "kit"))) return cut(n);
-    return cut(depth);
+    const top = cut(depth);
+    // keep the slash after a drive letter (C:/), and the root itself
+    return /^[A-Za-z]:$/.test(top) ? `${top}/` : top || "/";
   } catch {
     return dir;
   }

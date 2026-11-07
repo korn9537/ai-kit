@@ -111,7 +111,7 @@ const CASES = [
     desc: "present-tense used to, no longer than, until N, previously computed, ไม่เคย pass",
     files: {
       "a.ts":
-        "// used to build the cache key\n\n// no longer than 40 chars\n\n// retry until 3 attempts\n\n// the previously computed value\n\n// ไม่เคยคืน null\n",
+        "// used to build the cache key\n\n// no longer than 40 chars\n\n// retry until 3 attempts\n\n// the previously computed value\n\n// ไม่เคยคืน null\n\n// is used to run the job\n",
     },
     want: [],
   },
@@ -121,6 +121,24 @@ const CASES = [
       "a.ts": "// used to be 2\n\n// previously this called foo\n\n// เคยคืน null\n\n// no longer retries\n",
     },
     want: ["a.ts:1 history", "a.ts:3 history", "a.ts:5 history", "a.ts:7 history"],
+  },
+  {
+    desc: "real history with used to, until a version or year, an article before previously, Thai เดิม ... ไม่เคย",
+    files: {
+      "a.ts": [
+        "// used to use redis",
+        "// used to live in foo.ts",
+        "// used to store the token here",
+        "// used to crash on null",
+        "// used to run migrations on boot",
+        "// used to call the billing API",
+        "// until v2.3 this was a string",
+        "// until 2025 we sent both",
+        "// the previously hardcoded limit moved to config",
+        "// เดิมฟังก์ชันนี้ไม่เคยคืนค่า",
+      ].join("\n\n") + "\n",
+    },
+    want: Array.from({ length: 10 }, (_, i) => `a.ts:${i * 2 + 1} history`).sort(),
   },
 ];
 

@@ -44,14 +44,16 @@ says the workflow did not complete, and act on the printed `action`:
   the turn. The
   call refused, or no Workflow tool: say so and do §Close, every batch of those args under Open.
 - `stopped` with `reason` `log`: `git log` could not be read, so the commits are unknown and `commits` is empty.
-  Report nothing as not run, do not `abandon`; end the turn and let the next tick retry. With no cron, do §Close with
-  the cause under Open.
+  Report nothing as not run, do not `abandon`; end the turn and let the next tick retry. The state counts these
+  failures: when the step carries `close`, the third in a row has come, so do §Close with the cause under Open. With no
+  cron, do §Close at once with the cause under Open.
 - `stopped` otherwise: the workflow failed, nothing moved for two hours, or a turn was lost around its launch.
   TaskStop it if it still runs (`task` in `<state>`), then
   `node <plugin>/scripts/continuous.mjs abandon <state>`. Commits may exist that `<state>` does not hold, so run
   nothing again: report what `node <plugin>/scripts/jobs.mjs <job>` prints from the project root, and do §Close.
   Under Open: each printed `open` batch as not run, each id in `commits` and hash in
-  `loose` as committed but not reviewed.
+  `loose` as committed but not reviewed. With `logFailed` in the step the commits are unknown and nothing is
+  reported as not run: put the cause under Open. `abandon` stays on this path.
 - `done`: do §Close, each batch in the printed `open` under Open, the printed `dirty` paths as edits a dead agent or
   someone else left in the tree.
 

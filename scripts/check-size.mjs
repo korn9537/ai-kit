@@ -21,16 +21,17 @@ const conf = existsSync("ai/kit/config.json")
   : {};
 const INCLUDE = new RegExp(conf.include ?? "\\.(tsx?|jsx?|mjs|cs)$");
 const SKIP = new RegExp(conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)");
-// a split adds the import of the new file to the old one; a multi-line import runs to its `} from` / `)` line
+// a split adds the import of the new file to the old one; a multi-line import runs to its `} from`, `}` / `};` (a trailing `//` comment allowed) or `)` line
 const WIRING =
   /^(import\b|export\s*(\*|\{[^}]*\}|type\s*\{[^}]*\})\s*(as\s+\w+\s+)?from\b|export\s*(type\s*)?\{$|using\s+(static\s+)?[\w.]+\s*;$|using\s+(?!var\b)\w+\s*=\s*[\w.<>,\s]+;$|(const|let|var)\b.*=\s*require\(|from\s+\S+\s+import\b|require(_relative)?\s+['"])/;
 const OPEN = /^(import|export)\b[^;]*\{$|^from\s+\S+\s+import\s*\($/;
-const CLOSE = /^\}.*\bfrom\b|^\}\s*;?$|^\)$/;
+const CLOSE = /^\}.*\bfrom\b|^\}\s*;?\s*(\/\/.*)?$|^\)$/;
 const PARTIAL = /^((?:[a-z]+\s+)*)partial\s+(?=(class|struct|interface|record)\b)/;
 
-// [path now, path at HEAD]: a rename (R) keeps the size of its old path
+// [path now, path at HEAD]: a rename (R) keeps the size of its old path. -M20% pairs a rewrite down to 20% alike;
+// one rewritten past that counts as a new file (D+A), which has no size at HEAD.
 const changed = [];
-const ns = git("diff", "--cached", "--name-status", "-M", "--diff-filter=MR", "-z").split("\0");
+const ns = git("diff", "--cached", "--name-status", "-M20%", "--diff-filter=MR", "-z").split("\0");
 for (let i = 0; i < ns.length - 1; ) {
   const two = ns[i].startsWith("R");
   changed.push([ns[i + (two ? 2 : 1)], ns[i + 1]]);

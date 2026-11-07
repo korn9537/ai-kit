@@ -33,8 +33,19 @@ const INCLUDE = new RegExp(conf.include ?? "\\.(tsx?|jsx?|mjs|cs)$");
 const SKIP = new RegExp(
   conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)",
 );
-const HISTORY =
-  /\bused to (be|have|had|do|does|did|work|worked|call|called|return|returned|retry|run|ran|send|sent|take|took|go|went|throw|fail)\b|(?<!\b(the|an?|already|any) )\bpreviously\b|\bwas once\b|\bno longer(?! than)\b|\bformerly\b|(?<!ไม่)เคย|ก่อนหน้านี้/i;
+// `used to` is history unless it follows is/are/be/gets (code purpose) or a verb of what code does is next
+const PRESENT_USE = "build|compute|derive|generate|identify|determine|decide|select|match|check|verify|validate|hash|encode|decode|parse|format|sort";
+const HISTORY = new RegExp(
+  [
+    `(?<!\\b(is|are|be|being|been|gets?) )\\bused to\\b(?! (${PRESENT_USE})\\b)`,
+    "(?<!\\b(the|an?|any) )\\bpreviously\\b",
+    "\\b(the|an?|any) previously (?!(computed|cached|seen|stored|fetched)\\b)",
+    "\\buntil (v?\\d+\\.\\d|20\\d\\d\\b)",
+    "\\bwas once\\b|\\bno longer(?! than)\\b|\\bformerly\\b",
+    "(?<!ไม่)เคย|ก่อนหน้านี้|(เดิม|แต่ก่อน|ก่อนนี้).*ไม่เคย",
+  ].join("|"),
+  "i",
+);
 // History by date or by who asked (git log has both); tests skip it — a fixture date is data, not history.
 const MONTH =
   "(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\\.?";
@@ -134,13 +145,19 @@ if (!files.length)
     ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR")
     : gitz("ls-files");
 // --staged reads the index, so a file deleted from the work tree is still checked
-const staged = !args.some((a) => !a.startsWith("--")) && flag("staged");
+const staged = flag("staged");
 files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && (staged || existsSync(f)));
 
 const report = [];
 for (const f of files) {
-  const text = staged ? gitText("show", `:${f}`) : readFileSync(f, "utf8");
-  if (text === null) continue;
+  const text = staged ? gitText("show", `:./${f}`) : readFileSync(f, "utf8");
+  if (text === null) {
+    if (flag("strict")) {
+      console.log(`comments: cannot read ${f} from the index`);
+      process.exit(1);
+    }
+    continue;
+  }
   const lines = text.split(/\r?\n/);
   const cl = commentLines(f, lines);
   if (generatedGo(f, lines, cl)) continue;

@@ -42,6 +42,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit    |
 | `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
 | `scripts/check-size.mjs`      | pre-commit: blocks an edit to a code file over 40 KB at HEAD that is not a move-only split     |
+| `scripts/check-size.test.mjs` | fixture tests for `check-size.mjs`: `node scripts/check-size.test.mjs`                          |
 | `scripts/unattended.mjs`      | `kit.mjs sync` and its `check` warnings: what runs without the plugin read from the repo       |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit                                 |
 | `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |

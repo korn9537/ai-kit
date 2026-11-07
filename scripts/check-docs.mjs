@@ -249,8 +249,14 @@ files = files.filter((f) => inScope(f) && (staged || existsSync(f)));
 const issues = [];
 const todo = [];
 for (const f of files) {
-  const text = staged ? git("show", `:${f}`) : readFileSync(f, "utf8");
-  if (text === null) continue;
+  const text = staged ? git("show", `:./${f}`) : readFileSync(f, "utf8");
+  if (text === null) {
+    if (flag("strict")) {
+      console.log(`docs: cannot read ${f} from the index`);
+      process.exit(1);
+    }
+    continue;
+  }
   // untracked, or no HEAD yet: every line is new
   const want = added.get(f) ?? (staged || (head && tracked.has(f)) ? new Set() : null);
   // an unchanged line the rules did not see in HEAD (it left a fence or frontmatter) counts as added

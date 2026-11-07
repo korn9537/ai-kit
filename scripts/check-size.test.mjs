@@ -37,6 +37,26 @@ const CASES = [
     edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n};\nexport function evil() {}\n`),
     want: 1,
   },
+  {
+    desc: "an export { } block closed by `}; // end` passes",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n}; // end\n`),
+    want: 0,
+  },
+  {
+    desc: "code after a `} // end` line is blocked",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n} // end\nexport function evil() {}\n`),
+    want: 1,
+  },
+  {
+    desc: "a rename with 30% of the lines rewritten and a new line is blocked",
+    edit: (dir, git) => {
+      git("mv", "a.ts", "b.ts");
+      const lines = BIG.split("\n");
+      for (let i = 0; i < 900; i++) lines[i] = `const changed${i} = other(${i}, "different different");`;
+      writeFileSync(join(dir, "b.ts"), `${lines.join("\n")}const added = 1;\n`);
+    },
+    want: 1,
+  },
 ];
 
 let fail = 0;
