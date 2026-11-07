@@ -131,6 +131,13 @@ const CASES = [
     args: ["--staged"],
     want: ["ai/a.md:2 bold"],
   },
+  {
+    desc: "--staged --strict passes a staged submodule (gitlink) path",
+    head: { "ai/a.md": "x\n" },
+    run: [["update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,ai/sub.md"]],
+    args: ["--staged", "--strict"],
+    want: [],
+  },
 ];
 
 const put = (dir, files) => {

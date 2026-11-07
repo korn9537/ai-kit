@@ -34,9 +34,9 @@ export function init(args, old, base = [], baseLoose = []) {
   return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
 }
 
+const MAX_LOG_FAILS = 3;
 // the run is known to be over (lost session, stopped report): without this, init refuses the job for good; next
 // stays at stopped, so a tick that fires before the cron is deleted launches nothing
-const MAX_LOG_FAILS = 3;
 export const abandon = (state) => ({ ...state, running: false, launching: false, pending: [], abandoned: true });
 
 // run: what the workflow left ({ status, result, idle, failed }); repo: { commits: Map of batch id → hash, loose:
@@ -206,7 +206,9 @@ export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
 function refAbsent(git, cwd, ref) {
   try {
     const dir = resolve(cwd, git("rev-parse", "--git-common-dir").trim());
-    if (existsSync(join(dir, ref))) return false;
+    try {
+      if (statSync(join(dir, ref)).isFile()) return false;
+    } catch {}
     const packed = join(dir, "packed-refs");
     if (!existsSync(packed)) return true;
     return !readFileSync(packed, "utf8").split("\n").some((l) => l.endsWith(` ${ref}`));

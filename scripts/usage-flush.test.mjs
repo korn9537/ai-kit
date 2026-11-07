@@ -77,6 +77,17 @@ try {
   writeFileSync(lock, "");
   eq("an old empty lock is broken", (utimesSync(lock, old, old), withLock(bufDir, () => "ran", { waitMs: 0 })), "ran");
 
+  // an old-format lock (`<pid>`, no host) of a live process clears by the age rule
+  writeFileSync(lock, String(holder.pid));
+  utimesSync(lock, old, old);
+  eq("an old-format lock clears by the age rule", [withLock(bufDir, () => "ran", { waitMs: 500 }), existsSync(lock)], ["ran", false]);
+
+  // a lock that cannot be unlinked (a directory reads as null, unlink says EISDIR/EPERM) is not reported as broken
+  mkdirSync(lock);
+  eq("breakLock returns false when the unlink fails", [breakLock(lock, null), existsSync(lock)], [false, true]);
+  eq("and .lock.break is removed", existsSync(brk), false);
+  rmSync(lock, { recursive: true });
+
   // `seen` no longer matches the file under .lock.break: the lock stays
   writeFileSync(lock, `${holder.pid}:${host}:new`);
   utimesSync(lock, old, old);

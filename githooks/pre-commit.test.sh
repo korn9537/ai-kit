@@ -196,5 +196,17 @@ check "git mv plus new code is blocked through git commit" \
   "$([ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ] && echo blocked || echo committed)" blocked
 git -C "$REPO" reset -q --hard HEAD
 
+# a rename with 65% of the lines rewritten plus a new line is blocked, also under diff.renames=false
+git -C "$REPO" mv big3.ts big5.ts
+node -e 'const fs=require("fs");const f=process.argv[1];const l=fs.readFileSync(f,"utf8").split("\n");const n=Math.floor(l.length*0.65);for(let i=0;i<n;i++)l[i]="const changed"+i+" = other("+i+", \"different different\");";fs.writeFileSync(f,l.join("\n")+"const added = 1;\n")' "$REPO/big5.ts"
+git -C "$REPO" add big5.ts
+for cfg in true false; do
+  before="$(git -C "$REPO" rev-parse HEAD)"
+  git -C "$REPO" -c diff.renames=$cfg commit -qm rewrite-rename >/dev/null 2>&1
+  check "a 65% rewritten rename plus new code is blocked through git commit (diff.renames=$cfg)" \
+    "$([ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ] && echo blocked || echo committed)" blocked
+done
+git -C "$REPO" reset -q --hard HEAD
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

@@ -48,11 +48,11 @@ const CASES = [
     want: 1,
   },
   {
-    desc: "a rename with 30% of the lines rewritten and a new line is blocked",
+    desc: "a rename with 65% of the lines rewritten and a new line is blocked",
     edit: (dir, git) => {
       git("mv", "a.ts", "b.ts");
       const lines = BIG.split("\n");
-      for (let i = 0; i < 900; i++) lines[i] = `const changed${i} = other(${i}, "different different");`;
+      for (let i = 0; i < 1950; i++) lines[i] = `const changed${i} = other(${i}, "different different");`;
       writeFileSync(join(dir, "b.ts"), `${lines.join("\n")}const added = 1;\n`);
     },
     want: 1,

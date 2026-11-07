@@ -58,7 +58,11 @@ export function breakLock(lock, seen) {
   try {
     if (readText(lock) !== seen) return false;
     if (seen === "" && !((ageOf(lock) ?? 0) > LOCK_STALE_MS)) return false;
-    unlinkQuiet(lock);
+    try {
+      unlinkSync(lock);
+    } catch (e) {
+      if (e?.code !== "ENOENT") return false;
+    }
     return true;
   } finally {
     unlinkQuiet(brk);

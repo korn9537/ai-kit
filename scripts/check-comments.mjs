@@ -33,14 +33,15 @@ const INCLUDE = new RegExp(conf.include ?? "\\.(tsx?|jsx?|mjs|cs)$");
 const SKIP = new RegExp(
   conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)",
 );
-// `used to` is history unless it follows is/are/be/gets (code purpose) or a verb of what code does is next
-const PRESENT_USE = "build|compute|derive|generate|identify|determine|decide|select|match|check|verify|validate|hash|encode|decode|parse|format|sort";
+// the past-tense phrase is history, unless is/are/be/gets (with at most one adverb) leads it, or a verb of what code
+// does follows it
+const PRESENT_USE = "build|compute|derive|generate|identify|determine|decide|select|match|check|verify|validate|hash|encode|decode|parse|format|sort|find|resolve|sign|locate|authenticate";
 const HISTORY = new RegExp(
   [
-    `(?<!\\b(is|are|be|being|been|gets?) )\\bused to\\b(?! (${PRESENT_USE})\\b)`,
+    `(?<!\\b(is|are|be|being|been|gets?)( \\w+ly)? )\\bused to\\b(?! (${PRESENT_USE})\\b)`,
     "(?<!\\b(the|an?|any) )\\bpreviously\\b",
-    "\\b(the|an?|any) previously (?!(computed|cached|seen|stored|fetched)\\b)",
-    "\\buntil (v?\\d+\\.\\d|20\\d\\d\\b)",
+    "\\b(the|an?|any) previously (?!(computed|cached|seen|stored|fetched|selected|focused|saved|loaded)\\b)",
+    "\\buntil (v?\\d+\\.\\d+|20\\d\\d)\\b(?! ?(ms|s|sec|secs|seconds?|minutes?|min|h|hours?|days?|bytes?|[kmg]i?b)\\b)",
     "\\bwas once\\b|\\bno longer(?! than)\\b|\\bformerly\\b",
     "(?<!ไม่)เคย|ก่อนหน้านี้|(เดิม|แต่ก่อน|ก่อนนี้).*ไม่เคย",
   ].join("|"),
@@ -142,7 +143,7 @@ let files = args
   .map((f) => relative(root, resolve(cwd, f)));
 if (!files.length)
   files = flag("staged")
-    ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all")
     : gitz("ls-files");
 // --staged reads the index, so a file deleted from the work tree is still checked
 const staged = flag("staged");

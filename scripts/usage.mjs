@@ -154,8 +154,8 @@ function main() {
   }
   if (cmd === "end") {
     // SessionEnd: record what came after the last Stop (no summary), then flush; one process and one lock deadline
-    // (started at the first lock wait) for both steps. A failure of the first step does not skip the second, except a lock wait that timed out: the
-    // lock is still held, so the second would only wait again.
+    // (started at the first lock wait) for both steps. A failure of the first step does not skip the second, except
+    // a lock wait that timed out: the lock is still held, so the second would only wait again.
     const lockWait = {};
     let locked = false;
     let input = {};

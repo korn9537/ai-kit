@@ -193,6 +193,13 @@ mkdirSync(join(repo, ".git", "refs", "heads"), { recursive: true });
 writeFileSync(join(repo, ".git", branch), "");
 ok("repo: an unreadable (zero-byte) ref is a failed log", readRepo(repo, "2026-11-05-x").logFailed === true);
 rmSync(join(repo, ".git", branch));
+// an unborn refs/heads/<branch> beside a directory of that name (feat/x) is absent, not present
+g("symbolic-ref", "HEAD", "refs/heads/feat");
+mkdirSync(join(repo, ".git", "refs", "heads", "feat"), { recursive: true });
+writeFileSync(join(repo, ".git", "refs", "heads", "feat", "x"), "0".repeat(40) + "\n");
+ok("repo: an unborn ref beside a ref directory is not a failed log", readRepo(repo, "2026-11-05-x").logFailed === false);
+rmSync(join(repo, ".git", "refs", "heads", "feat"), { recursive: true });
+g("symbolic-ref", "HEAD", branch);
 const nogit = join(tmp, "nogit");
 mkdirSync(nogit);
 ok("repo: no repo at all is a failed log", readRepo(nogit, "2026-11-05-x").logFailed === true);

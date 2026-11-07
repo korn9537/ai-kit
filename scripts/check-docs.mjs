@@ -239,7 +239,7 @@ let files = args
   .map((f) => relative(root, resolve(cwd, f)));
 if (!files.length)
   files = staged
-    ? z(git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"))
+    ? z(git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all", "-z"))
     : [
         ...z(git("diff", "HEAD", "--name-only", "--diff-filter=ACMR", "-z")),
         ...z(git("ls-files", "--others", "--exclude-standard", "-z")),

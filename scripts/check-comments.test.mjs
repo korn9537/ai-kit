@@ -111,7 +111,7 @@ const CASES = [
     desc: "present-tense used to, no longer than, until N, previously computed, ไม่เคย pass",
     files: {
       "a.ts":
-        "// used to build the cache key\n\n// no longer than 40 chars\n\n// retry until 3 attempts\n\n// the previously computed value\n\n// ไม่เคยคืน null\n\n// is used to run the job\n",
+        "// used to build the cache key\n\n// the key used to sign the cookie\n\n// Used to resolve the tenant\n\n// is also used to find the owner\n\n// wait until 2000 ms pass\n\n// wait until 2048 bytes arrive\n\n// wait until 1.5 s pass\n\n// the previously selected tab\n\n// the previously loaded rows\n\n// no longer than 40 chars\n\n// retry until 3 attempts\n\n// the previously computed value\n\n// ไม่เคยคืน null\n\n// is used to run the job\n",
     },
     want: [],
   },
@@ -135,10 +135,12 @@ const CASES = [
         "// until v2.3 this was a string",
         "// until 2025 we sent both",
         "// the previously hardcoded limit moved to config",
+        "// until 2.27 this read the file",
+        "// until 2026 we sent both",
         "// เดิมฟังก์ชันนี้ไม่เคยคืนค่า",
       ].join("\n\n") + "\n",
     },
-    want: Array.from({ length: 10 }, (_, i) => `a.ts:${i * 2 + 1} history`).sort(),
+    want: Array.from({ length: 12 }, (_, i) => `a.ts:${i * 2 + 1} history`).sort(),
   },
 ];
 
@@ -164,6 +166,20 @@ const STAGED = [
     desc: "--staged checks a file staged but deleted from the work tree",
     files: { "a.ts": "// used to be bad\nconst a = 1;\n" },
     setup: (dir) => rmSync(join(dir, "a.ts")),
+    want: 1,
+  },
+  {
+    desc: "--staged --strict passes a staged submodule (gitlink) path",
+    files: { "a.ts": "const a = 1;\n" },
+    setup: (dir, git) => git("update-index", "--add", "--cacheinfo", "160000,1111111111111111111111111111111111111111,sub.ts"),
+    want: 0,
+  },
+  {
+    desc: "--staged --strict still blocks a file that cannot be read from the index",
+    files: { "a.ts": "const a = 1;\n" },
+    setup: (dir, git) => {
+      git("update-index", "--add", "--cacheinfo", "100644,1111111111111111111111111111111111111111,b.ts");
+    },
     want: 1,
   },
 ];
