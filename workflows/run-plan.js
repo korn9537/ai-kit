@@ -170,7 +170,8 @@ async function reviewChain(b, r, need) {
     return
   }
   r.fix = pick(fx)
-  // like the first commit: an owner decision or blocker the fix agent left open holds the batch, not only r.fix
+  // an owner decision or blocker the fix agent left open marks the batch partial, not only r.fix; it holds a later
+  // batch that has not started, not a dependent already running (see the note where a commit is recorded)
   const owner = fx.owner || []
   const blockers = fx.blockers || []
   if (owner.length + blockers.length) {

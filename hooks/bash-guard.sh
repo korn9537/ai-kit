@@ -7,8 +7,9 @@
 # Build escape hatch: prefix the command with ALLOW_BUILD_WHILE_DEV=1 when the port is unrelated.
 # Fail closed: when the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds $( ),
 # the raw text, cut on ; && || | & ( ) backtick and newline with the quotes blanked, is checked as well, so a
-# heredoc body or message naming `git add -A` there can block.
-# Known gaps (the text is not run, so these stay unseen): `xargs git add`, `bash -c "git add -A"`, `git add $(...)`.
+# heredoc body or message naming `git add -A` there can block. The usual -m "$(cat <<'EOF' ...)" is followed, not raw.
+# Known gaps (the text is not run, so these stay unseen): `xargs git add`, `bash -c "git add -A"`, `git add $(...)`,
+# a heredoc fed to a shell (`bash <<E`), an attached -S key id ending in a value flag (`git commit -Sfoot -a`).
 set -o pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -73,12 +74,17 @@ resolve() {
   if [[ "$1" == /* || "$1" =~ ^[A-Za-z]:/ ]]; then REPLY="$1"; else REPLY="$2/$1"; fi
 }
 
-# dir_sweeps <path>: an existing directory that git add would walk: not a submodule (a .git inside, or a lone gitlink,
-# mode 160000, in the index: add stages the pointer)
+# dir_sweeps <path> <base dir>: an existing directory that git add would walk: not a submodule (a .git inside, or a
+# lone gitlink, mode 160000, in the index: add stages the pointer). The top of base's own repo holds a .git too, and
+# adding that is a sweep
 dir_sweeps() {
-  local m
+  local m top
   [[ -d "$1" ]] || return 1
-  [[ -e "$1/.git" ]] && return 1
+  if [[ -e "$1/.git" ]]; then
+    top="$(git -C "$2" rev-parse --show-toplevel 2>/dev/null || git -C "$cwd0" rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -z "$top" || "$1" -ef "$top" ]]
+    return
+  fi
   m="$(git -C "${1%/*}" ls-files -s -- "${1##*/}" 2>/dev/null || true)"
   [[ "$m" == 160000* && "$m" != *$'\n'* ]] && return 1
   return 0
@@ -92,16 +98,16 @@ path_sweeps() {
     . | ./ | :/ | */ | *\** | "") return 0 ;;
   esac
   if [[ "$1" == /* ]]; then
-    dir_sweeps "$1"
+    dir_sweeps "$1" "$2"
     return
   fi
-  dir_sweeps "$2/$1" && return 0
-  [[ "$2" != "$cwd0" ]] && dir_sweeps "$cwd0/$1"
+  dir_sweeps "$2/$1" "$2" && return 0
+  [[ "$2" != "$cwd0" ]] && dir_sweeps "$cwd0/$1" "$cwd0"
 }
 
 # git_sweeps <dir>: t[i] is git; 0 when the command stages or commits more than named files
 git_sweeps() {
-  local base="$1" sub="" arg sweep=0 dry=0 dd=0
+  local base="$1" sub="" arg pre sweep=0 dry=0 dd=0
   ((++i))
   while ((i < n)); do
     case "${t[i]}" in
@@ -132,7 +138,9 @@ git_sweeps() {
           --*) continue ;;
           -[!-]*)
             [[ "${arg%%[mFCct]*}" == *a* ]] && return 0
-            [[ "${arg: -1}" =~ [mFCct] ]] && ((++i))
+            # the value is the next word only when the flag ends the cluster: -mfoot holds its own
+            pre="${arg%%[mFCct]*}"
+            ((${#pre} + 1 == ${#arg})) && ((++i))
             continue
             ;;
         esac
@@ -256,7 +264,8 @@ EOF
       *)
         if [[ -n "$build_re" ]]; then
           rest="${t[*]:i}"
-          [[ "$rest" =~ $build_re ]] && build=1
+          # grep, not =~: bash on macOS reads \s \b \d in a config pattern as plain letters
+          grep -qE -- "$build_re" <<<"$rest" && build=1
         else
           build_words && build=1
         fi

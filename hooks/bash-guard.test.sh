@@ -129,10 +129,53 @@ git add -A'
 git_case "block: a heredoc closed by EOF)" 2 'x=$(cat <<EOF
 hi
 EOF) && git add -A'
-git_case "block: a heredoc inside a quoted \$( ) naming git add -A (accepted false hit)" 2 'git commit -m "$(cat <<'"'EOF'"'
+git_case "pass: a quoted heredoc in \$( ) naming git add -A" 0 'git commit -m "$(cat <<'"'EOF'"'
 git add -A was wrong
 EOF
 )"'
+for m in 'fix: stop on `git add .`' 'docs: never `git add -A` here' 'fix: (git add .) in docs' 'say "git add ." here'; do
+  git_case "pass: a quoted heredoc message: $m" 0 "git commit -m \"\$(cat <<'EOF'
+$m
+EOF
+)\""
+done
+git_case "pass: a <<- quoted heredoc message" 0 "$(printf 'git commit -m "$(cat <<-%sEOF%s\n\tgit add .\n\tEOF\n)"' "'" "'")"
+git_case "block: a command after the quoted heredoc in \$( )" 2 'git commit -m "$(cat <<'"'EOF'"'
+x
+EOF
+git add -A)"'
+git_case "block: a substitution before the quoted heredoc" 2 'git commit -m "$(git add -A) $(cat <<'"'EOF'"'
+x
+EOF
+)"'
+git_case "block: a quoted heredoc fed to a shell in \$( )" 2 'x="$(bash <<'"'E'"'
+git add -A
+E
+)"'
+for c in "bash -c" "sh -c" eval; do
+  git_case "block: $c of a quoted heredoc" 2 "$c \"\$(cat <<'W'
+git add -A
+W
+)\""
+done
+git_case "block: an escaped \$( does not open a heredoc" 2 'echo "\$(cat <<'"'W'"'
+x"; git add -A; echo "
+W
+)"'
+git_case "pass: gh pr create with a body naming git add ." 0 'gh pr create --body "$(cat <<'"'EOF'"'
+never `git add .` here
+EOF
+)"'
+git_case "block: an unquoted heredoc in \$( ) may run its body" 2 'git commit -m "$(cat <<EOF
+$(git add -A)
+EOF
+)"'
+git_case "block: a quoted heredoc that never closes" 2 'git commit -m "$(cat <<'"'EOF'"'
+git add -A'
+git_case "block: git commit after a quoted heredoc message" 2 'git commit -m "$(cat <<'"'EOF'"'
+x
+EOF
+)" -a'
 git_case "pass: a quoted \$( ) with no git add" 0 'git commit -m "$(cat <<'"'EOF'"'
 fix the thing
 EOF
@@ -155,6 +198,15 @@ git_case "block: command -p git add -A" 2 "command -p git add -A"
 git_case "pass: command -v git" 0 "command -v git"
 git_case "pass: a directory holding .git is a submodule pointer" 0 "git add gm-sale-visit"
 git_case "pass: a gitlink in the index is a submodule pointer" 0 "git add sm2"
+git_case "block: the repo root by its absolute path" 2 "git add $REPO"
+git_case "pass: a submodule by its absolute path under a -C the scan cannot resolve" 0 \
+  "git -C \"\$R\" add $REPO/gm-sale-visit"
+git_case "block: git -C the repo root, added by its absolute path" 2 "git -C $REPO add $REPO"
+git_case "block: the repo root through its parent" 2 "git add ../${REPO##*/}"
+git_case "block: the repo root as src/.." 2 "git add src/.."
+git_case "block: an attached -m value, then -a" 2 "git commit -mfoot -a"
+git_case "pass: an attached -m value, then a file" 0 "git commit -mfoot lib/a.ts"
+git_case "pass: -sm takes the next word" 0 "git commit -sm . lib/a.ts"
 git_case "block: a quoted name holding a semicolon, then a dot" 2 'git add "a;b" .'
 # 500 quoted names with spaces: no fork per word
 big="git add"
@@ -198,6 +250,18 @@ npm run build passes\""
 run_case "allow: a build named in a heredoc while listening" 0 "cat <<EOF
 npm run build
 EOF"
+run_case "allow: a backticked build in a quoted heredoc message while listening" 0 "git commit -m \"\$(cat <<'EOF'
+fix: \`pnpm build\` failed on CI
+EOF
+)\""
+# a config pattern is grep -E: \s \b \d mean what they mean there
+for re in 'pnpm\s+build' '\bnext build\b' '^(pnpm|npm) build\b'; do
+  jq -n --arg re "$re" '{build_guard: {build_re: $re}}' >"$NO_CONFIG/ai/kit/config.json"
+  c="pnpm build"
+  [[ "$re" == *next* ]] && c="next build"
+  run_case "block: build_re $re while listening" 2 "$c"
+done
+rm -f "$NO_CONFIG/ai/kit/config.json"
 for c in "(cd web && npm run build)" "npx turbo run build" "pnpm turbo build" "pnpm next build" "pnpm exec next build" \
   "pnpm -r build" "npm run build:prod" "npm run -s build" "pnpm --dir web build" "bun run build" "npx vite build" \
   "time npm run build" "env CI=1 npm run build" "timeout 60 npm run build" "yarn workspace web build" "sleep 1 & pnpm build" \

@@ -9,7 +9,7 @@ push triggers, is in the project's CLAUDE.md (branch and deploy).
   contract change whose consumers break until both sides land.
 - Stage named files only: never `git add -A`, `.`, a directory or a glob, never `git commit -a`
   (the ai-kit plugin's `hooks/bash-guard.sh` blocks them, also after `cd`, `git -C`, `&` or as `git stage`;
-  quoted text and heredoc bodies are not read).
+  quoted text and heredoc bodies are not read, unless the scan cannot follow them, as in a heredoc that may expand).
   Before `git add <file>` read `git diff <file>` for hunks that are not yours; before committing read
   `git diff --cached --stat`. Then `git commit` with no paths: `git commit -- <path>` commits the whole working-tree
   file, other hunks included, and leaves the token records behind.

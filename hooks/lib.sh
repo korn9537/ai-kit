@@ -162,7 +162,9 @@ kit_memory_dir() {
 # IFS=$'\037' read -r -a), placeholders already decoded; an empty quote is an empty word. A line of \006( or \006) marks
 # a parenthesis, so a caller can scope a cd. The last line is \006ok, or \006raw when the scan could not follow the
 # text (it ended inside a quote or heredoc, a double quote or an unquoted heredoc holds $( or a backtick, an open
-# $(( )): the caller then checks the raw text as well. No \006ok at all means awk failed. awk under LC_ALL=C: bash 3.2
+# $(( )): the caller then checks the raw text as well. The one $( read through is the message form of git and gh: a
+# double quote ending its line in an unescaped $(cat <<'W', whose body is dropped, closed by a line of ) alone; for any
+# other command the output may be run (bash -c, eval). No \006ok at all means awk failed. awk under LC_ALL=C: bash 3.2
 # replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s).
 kit_split_cmd() {
   LC_ALL=C awk '
@@ -187,6 +189,10 @@ function enc(s) {
   gsub("&", "\017", s); gsub("[|]", "\020", s); gsub("`", "\021", s)
   return s
 }
+function escaped(s, pos,   b) {
+  while (pos > 1 && substr(s, pos - 1, 1) == BS) { b++; pos-- }
+  return b % 2
+}
 function dqend(s,   off, k, pos, b, j) {
   off = 0
   while ((k = index(substr(s, off + 1), DQ)) > 0) {
@@ -202,6 +208,12 @@ BEGIN {
   PH = "[\001-\005\016-\021]"
 }
 {
+  if (dqhd) {
+    t = $0
+    if (dqtab) sub(/^\t+/, "", t)
+    if (t == dqword) { dqhd = 0; dqclose = 1 }
+    next
+  }
   if (hd) {
     t = $0
     if (!hdq && (index(t, "$(") || index(t, "`"))) raw = 1
@@ -214,7 +226,21 @@ BEGIN {
     if (q != "") {
       p = (q == SQ) ? index(line, SQ) : dqend(line)
       if (p == 0) { chunk = line; line = "" } else { chunk = substr(line, 1, p - 1); line = substr(line, p + 1) }
-      if (q == DQ && (index(chunk, "$(") || index(chunk, "`"))) raw = 1
+      if (q == DQ) {
+        text = chunk
+        if (dqclose) {
+          dqclose = 0
+          if (p == 0 || chunk !~ /^[ \t]*\)[ \t]*$/) raw = 1
+        }
+        else if (p == 0 && seg ~ /^[ \t]*(git|gh)[ \t]/ &&
+                 match(chunk, /\$\([ \t]*cat[ \t]+<<-?[ \t]*\047[^\047]+\047[ \t]*$/) && !escaped(chunk, RSTART)) {
+          w = substr(chunk, RSTART); text = substr(chunk, 1, RSTART - 1)
+          dqtab = index(w, "<<-") > 0
+          sub(/^[^\047]*\047/, "", w); sub(/\047[ \t]*$/, "", w)
+          dqword = w; dqhd = 1
+        }
+        if (index(text, "$(") || index(text, "`")) raw = 1
+      }
       seg = seg enc(chunk); qn += length(chunk)
       if (p) { if (qn == 0) seg = seg "\005"; q = "" }
       continue

@@ -76,6 +76,25 @@ run_case "pass: cleaning /tmp does not widen the diff to the whole tree" pass - 
   "$(line Bash '{"command": "rm -rf /tmp/scratch && grep -rn -- --fix ."}')"
 reset
 
+# a git diff that fails prints one line, which must not read as a small change
+SHIM="$REPO/.git/shim"
+mkdir -p "$SHIM"
+cat >"$SHIM/git" <<EOF
+#!/bin/sh
+case " \$* " in *" --quiet "*) exit 128 ;; esac
+exec "$(command -v git)" "\$@"
+EOF
+chmod +x "$SHIM/git"
+sed -i.bak '1,31s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+PATH="$SHIM:$PATH" run_case "block: a failed git diff is no small change" block - "$(edit src/a.ts)"
+cat >"$SHIM/git" <<EOF
+#!/bin/sh
+case " \$* " in *" diff "*) exit 128 ;; esac
+exec "$(command -v git)" "\$@"
+EOF
+PATH="$SHIM:$PATH" run_case "block: every git diff failing still reaches the block" block - "$(edit src/a.ts)"
+reset
+
 seq 1 3 >"$REPO/src/new.ts"
 run_case "block: a new file is never small" block - "$(edit src/new.ts)"
 rm -f "$REPO/src/new.ts"

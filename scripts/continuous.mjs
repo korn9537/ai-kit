@@ -39,8 +39,8 @@ export function init(args, old, base = [], baseLoose = []) {
   return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
 }
 
-// a state file of the old version holds `newdir/` and git-quoted "caf\303\251.txt" in base; dirty now lists files
-// unquoted, so a base entry ending in / is a prefix and a quoted one is decoded
+// a state file of the old version holds `newdir/` and git-quoted "caf\303\251.txt" in base; a dirty path with a space
+// stays quoted whatever core.quotePath says, so both sides are decoded and a base entry ending in / is a prefix
 const unquote = (e) => {
   if (!/^".*"$/.test(e)) return e;
   const bytes = [];
@@ -54,7 +54,10 @@ const unquote = (e) => {
   }
   return Buffer.from(bytes).toString("utf8");
 };
-const inBase = (base, p) => base.some((e) => (e.endsWith("/") ? p.startsWith(e) : unquote(e) === p));
+const inBase = (base, p) => {
+  const path = unquote(p);
+  return base.map(unquote).some((e) => (e.endsWith("/") ? path.startsWith(e) : e === path));
+};
 
 const MAX_LOG_FAILS = 3;
 // the run is known to be over (lost session, stopped report): without this, init refuses the job for good; next

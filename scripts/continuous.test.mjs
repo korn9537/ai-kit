@@ -118,6 +118,9 @@ const oldBase = (base, paths) => {
 ok("an old base `newdir/` holds the files below it", oldBase(["newdir/"], ["newdir/a.txt"]).step.action === "run");
 ok("an old quoted base entry matches the unquoted path", oldBase(['"caf\\303\\251.txt"'], ["café.txt"]).step.action === "run");
 ok("a path outside the old base still counts", oldBase(["newdir/"], ["other/a.txt"]).step.action === "wait");
+ok("a dirty path with a space, quoted by git, is in the base", oldBase(['"user notes.txt"'], ['"user notes.txt"']).step.action === "run");
+ok("a quoted base dir holds a quoted path below it", oldBase(['"my dir/"'], ['"my dir/a b.txt"']).step.action === "run");
+ok("a quoted path outside the base still counts", oldBase(['"user notes.txt"'], ['"other notes.txt"']).step.action === "wait");
 r = next(live(), finished(failedAgent("a"), skipped("b"), skipped("c"), committed("d")), { ...dirty, noStash: false }, T);
 const toStash = next(r.state, none, { ...dirty, noStash: false }, T + RETRY_GAP);
 ok("a tree clean at the start: the retry stashes the edits", toStash.step.action === "stash" && toStash.state.stashes.length === 1, toStash);

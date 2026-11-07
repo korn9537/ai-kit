@@ -60,7 +60,7 @@ read -r -d '' events_jq <<'JQ' || true
     def inplace($re): test($re) or (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test($re));
     def raw_write:
       # sed and perl: -i within one command, read raw and with quoted text blanked (sed -e 's/a;b/c/' -i f): a later
-      # command's flag is not sed's (sed -n 1p f; grep -i x)
+      # command's flag is not sed's (sed -n 1p f; grep -i x). Known gap: an escaped ' ; or | before -i ends the scan
       inplace("\\bg?sed\\b[^;&|\n]*\\s(-[A-Za-z]*i|--in-place)\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or inplace("\\bperl\\b[^;&|\n]*\\s-(?!M)[A-Za-z0-9]*i\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or test("\\bprettier\\b[^;&|\n]* (-w|--write)\\b")
@@ -189,8 +189,8 @@ if [[ -n "$snapshot" ]]; then
   if [[ -n "$now_tree" ]]; then
     changed="$(code_since "$snapshot" "$now_tree")"
     [[ -z "$changed" ]] && exit 0
-    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
-    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
+    new_files="$(git -C "$project" diff --name-only --diff-filter=A "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
+    paths="$(git -C "$project" diff --name-only "$snapshot" "$now_tree" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
   fi
 else
   since="$(jq -R 'fromjson? // empty | .timestamp // empty' -r "$transcript" | head -1 || true)"
@@ -199,8 +199,8 @@ else
     new_files="$(git -C "$project" ls-files --others --exclude-standard -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
     changed="$(code_since "$base")"
     [[ -z "$new_files" && -z "$changed" ]] && exit 0
-    new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
-    paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage')"
+    new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
+    paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
   fi
 fi
 skip_lines="$(kit_conf '.review.skip_lines' 10)"
@@ -208,8 +208,9 @@ always="$(kit_conf '.review.always' '(^|/)(migrations?|schema|auth|permissions?|
 # JS-style regex (jq test, as the other config patterns); an invalid one counts as a match
 hits_always() { jq -Rse --arg re "$always" 'split("\n") | any(.[]; test($re; "i"))' <<<"$paths" >/dev/null 2>&1 \
   || [[ $? -ne 1 ]]; }
-if [[ "$state" == none && -n "$changed" && -z "${new_files//$'\n'/}" ]] && (($(wc -l <<<"$changed") <= skip_lines)) &&
-  ! hits_always; then
+# a failed diff prints one line: it says nothing about the size of the change
+if [[ "$state" == none && -n "$changed" && "$changed" != *"(git diff failed)"* && -z "${new_files//$'\n'/}" ]] &&
+  (($(wc -l <<<"$changed") <= skip_lines)) && ! hits_always; then
   exit 0
 fi
 

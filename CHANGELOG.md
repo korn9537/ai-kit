@@ -13,9 +13,9 @@ From a review of every hook and script. No project needs to edit anything.
   `check-wrap.mjs` is `check-docs.mjs --wrap`, `check-size.mjs` is `check-comments.mjs --size`, `unattended.mjs` is in
   `kit.mjs`, `run-plan-status.mjs` is `plan.mjs live`; `migrate` moved to `kit-migrate.mjs`, with a first test.
 - `bash-guard.sh`: one splitter that drops quoted text and heredoc bodies, so a commit message naming a build no longer
-  blocks, and many missed forms now do (`git stage .`, `git commit . -m x`, `(cd web && npm run build)`,
-  `pnpm turbo build`). When the scan loses the quotes it also checks the raw text. `memory-guard.sh` keeps Write and
-  Edit only: its Bash branch took 14 s on a Thai heredoc, past its timeout.
+  blocks, in `-m "$(cat <<'EOF' ...)"` too, and many missed forms now do (`git stage .`, `git commit . -m x`,
+  `(cd web && npm run build)`, `pnpm turbo build`). When the scan loses the quotes it also checks the raw text.
+  `memory-guard.sh` keeps Write and Edit only: its Bash branch took 14 s on a Thai heredoc, past its timeout.
 - Stop hook: a preview agent or a denied reviewer no longer counts as a review; more Bash writes count; a read-only
   command does not. One moved line is no longer a move: a run needs three code lines.
 - `continuous.mjs`: a failed `git log` stops the run instead of committing a batch twice, and three in a row close it.
