@@ -73,9 +73,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   main-session reply with `Review closed: re-checked once` (not quoted). A block moved to another file counts as no
   change (`git diff --color-moved`, re-indenting allowed); a reorder or re-indent within one file still counts.
 - `agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent (type `general-purpose`,
-  `claude` or none) launched without a `model`, which would inherit the main session's opus; pass `sonnet`, except
-  a fallback for a kit agent, which passes that agent's frontmatter model and effort (`opus` medium for the
-  reviewer, business-analyst and decider, `sonnet` medium for the committer).
+  `claude` or none) or an `Explore` launched without a `model`, which would inherit the main session's opus; pass
+  `sonnet`, except a fallback for a kit agent, which passes that agent's frontmatter model and effort (`opus` medium
+  for the reviewer, business-analyst and decider, `sonnet` medium for the committer).
 - `handoff-nudge.sh` (UserPromptSubmit, and PostToolUse on Agent, Task and SendMessage for a coordinator) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
   coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the
@@ -83,8 +83,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   `handoff.max_reads` (5; 0 is off) reads or searches since the last prompt, past `handoff.reads_from` (100k) tokens of
   context, a note to send the search to a subagent. A subagent's reads and Bash lines that do not start as a read do not
   count. A `Read` with no range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a
-  note to read a line range, once per prompt in the main session and once per subagent. Agents
-  find a symbol with the `LSP` tool when an LSP plugin is on (`typescript-lsp`, `gopls-lsp`, `csharp-lsp`), else `grep`.
+  note to read a line range, once per prompt in the main session and once per subagent.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
   without `node_modules` (a fresh worktree) only the project's checks are skipped.

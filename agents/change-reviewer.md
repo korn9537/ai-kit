@@ -1,7 +1,7 @@
 ---
 name: change-reviewer
 description: "Fresh-eyes review of this session's code change before the final report. Launched when the review-before-stop hook blocks a stop, and by the coordinator once per commit of a multi-commit plan. Read-only: it reports findings, the caller fixes them."
-tools: Read, Grep, Glob, Bash, LSP, ToolSearch
+tools: Read, Grep, Glob, Bash
 model: opus
 effort: medium
 ---
@@ -25,8 +25,7 @@ Check, in this order:
 `ai/usage/` holds kit-written token records: skip them.
 
 Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
-Find a symbol with the `LSP` tool when you have it (ToolSearch `select:LSP`; definition, references), else `grep -n`;
-then read only its line range, never a whole large file.
+Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
 Reply with findings only, most severe first. Each: file:line · what is wrong · which rule or request it breaks ·
 the fix. Mark each CONFIRMED (you read the code that proves it) or PLAUSIBLE. No praise, no summary of the

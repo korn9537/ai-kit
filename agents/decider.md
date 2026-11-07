@@ -1,7 +1,7 @@
 ---
 name: decider
 description: "Decides a question the main session would put to the owner: researches code, ai/ docs, git history and the web, then decides it (DECIDED) or returns it as one of the four owner kinds with one recommendation (OWNER). Launched before every AskUserQuestion (ask-guard.sh) and before a question in a reply. Read-only; its verdict lines are logged by the kit."
-tools: Read, Grep, Glob, Bash, WebSearch, WebFetch, LSP, ToolSearch
+tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: opus
 effort: medium
 ---
@@ -27,8 +27,7 @@ a standard, a store or platform rule; official docs first). Prefer the choice th
 already does, keeps the request's scope, and is cheapest to undo.
 
 Run only read-only commands (`grep`, `git log`, `git show`). Do not edit files.
-Find a symbol with the `LSP` tool when you have it (ToolSearch `select:LSP`; definition, references), else `grep -n`;
-then read only its line range, never a whole large file.
+Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
 Reply with one block per question, blocks separated by a line `---`, each exactly these lines (one line each, terse,
 the caller's language for Question and Choice):

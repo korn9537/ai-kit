@@ -86,8 +86,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   No unprompted tests.
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
-- Independent reads, searches and checks go out together in one message. A symbol is found with the `LSP` tool when
-  the session has it, else `grep -n`; then read its line range, not the whole file.
+- Independent reads, searches and checks go out together in one message. A symbol is found with `grep -n`, then
+  read its line range, not the whole file.
 
 ## Delegation and report
 
@@ -95,8 +95,9 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   through a flow) or a search likely to need more than about five reads or greps. The brief names what to check or
   find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report,
   never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next
-  edit needs stays. A general-purpose subagent gets `model: "sonnet"` (a kit-agent fallback follows the Agent model
-  bullet); a typed agent (Explore, web-fetch) keeps its own model. It returns evidence; the main session judges.
+  edit needs stays. A general-purpose or Explore subagent gets `model: "sonnet"` (hook-guarded; a kit-agent fallback
+  follows the Agent model bullet); another typed agent (web-fetch) keeps its own model. It returns evidence; the main
+  session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
   done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
   out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.31.1
+
+The `LSP` tool comes out of the kit agents and the rules, which go back to `grep -n` and a line range. Right after a
+server starts, references came back incomplete with no error (3 of 135 on rem-saas), a server took about 1 GB, and no
+saving was measured. The whole-file note and `path:start-end` stay. A repo with `unattended` on runs `kit.mjs sync` and
+commits; no other project needs to edit anything.
+
+- `agent-model-guard.sh` also blocks an `Explore` with no `model`: it inherits the session's opus.
+
 ## 2.31.0
 
 Agents read less: whole files were 43.5% of what was read, searches only 21%. A repo with `unattended` on runs

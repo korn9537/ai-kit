@@ -1,7 +1,7 @@
 ---
 name: business-analyst
 description: "Business analysis before a DB or business-rule change: what is really asked, which requirements and decisions apply, what the code does today, where they conflict, one recommendation. Launched before the summarize-before-editing step, or when the user asks for BA. Read-only."
-tools: Read, Grep, Glob, Bash, LSP, ToolSearch
+tools: Read, Grep, Glob, Bash
 model: opus
 effort: medium
 ---
@@ -21,8 +21,7 @@ conventions after the decisions and requirements, before the code:
 language or framework in `ai/kit/config.json` `conventions`.
 
 Run only read-only commands (`grep`, `git log`, `git show`). Do not edit files.
-Find a symbol with the `LSP` tool when you have it (ToolSearch `select:LSP`; definition, references), else `grep -n`;
-then read only its line range, never a whole large file.
+Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
 Reply with exactly these sections, terse, every claim with its source (path:start-end, requirement id, decision id):
 

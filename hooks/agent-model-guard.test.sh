@@ -33,7 +33,8 @@ run_case "block: no subagent_type without model" 2 '{"description":"d","prompt":
 run_case "pass: general-purpose with model sonnet" 0 '{"subagent_type":"general-purpose","model":"sonnet","prompt":"x"}'
 run_case "pass: no subagent_type with model" 0 '{"model":"sonnet","prompt":"x"}'
 run_case "pass: ai-kit:committer" 0 '{"subagent_type":"ai-kit:committer","prompt":"x"}'
-run_case "pass: Explore" 0 '{"subagent_type":"Explore","prompt":"x"}'
+run_case "block: Explore without a model" 2 '{"subagent_type":"Explore","prompt":"x"}'
+run_case "pass: Explore with a model" 0 '{"subagent_type":"Explore","model":"sonnet","prompt":"x"}'
 run_case "pass: Plan" 0 '{"subagent_type":"Plan","prompt":"x"}'
 run_case "pass: fork" 0 '{"subagent_type":"fork","prompt":"x"}'
 # the block message names the fallback models

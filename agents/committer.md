@@ -1,7 +1,7 @@
 ---
 name: committer
 description: "Commit subagent of a multi-commit plan: implements one batch, verifies it and makes its one commit. Launched by the coordinator (docs/plan-batching.md §Coordinator pipeline) with description `commit: <batch>`. Reports hash, files, choices and open items only."
-tools: Read, Edit, Write, Grep, Glob, Bash, LSP, ToolSearch
+tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 effort: medium
 ---
@@ -16,8 +16,7 @@ edit, stage, revert or search them.
 
 Context is the cost. Every result you read stays in your context and is re-read on each later call:
 
-- Locate a symbol with the `LSP` tool when you have it (ToolSearch `select:LSP`; definition, references), else with
-  `grep -n` (several patterns in one call), then read only the needed line range; send independent
+- Locate with `grep -n` (several patterns in one call), then read only the needed line range; send independent
   reads and searches in one message. Never read a whole large file to find one symbol, never one `sed -n` per call
   when several ranges are known.
 - Verify with the project's verify commands (CLAUDE.md) on what changed only, once, right before the commit. A command
