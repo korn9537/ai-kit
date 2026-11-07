@@ -98,7 +98,7 @@ export function next(state, run, repo, now = Date.now()) {
   const done = (id) => s.batches[id]?.status === "committed";
   const retry = [];
   const again = new Set();
-  const known = Object.values(s.batches).flatMap((r) => [r.hash, r.fix?.hash]).filter(Boolean);
+  const known = Object.values(s.batches).flatMap((r) => [r.hash, r.fix?.hash, r.fix2?.hash]).filter(Boolean);
   // a resumed job holds the fix commits of its lost run: none of them is this run's lost batch
   const loose = repo.loose
     .filter((h) => !(s.baseLoose || []).some((k) => k.startsWith(h) || h.startsWith(k)))

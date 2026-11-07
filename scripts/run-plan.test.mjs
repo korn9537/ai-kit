@@ -1,4 +1,4 @@
-// Runs workflows/run-plan.js with a fake agent(): which batches come back with `left`.
+// Runs workflows/run-plan.js with a fake agent(): how many fix rounds a batch gets, and how it ends.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -20,36 +20,50 @@ const ok = (name, cond) => {
 const commit = (hash) => ({ hash, files: ["a"], choices: [], owner: [], blockers: [], notes: [], review: "review" });
 const finding = (what, dataRule = false, verdict = "CONFIRMED") => ({ where: "a.ts:1", what, rule: "r", fix: "f", verdict, dataRule });
 const review = (findings) => ({ findings, reviewed: true, checked: "all" });
-// script: first review, re-check, fix commit
-const script = (first, recheck, fix = commit("f1")) => (label) => {
-  if (/recheck/.test(label)) return review(recheck);
-  if (/^review/.test(label)) return review(first);
-  return / fix\]/.test(label) ? fix : commit("c1");
+// review results in order: first review, then each re-check; every fix commit gets the next hash
+const script = (reviews, fix = (n) => commit(`f${n}`), first = commit("c1")) => {
+  const log = [];
+  let n = 0, f = 0;
+  const fn = (label) => {
+    log.push(label.split(" ")[0] + (/ fix\]/.test(label) ? " fix" : ""));
+    if (/^review/.test(label)) return review(reviews[n++] ?? []);
+    return / fix\]/.test(label) ? fix(++f) : first;
+  };
+  fn.log = log;
+  return fn;
 };
-const one = (id = "a", verify = "make test") => [{ id, title: "feat(x): y", brief: "b", verify }];
+const one = [{ id: "a", title: "feat(x): y", brief: "b", verify: "make test" }];
+const fixes = (s) => s.log.filter((l) => /fix$/.test(l)).length;
 
-let r = (await run(one(), script([], []))).batches[0];
-ok("a clean review: committed, no left", r.status === "committed" && r.left === undefined);
+let s = script([[]]);
+let r = (await run(one, s)).batches[0];
+ok("a clean review: committed, no fix", r.status === "committed" && fixes(s) === 0);
 
-r = (await run(one(), script([finding("bug")], []))).batches[0];
-ok("a fix the re-check accepts: no left", r.left === undefined);
+s = script([[finding("bug")], []]);
+r = (await run(one, s)).batches[0];
+ok("a fix the re-check accepts: one fix", r.status === "committed" && fixes(s) === 1 && !r.fix2);
 
-r = (await run(one(), script([finding("bug")], [finding("still", false, "PLAUSIBLE")]))).batches[0];
-ok("only a PLAUSIBLE left: no left", r.left === undefined);
+s = script([[finding("bug")], [finding("x", false, "PLAUSIBLE")]]);
+r = (await run(one, s)).batches[0];
+ok("only a PLAUSIBLE left: no second fix", fixes(s) === 1);
 
-r = (await run(one(), script([finding("bug", true)], [finding("new bug")]))).batches[0];
-ok("a CONFIRMED finding after the last review: left", r.status === "partial" && r.left?.id === "a-left");
-ok("left holds the new finding, not the fixed one", /new bug/.test(r.left.brief) && !/ bug · r/.test(r.left.brief.replace("new bug", "")));
-ok("left keeps verify and a fix title", r.left.verify === "make test" && r.left.title === "fix(x): y");
+s = script([[finding("bug", true)], [finding("new bug")], []]);
+r = (await run(one, s)).batches[0];
+ok("a finding the re-check leaves: a second fix, clean", r.status === "committed" && fixes(s) === 2 && r.fix2?.hash === "f2");
+ok("the batch ends with no blocker and no third-pass wording", r.blockers.length === 0 && !/no third pass/.test(r.review));
 
-r = (await run(one(), script([finding("bug")], [], { ...commit(""), hash: "" }))).batches[0];
-ok("a failed fix: its findings are left", r.status === "partial" && /bug/.test(r.left?.brief ?? ""));
+s = script([[finding("bug")], [finding("b2")], [finding("b3")]]);
+r = (await run(one, s)).batches[0];
+ok("still left after the second fix: partial, no third fix", r.status === "partial" && fixes(s) === 2 && /1 CONFIRMED/.test(r.review));
+ok("it says no third pass nowhere", !/no third pass/.test(r.review) && r.blockers.length === 1);
 
-r = (await run(one("a-left"), script([finding("bug")], [finding("again")]))).batches[0];
-ok("a -left batch gets no further round", r.status === "partial" && r.left === undefined);
+s = script([[finding("bug")], [finding("b2")]], (n) => (n === 1 ? commit("f1") : { ...commit(""), notes: ["stuck"] }));
+r = (await run(one, s)).batches[0];
+ok("a second fix that fails: partial, findings left", r.status === "partial" && /CONFIRMED finding/.test(r.review) && !r.fix2);
 
-r = (await run([{ id: "a", title: "t", brief: "b" }], script([finding("bug")], [finding("x")]))).batches[0];
-ok("no verify on the batch: none on left", !("verify" in r.left));
+s = script([[finding("bug")], [finding("b2")]], (n) => commit(`f${n}`), { ...commit("c1"), owner: ["pick a price"] });
+r = (await run(one, s)).batches[0];
+ok("an owner decision open: no second fix", r.status === "partial" && fixes(s) === 1);
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

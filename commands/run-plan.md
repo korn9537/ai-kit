@@ -28,15 +28,12 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    yet, or skipped because a batch it waits for was not committed in full. Tell the user a `⚠` line (an owner
    decision, a blocker, an agent with no transcript write for 15 minutes) before the run ends; the final report still
    comes from the result.
-4. **Left findings**: a batch with `left` in the result holds CONFIRMED findings no review pass was left for. Before
-   the report, once: `plan.mjs write` an args file of the same `job`, `request` and `plugin` with those `left` objects
-   as `batches`, then Workflow as in **Run** with those args. Their own commit and review results join the report. A
-   `-left` batch has no `left`: what its review leaves goes under Open.
-5. **Report** from its result, one final report (CLAUDE.core.md). First, when every batch has a commit and none would
+4. **Report** from its result, one final report (CLAUDE.core.md). First, when every batch has a commit and none would
    go under Open, run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs close <job>` and list that commit under Git. A plan
    left open: Open says what §Plan file (Left work) needs, then `/ai-kit:run-plan resume <job>`.
    - Checked, per batch: a skipped review as `review skipped, move-only or comment-only`; the CONFIRMED findings
-     fixed and the re-check's findings; `Review closed: re-checked once, no third pass` only where `review` says
+     fixed and the re-check's findings, `fix2` and `recheck2` when a second fix ran;
+     `Review closed: re-checked once, no third pass` only where `review` says
      re-checked once (plain text).
    - Git: every commit, fixes included.
    - Open: each `owner` decision, each `blockers` and `notes` item, each `blocked`, `partial` or `skipped` batch
@@ -46,7 +43,7 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    - After the owner answers: run this command again with the batches left, each id with status `committed` out of
      their `waitsFor` (the workflow counts an id outside this run as not committed); a `partial` one per
      `plan-batching.md` §Plan file (Left work).
-6. No Workflow tool, or the call is refused → run the plan as coordinator per §Coordinator pipeline instead.
+5. No Workflow tool, or the call is refused → run the plan as coordinator per §Coordinator pipeline instead.
 
 ## Resume
 

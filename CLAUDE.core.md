@@ -61,7 +61,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   effort, `ai-kit:committer` on sonnet at medium effort, all from their agent frontmatter; the Agent call passes no
   model or effort for them. A general-purpose fallback for a kit agent (type not loaded) passes that agent's
   frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for committer); every other
-  general-purpose subagent gets `model: "sonnet"`.
+  general-purpose or Explore subagent gets `model: "sonnet"`.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for
@@ -120,8 +120,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
      calculation, permission or final-decision change, launch the reviewer yourself even when small. Findings on code
      you just changed are fixed and re-checked once by the same reviewer (fix diff only), with a fresh background
      reviewer per commit (none for a commit of only moved blocks, comments or docs). No third pass: the report says,
-     as plain text with no quotes or backticks, Review closed: re-checked once, no third pass. Exception: a CONFIRMED
-     finding about data or rule correctness is fixed and then reviewed by a fresh reviewer. A user message starting
+     as plain text with no quotes or backticks, Review closed: re-checked once, no third pass.
+     Exception: a CONFIRMED finding about data or rule correctness is fixed and then reviewed by a fresh
+     reviewer. CONFIRMED findings a re-check leaves get one more fix and a re-check of that fix, then go under
+     Open.
+     A user message starting
      with "skip review" or "ไม่ต้อง review" opts out. UI suggestions → Decided (applied) or Open. A finding seen a
      second time that a script could catch → say so in the proposal issue, or add the pre-commit check when it fails
      the cross-repo test (`ai-kit/docs/kit-proposals.md`).

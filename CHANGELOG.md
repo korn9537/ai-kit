@@ -5,9 +5,8 @@
 CONFIRMED findings no longer stop at the report: 70 of 78 fresh reviews left some, 209 in all. No project needs to edit
 anything.
 
-- `run-plan.js` returns `left` for a batch whose last review left CONFIRMED findings, or whose fix failed: a new batch
-  `<id>-left` with those findings as its brief. `/ai-kit:run-plan` runs it once before the report, with its own commit
-  and review; a `-left` batch's findings go under Open. `/ai-kit:continuous` writes it to the plan for a resume.
+- A re-check that leaves CONFIRMED findings gets one more fix and a re-check of that fix, in `run-plan.js` and for a
+  coordinator. An open owner decision holds it. What is left then goes under Open.
 
 ## 2.31.1
 

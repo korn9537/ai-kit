@@ -133,18 +133,6 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
         list(fs),
       ].join('\n')
 
-// CONFIRMED findings no review pass is left for become one new batch, its own commit and review; a -left batch's own
-// findings stop at the report, so a batch runs at most one extra round
-const leftBatch = (b, fs) =>
-  b.id.endsWith('-left')
-    ? undefined
-    : {
-        id: `${b.id}-left`,
-        title: fixSubject(b.title),
-        brief: [`Fix only these review findings left on batch ${b.id}: ${b.title}.`, '', list(fs)].join('\n'),
-        ...(b.verify ? { verify: b.verify } : {}),
-      }
-
 const results = {}
 const pick = (c) => ({ hash: c.hash, files: c.files, choices: c.choices, owner: c.owner, blockers: c.blockers, notes: c.notes })
 
@@ -176,7 +164,6 @@ async function reviewChain(b, r, need) {
   if (!fx || !fx.hash) {
     r.status = 'partial'
     r.review = 'CONFIRMED findings left unfixed'
-    r.left = leftBatch(b, confirmed)
     r.owner = [...(r.owner || []), ...((fx && fx.owner) || [])]
     r.blockers.push(...((fx && fx.blockers) || []))
     r.notes.push(...((fx && fx.notes) || []))
@@ -203,12 +190,41 @@ async function reviewChain(b, r, need) {
   }
   r.recheck = rc.findings
   r.review = fresh ? 'fixed; fresh review of the data or rule fix' : 'fixed; re-checked once, no third pass'
-  const left = (rc.findings || []).filter((f) => f.verdict === 'CONFIRMED')
+  let left = (rc.findings || []).filter((f) => f.verdict === 'CONFIRMED')
+  // one more fix and a re-check of it, not a stop at the report; an owner decision still open holds it
+  if (left.length && !(r.owner || []).length) {
+    const fx2 = await exclusive(() =>
+      agent(fixPrompt(b, fx.hash, left), {
+        label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT,
+      }),
+    )
+    if (fx2 && fx2.hash) {
+      r.fix2 = pick(fx2)
+      const rc2 = await agent(recheckPrompt(b, r.hash, fx2.hash, left, false), {
+        label: `review: [${b.id} recheck] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:change-reviewer', schema: REVIEW,
+      })
+      if (rc2 && rc2.reviewed) {
+        r.recheck2 = rc2.findings
+        left = (rc2.findings || []).filter((f) => f.verdict === 'CONFIRMED')
+        r.review = 'fixed; a second fix re-checked'
+      } else {
+        r.recheck2 = `not re-checked: ${rc2 ? rc2.checked : 'reviewer failed or was skipped'}`
+        r.review = 'fixed; second fix not re-checked'
+        r.status = 'partial'
+        return
+      }
+    }
+    const open = fx2 ? [...(fx2.owner || []), ...(fx2.blockers || [])] : []
+    if (open.length) {
+      r.owner = [...(r.owner || []), ...((fx2 && fx2.owner) || [])]
+      r.blockers.push(...((fx2 && fx2.blockers) || []))
+      r.status = 'partial'
+    }
+  }
   if (left.length) {
     r.status = 'partial'
-    r.review += `; ${left.length} CONFIRMED finding(s) left`
-    r.blockers.push(`${left.length} CONFIRMED finding(s) left after the re-check: see recheck`)
-    r.left = leftBatch(b, left)
+    r.review = `fixed; ${left.length} CONFIRMED finding(s) left`
+    r.blockers.push(`${left.length} CONFIRMED finding(s) left after the last re-check: see recheck`)
   }
   log(`${b.title}: fix ${fx.hash}, ${rc.findings.length} finding(s) left`)
 }

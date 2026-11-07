@@ -62,10 +62,9 @@ says the workflow did not complete, and act on the printed `action`:
 ## Close
 
 CronDelete this run's cron (CronList finds it) and stop `caffeinate` (`pkill -f "caffeinate -i -t 604800"`). No batch
-would go under Open: from the project root, `node <plugin>/scripts/plan.mjs close <job>`, that commit under Git. A
-batch with `left`: `plan.mjs write` those objects as `batches`, so the plan stays open, and name `/ai-kit:run-plan
-resume <job>` under Open. Then write one final report per `<plugin>/commands/run-plan.md` step 5 from the `batches` of
-`<state>`, which hold every run's results. Each name in its `stashes` goes under Open: the edits a dead committer
-left, in `git stash list`. To go on after answering, the user runs this command again with what is left and the same
-job. A batch reported with a commit stays in `<state>`; what is left of one under Open takes a new batch id, and
-batches that waited for it wait for that id.
+would go under Open: from the project root, `node <plugin>/scripts/plan.mjs close <job>`, that commit under Git. Then
+write one final report per `<plugin>/commands/run-plan.md` step 4 from the `batches` of `<state>`, which hold every
+run's results. Each name in its `stashes` goes under Open: the edits a dead committer left, in `git stash list`. To go
+on after answering, the user runs this command again with what is left and the same job. A batch reported with a
+commit stays in `<state>`; what is left of one under Open takes a new batch id, and batches that waited for it wait
+for that id.
