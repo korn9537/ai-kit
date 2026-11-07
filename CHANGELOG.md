@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.28.0
+
+From a review of every hook and script. No project needs to edit anything.
+
+- Session start: Claude Code keeps only a 2,000-character preview of a hook string over 10,000 characters, and the
+  injected `CLAUDE.core.md` was over 12,000. `session-context.sh` and `session-start.sh` now inject one half each,
+  split at the new Delegation and report heading; nothing was cut.
+- Fewer files. Hooks: `bash-guard.sh` replaces `build-while-dev-guard.sh` and `git-add-all-guard.sh`; `kit-log.sh`
+  replaces `usage-log.sh`, `usage-flush.sh` and `decider-log.sh`; `review-skip-guard.sh` is gone, coordinators call
+  `scripts/review-needed.sh`. Scripts: `usage-flush.mjs` is in `usage.mjs`, `usage-record.mjs` in `usage-digest.mjs`,
+  `check-wrap.mjs` is `check-docs.mjs --wrap`, `check-size.mjs` is `check-comments.mjs --size`, `unattended.mjs` is in
+  `kit.mjs`, `run-plan-status.mjs` is `plan.mjs live`; `migrate` moved to `kit-migrate.mjs`, with a first test.
+- `bash-guard.sh`: one splitter that drops quoted text and heredoc bodies, so a commit message naming a build no longer
+  blocks, and many missed forms now do (`git stage .`, `git commit . -m x`, `(cd web && npm run build)`,
+  `pnpm turbo build`). When the scan loses the quotes it also checks the raw text. `memory-guard.sh` keeps Write and
+  Edit only: its Bash branch took 14 s on a Thai heredoc, past its timeout.
+- Stop hook: a preview agent or a denied reviewer no longer counts as a review; more Bash writes count; a read-only
+  command does not. One moved line is no longer a move: a run needs three code lines.
+- `continuous.mjs`: a failed `git log` stops the run instead of committing a batch twice, and three in a row close it.
+  State is written atomically. `plan.mjs` refuses staged files outside cwd and finds its root from a subdirectory.
+  `run-plan.js` keeps a fix agent's owner questions and blockers.
+- Usage: a lock with a short wait and a dead-holder break makes flush and record safe to run at once (four parallel
+  flushes cost about 2.6x), records dedupe on session and ts, and SessionEnd records before it flushes.
+- Checks: `--staged` reads the index, `--size` sees renames, the history rule passes present-tense comments such as
+  `used to build`, and fences, frontmatter and template literals parse correctly.
+- `jobs.mjs` reads non-ASCII paths and body trailers. `kit.mjs` honours `CLAUDE_CONFIG_DIR` and repairs a
+  non-executable shim. Every CLI runs through a symlink (`is-main.mjs`, with a test that greps for the old guard).
+
 ## 2.27.3
 
 - `scripts/plan.mjs`: `write` lets through only the wide lines a plan's file already holds, not every line of an
