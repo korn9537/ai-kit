@@ -133,6 +133,18 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
         list(fs),
       ].join('\n')
 
+// CONFIRMED findings no review pass is left for become one new batch, its own commit and review; a -left batch's own
+// findings stop at the report, so a batch runs at most one extra round
+const leftBatch = (b, fs) =>
+  b.id.endsWith('-left')
+    ? undefined
+    : {
+        id: `${b.id}-left`,
+        title: fixSubject(b.title),
+        brief: [`Fix only these review findings left on batch ${b.id}: ${b.title}.`, '', list(fs)].join('\n'),
+        ...(b.verify ? { verify: b.verify } : {}),
+      }
+
 const results = {}
 const pick = (c) => ({ hash: c.hash, files: c.files, choices: c.choices, owner: c.owner, blockers: c.blockers, notes: c.notes })
 
@@ -164,6 +176,7 @@ async function reviewChain(b, r, need) {
   if (!fx || !fx.hash) {
     r.status = 'partial'
     r.review = 'CONFIRMED findings left unfixed'
+    r.left = leftBatch(b, confirmed)
     r.owner = [...(r.owner || []), ...((fx && fx.owner) || [])]
     r.blockers.push(...((fx && fx.blockers) || []))
     r.notes.push(...((fx && fx.notes) || []))
@@ -190,11 +203,12 @@ async function reviewChain(b, r, need) {
   }
   r.recheck = rc.findings
   r.review = fresh ? 'fixed; fresh review of the data or rule fix' : 'fixed; re-checked once, no third pass'
-  const left = (rc.findings || []).filter((f) => f.verdict === 'CONFIRMED').length
-  if (left) {
+  const left = (rc.findings || []).filter((f) => f.verdict === 'CONFIRMED')
+  if (left.length) {
     r.status = 'partial'
-    r.review += `; ${left} CONFIRMED finding(s) left`
-    r.blockers.push(`${left} CONFIRMED finding(s) left after the re-check: see recheck`)
+    r.review += `; ${left.length} CONFIRMED finding(s) left`
+    r.blockers.push(`${left.length} CONFIRMED finding(s) left after the re-check: see recheck`)
+    r.left = leftBatch(b, left)
   }
   log(`${b.title}: fix ${fx.hash}, ${rc.findings.length} finding(s) left`)
 }

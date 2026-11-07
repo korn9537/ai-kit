@@ -43,8 +43,9 @@ one updates a status and no two sessions edit it. All of it runs from the projec
 - **Close**: `plan.mjs close <job>` deletes the plan in its own commit, once every batch has a commit and the report
   holds no batch under Open. Other Open items (notes, PLAUSIBLE findings) do not hold a plan open.
 - **Left work**: a commit says the batch ran, not that it ended clean. What is left of a `partial` batch goes back in
-  as a new batch id through `write`, with what waited for it now waiting for that id. An owner's answer goes into the
-  brief of its `blocked` batch through `write`, same id. The owner giving up the rest: `close <job> --drop`.
+  as a new batch id through `write`, with what waited for it now waiting for that id; the workflow's `left` is that
+  batch for CONFIRMED findings no review pass was left for (`commands/run-plan.md` step 4). An owner's answer goes into
+  the brief of its `blocked` batch through `write`, same id. The owner giving up the rest: `close <job> --drop`.
 - A reverted batch still counts as committed: say so under Open and add a new batch id for it.
 - `/ai-kit:check` warns of a plan with nothing left. A plan written by hand (`templates/ai/plan.md`) keeps its status
   table and is the author's to update; the script only gives that warning.

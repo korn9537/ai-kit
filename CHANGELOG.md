@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.32.0
+
+CONFIRMED findings no longer stop at the report: 70 of 78 fresh reviews left some, 209 in all. No project needs to edit
+anything.
+
+- `run-plan.js` returns `left` for a batch whose last review left CONFIRMED findings, or whose fix failed: a new batch
+  `<id>-left` with those findings as its brief. `/ai-kit:run-plan` runs it once before the report, with its own commit
+  and review; a `-left` batch's findings go under Open. `/ai-kit:continuous` writes it to the plan for a resume.
+
 ## 2.31.1
 
 The `LSP` tool comes out of the kit agents and the rules, which go back to `grep -n` and a line range. Right after a
