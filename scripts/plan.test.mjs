@@ -124,6 +124,14 @@ try {
   ok("sharedFiles names a path two briefs hold", JSON.stringify(sharedFiles(briefs)) === JSON.stringify([{ file: "src/x/a.ts", batches: ["a", "b"] }]));
   ok("sharedFiles: one brief naming a path twice is no share", sharedFiles([{ id: "a", brief: "src/a.ts src/a.ts" }]).length === 0);
   ok("a plan with no shared file has no shared key", !("shared" in write(repo, args())));
+  const spell = [{ id: "a", brief: "/r/src/a.ts [app/(auth)/p.tsx]" }, { id: "b", brief: "./src/a.ts files:app/(auth)/p.tsx" }];
+  ok("sharedFiles: absolute, ./ and bracketed spellings pair", sharedFiles(spell, "/r").map((x) => x.file).join() === "src/a.ts,app/(auth)/p.tsx");
+  const sharedRepo = repoAt("shared");
+  const one = (id) => ({ id, title: id, brief: "Edit src/z.ts" });
+  ok("write: no share in a first batch", !("shared" in write(sharedRepo, args([one("s1")]))));
+  const added = write(sharedRepo, args([one("s2")]));
+  ok("write: a batch sharing a file with one already in the plan is named", added.committed && added.shared?.[0]?.batches.join() === "s1,s2");
+  ok("write: the unchanged path names it too", write(sharedRepo, args([one("s2")])).committed === false && added.shared.length === 1 && write(sharedRepo, args([one("s2")])).shared?.length === 1);
   const longRepo = repoAt("long");
   const longArgs = args([{ id: "a", brief: long }]);
   write(longRepo, longArgs);

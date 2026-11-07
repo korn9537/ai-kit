@@ -65,7 +65,7 @@ prompt2() {
     env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" >/dev/null 2>&1
 }
 COUNT="$REPO/.git/claude-review/s2.reads"
-counted() { [[ "$(cat "$COUNT" 2>/dev/null)" == "$1" ]]; }
+counted() { [[ "$(($(wc -c <"$COUNT")))" == "$1" ]]; }
 
 ctx 120000
 for i in 1 2 3 4; do read_tool Bash "grep -n x src/a.ts"; done
@@ -76,11 +76,18 @@ check "the fifth read past reads_from: the subagent note" \
 read_tool Grep
 check "the sixth: no repeat until the next five" "$(t test -z "$OUT")" "$OUT"
 for cmd in "git status" "cat > a.txt" "sed -i s/a/b/ f" "pnpm test" "cat <<X"; do read_tool Bash "$cmd"; done
-check "a Bash line that is no read is not counted" "$(t counted 6)" "$(cat "$COUNT")"
+check "a Bash line that is no read is not counted" "$(t counted 6)"
 read_tool Bash "cd src && sed -n '1,9p' a.ts"
-check "a read after a cd is counted" "$(t counted 7)" "$(cat "$COUNT")"
+check "a read after a cd is counted" "$(t counted 7)"
 read_tool Read "" sub1
-check "a subagent's read is not counted" "$(t counted 7)" "$(cat "$COUNT")"
+check "a subagent's read is not counted" "$(t counted 7)"
+n=7
+for cmd in "cat a.ts" "cat a.ts 2>/dev/null" "git show HEAD:a.ts" "git grep x" "git log -3" "ls -R src" "wc -l a" \
+  'cd "/a b" && grep x y' "LC_ALL=C grep x y" "sed -En 1p a" "sed -ne 1p a"; do
+  read_tool Bash "$cmd"
+  n=$((n + 1))
+  check "counted: $cmd" "$(t counted "$n")"
+done
 prompt2
 check "a new prompt starts the count again" "$(t test ! -f "$COUNT")"
 ctx 60000

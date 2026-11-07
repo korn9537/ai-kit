@@ -15,7 +15,9 @@ In this file `<plugin>` is the plugin root (`${CLAUDE_PLUGIN_ROOT}` at the start
 2. **State**: `mkdir -p` the folder of `<state>`, write the args to a temp file, then run
    `node <plugin>/scripts/continuous.mjs init <state> <args file>`, then `node <plugin>/scripts/plan.mjs write <args
    file>`, `init` first so a refusal commits nothing. A refusal names what to fix; fix it now, while the user is here.
-   A batch renamed or dropped after `write` took the plan: `write --replace`.
+   A `shared` key in the output of `write` lists files two briefs name: merge those batches per `plan-batching.md`
+   §Plan file. A batch merged, renamed or dropped after `write` took the plan: `write --replace` with the fixed args
+   file, then `init` again with that file, since each run starts from the batches in `<state>`.
    Going on with a plan a lost session left: skip step 1, clear `commands/run-plan.md` §Resume, and its `argsFile` is
    the args file here, `repo` added to it when needed; only `init` runs, no `write`.
 3. **Awake**: where `caffeinate` exists, run `caffeinate -i -t 604800` as a background Bash command.

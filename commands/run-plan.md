@@ -16,10 +16,12 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    - `repo`: only when the repo is not the session's working directory.
    - `batches`, in plan order: `{id, title, brief, verify, waitsFor, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (paths and lines already found), the
-     decisions and requirements it follows. `verify` holds the project's verify commands for it. `waitsFor` lists
+     decisions and requirements it follows. `verify` holds the project's verify commands for it, leaving out what
+     CLAUDE.md says the pre-commit runs. `waitsFor` lists
      the ids it needs. `alsoInScope` lists each item the main session added beyond the request.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
-   project root (`plan-batching.md` §Plan file; a refusal names what to fix). Then Workflow with `scriptPath`
+   project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
+   two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath`
    `${CLAUDE_PLUGIN_ROOT}/workflows/run-plan.js` and those `args`. While it runs, do not edit the repo; keep answering
    the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from
    the Workflow result>` and answer from its lines (one per batch id). A batch of `args` with no line is not started

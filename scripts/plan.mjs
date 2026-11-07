@@ -332,11 +332,12 @@ export function projectRoot(dir) {
 
 // paths two or more briefs name (a slash and an extension): such batches read the same lines, so plan-batching.md
 // wants one batch unless a separate commit is called for. A hint only: a brief may name a file it does not touch
-export function sharedFiles(batches) {
+export function sharedFiles(batches, root = "") {
+  const rel = (p) => (root && p.startsWith(`${root}/`) ? p.slice(root.length + 1) : p).replace(/^\.\//, "");
   const by = new Map();
   for (const b of batches ?? []) {
-    const paths = String(b.brief ?? "").matchAll(/(?:^|[\s`'"(])([\w@.-]+(?:\/[\w@.[\]-]+)+\.[A-Za-z0-9]+)/g);
-    for (const f of new Set([...paths].map((m) => m[1]))) by.set(f, [...(by.get(f) ?? []), b.id]);
+    const paths = String(b.brief ?? "").matchAll(/(?:^|[\s`'"([=:,])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.()[\]-]+)+\.[A-Za-z0-9]+)/g);
+    for (const f of new Set([...paths].map((m) => rel(m[1])))) by.set(f, [...(by.get(f) ?? []), b.id]);
   }
   return [...by].filter(([, ids]) => ids.length > 1).map(([file, batches]) => ({ file, batches }));
 }
@@ -347,10 +348,11 @@ export function write(root, args, replace = false) {
   const before = existsSync(path) ? readFileSync(path, "utf8") : null;
   const old = before === null ? null : parse(before);
   if (before !== null && !old) throw new Error(`${rel} is not a plan this script wrote`);
-  const plan = merge(old, args, commitsOf(root, args.job), replace);
+  const commits = commitsOf(root, args.job);
+  const plan = merge(old, args, commits, replace);
   const text = render(plan);
   refuseFile(text, plan, before);
-  const shared = sharedFiles(args.batches);
+  const shared = sharedFiles(plan.batches.filter((b) => !commits.has(b.id)), root);
   const hint = shared.length ? { shared } : {};
   // parsed, not as text: a formatter in the pre-commit rewrites the block
   if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false, ...hint };

@@ -30,8 +30,9 @@ one updates a status and no two sessions edit it. All of it runs from the projec
   batch. It refuses what would fail later (a wait on a batch planned after it or outside this run, a batch with a commit
   or with no title or brief), or a file that would not come back as the plan or has a line over 120 columns (a job over
   113 characters, a very long key; a line the plan's file already holds is not refused), and commits the plan. Its
-  `shared` output lists files two briefs name: merge those batches (`write --replace`) unless step 3 allows the split,
-  or the brief only mentions the file. It also
+  `shared` output lists paths two briefs of batches with no commit name (a path needs a slash and an extension, so a
+  root file or an extensionless one is not seen): merge those batches (`write --replace`) unless step 3 allows the
+  split or the brief only mentions the file. It also
   refuses while other files are staged: commit those first. Run again on the same job, it adds new batches and updates
   known ones by id. `--replace` also drops the batches with no commit that the args leave out, for a plan renamed or cut
   after a refusal. A text too long for one line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc
@@ -76,7 +77,8 @@ who leaves: it tries failed committers again and writes the one report when noth
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
-- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands,
+- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands (not
+  what CLAUDE.md says the pre-commit runs),
   the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id for its `Batch: <id>`
   trailer (§Plan file; a fix commit has none) and anything the coordinator already found (paths, line numbers), so
   the subagent does not search for it again.

@@ -80,8 +80,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
   coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the
   workflow's batches stay out of the main session's context. PostToolUse on Bash, Read, Grep and Glob: every
-  `handoff.max_reads` (5; 0 is off) reads or searches of one turn past `handoff.reads_from` (100k) tokens of context,
-  a note to send the search to a subagent. A subagent's reads and Bash lines that are no read do not count.
+  `handoff.max_reads` (5; 0 is off) reads or searches since the last prompt, past `handoff.reads_from` (100k) tokens of
+  context, a note to send the search to a subagent. A subagent's reads and Bash lines that do not start as a read do not
+  count.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
   without `node_modules` (a fresh worktree) only the project's checks are skipped.

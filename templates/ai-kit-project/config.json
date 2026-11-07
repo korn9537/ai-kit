@@ -12,6 +12,6 @@
     "port": 3000,
     "hint": "A build writes where the dev server serves from. Run the typecheck instead."
   },
-  "handoff": { "max_context": 150000 },
+  "handoff": { "max_context": 150000, "max_reads": 5, "reads_from": 100000 },
   "conventions": []
 }

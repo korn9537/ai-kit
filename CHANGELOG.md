@@ -6,12 +6,14 @@ Less work on the main session, from a measure of four projects' transcripts: sea
 turns woken by a finished agent 33%. No project needs to edit anything.
 
 - `handoff-nudge.sh` also runs on PostToolUse of Bash, Read, Grep and Glob: every `handoff.max_reads` (default 5, 0 is
-  off) reads or searches of one turn past `handoff.reads_from` (default 100k) tokens of context, a note to send the
-  search to a subagent. It never blocks.
+  off) reads or searches since the last prompt, past `handoff.reads_from` (default 100k) tokens of context, a note to
+  send the search to a subagent. It never blocks.
 - A plan of two batches or more now runs as the run-plan workflow; it was four. `docs/plan-batching.md`,
   `CLAUDE.core.md`. The user naming a runner still wins.
-- `plan.mjs write` lists in `shared` the files two briefs name, so batches that would read the same lines get merged.
-- `ai-kit:committer` verifies once before the commit and does not run by hand what CLAUDE.md says the pre-commit runs.
+- `plan.mjs write` lists in `shared` the paths two briefs name, so batches that would read the same lines get merged.
+  `/ai-kit:run-plan` and `/ai-kit:continuous` act on it.
+- A committer verifies once before the commit and does not run by hand what CLAUDE.md says the pre-commit runs; a
+  brief's `verify` leaves those commands out.
 
 ## 2.29.0
 

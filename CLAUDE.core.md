@@ -81,7 +81,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   `ai-kit/docs/ai-layout.md` §Where a fact goes.
 - **Comments** are for AI readers: at most two lines, a constraint or a pointer, no history
   (`ai-kit/scripts/check-comments.mjs`, `ai-kit/docs/code-comments.md`).
-- **Verify once per commit**, right before it, only what changed, with the project's verify commands (CLAUDE.md).
+- **Verify once per commit**, right before it, only what changed, with the project's verify commands (CLAUDE.md),
+  leaving to the commit what CLAUDE.md says the pre-commit runs.
   No unprompted tests.
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
