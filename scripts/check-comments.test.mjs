@@ -1,4 +1,5 @@
 // Tests for check-comments.mjs: each case writes `files` and `ai/kit/config.json`, then compares reported issues.
+// The SIZE cases commit a 115 KB file, stage an edit and compare the exit code of --size.
 // Usage: node scripts/check-comments.test.mjs
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -10,6 +11,26 @@ const ALL = { comments: { include: "\\.(ts|py|sh|ya?ml)$" } };
 const block = (p, n) => Array.from({ length: n }, (_, i) => `${p} note ${i}`).join("\n");
 
 const CASES = [
+  {
+    desc: "a backtick in a string does not open a template: a later comment is still checked",
+    files: { "a.ts": 'const a = "`";\n// used to be bad\nconst b = 1;\n' },
+    want: ["a.ts:2 history"],
+  },
+  {
+    desc: "a backtick in a regex does not open a template",
+    files: { "a.ts": "const a = /`/;\n// used to be bad\nconst b = 1;\n" },
+    want: ["a.ts:2 history"],
+  },
+  {
+    desc: "a backtick in a regex class and a trailing // comment do not open a template",
+    files: { "a.ts": "const a = x.replace(/[`\\]]/g, ''); // a ` here\n// used to be bad\nconst b = 1;\n" },
+    want: ["a.ts:2 history"],
+  },
+  {
+    desc: "a // line inside a real template literal is still data",
+    files: { "a.ts": "const a = `\n// used to be bad\n`;\n" },
+    want: [],
+  },
   {
     desc: "a long // block is reported",
     files: { "a.ts": `${block("//", 3)}\nconst a = 1;\n` },
@@ -147,6 +168,20 @@ const CASES = [
 // --staged cases: `setup` runs in the repo after the files are staged
 const STAGED = [
   {
+    desc: "a bad comments.include regex exits 1 with one line, not a stack trace",
+    files: { "ai/kit/config.json": '{"comments":{"include":"("}}', "a.ts": "const a = 1;\n" },
+    setup: () => {},
+    want: 1,
+    out: /comments: ai\/kit\/config.json comments.include is not a valid regex/,
+  },
+  {
+    desc: "a bad comments.skip regex exits 1 even without --strict findings",
+    files: { "ai/kit/config.json": '{"comments":{"skip":"[a"}}', "a.ts": "const a = 1;\n" },
+    setup: () => {},
+    want: 1,
+    out: /comments\.skip/,
+  },
+  {
     desc: "--staged reads the index: a dirty staged line is reported with a clean work tree",
     files: { "a.ts": "const a = 1;\n" },
     setup: (dir, git) => {
@@ -183,6 +218,60 @@ const STAGED = [
     want: 1,
   },
 ];
+
+const BIG = Array.from({ length: 3000 }, (_, i) => `const value${i} = compute(${i}, "padding padding");`).join("\n") + "\n";
+
+const SIZE = [
+  {
+    desc: "a new code line in a big file is blocked",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}const added = 1;\n`),
+    want: 1,
+  },
+  {
+    desc: "a git mv of a big file plus a new line is blocked",
+    edit: (dir, git) => {
+      git("mv", "a.ts", "b.ts");
+      writeFileSync(join(dir, "b.ts"), `${BIG}const added = 1;\n`);
+    },
+    want: 1,
+  },
+  {
+    desc: "a pure git mv of a big file passes",
+    edit: (dir, git) => git("mv", "a.ts", "b.ts"),
+    want: 0,
+  },
+  {
+    desc: "an export { } block of wiring passes",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n  b,\n};\n`),
+    want: 0,
+  },
+  {
+    desc: "code after the }; of an export block is blocked",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n};\nexport function evil() {}\n`),
+    want: 1,
+  },
+  {
+    desc: "an export { } block closed by `}; // end` passes",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n}; // end\n`),
+    want: 0,
+  },
+  {
+    desc: "code after a `} // end` line is blocked",
+    edit: (dir) => writeFileSync(join(dir, "a.ts"), `${BIG}export {\n  a,\n} // end\nexport function evil() {}\n`),
+    want: 1,
+  },
+  {
+    desc: "a rename with 65% of the lines rewritten and a new line is blocked",
+    edit: (dir, git) => {
+      git("mv", "a.ts", "b.ts");
+      const lines = BIG.split("\n");
+      for (let i = 0; i < 1950; i++) lines[i] = `const changed${i} = other(${i}, "different different");`;
+      writeFileSync(join(dir, "b.ts"), `${lines.join("\n")}const added = 1;\n`);
+    },
+    want: 1,
+  },
+];
+
 
 const put = (dir, files) => {
   for (const [p, body] of Object.entries(files ?? {})) {
@@ -228,6 +317,7 @@ for (const c of STAGED) {
       execFileSync("node", [SCRIPT, "--staged", "--strict"], { cwd: dir, stdio: "pipe" });
     } catch (e) {
       rc = e.status;
+      if (c.out && (String(e.stdout).split("\n").length > 2 || !c.out.test(String(e.stdout)))) rc = -1;
     }
     const ok = rc === c.want;
     console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
@@ -236,5 +326,33 @@ for (const c of STAGED) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(`\n${CASES.length + STAGED.length - fail} passed, ${fail} failed`);
+for (const c of SIZE) {
+  const dir = mkdtempSync(join(tmpdir(), "check-size-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  try {
+    git("init", "-q");
+    git("config", "user.email", "t@t");
+    git("config", "user.name", "t");
+    writeFileSync(join(dir, "a.ts"), BIG);
+    git("add", "-A");
+    git("commit", "-q", "-m", "base");
+    c.edit(dir, git);
+    git("add", "-A");
+    let rc = 0;
+    try {
+      execFileSync("node", [SCRIPT, "--size"], { cwd: dir, stdio: "pipe" });
+    } catch (e) {
+      rc = e.status;
+    }
+    const ok = rc === c.want;
+    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
+    if (!ok) {
+      fail++;
+      console.log(`       want rc ${c.want}, got ${rc}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+console.log(`\n${CASES.length + STAGED.length + SIZE.length - fail} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

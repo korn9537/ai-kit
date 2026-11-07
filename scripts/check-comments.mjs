@@ -1,14 +1,13 @@
 // Reports comments breaking docs/code-comments.md: blocks over 2 lines, history, dates, two C# <summary>s on a member.
-// Usage, cwd in the repo: node <plugin>/scripts/check-comments.mjs [--staged] [--strict: exit 1 on an issue] [--top=N] [files...]
+// Usage, cwd in the repo: node <plugin>/scripts/check-comments.mjs [--staged] [--strict: exit 1 on an issue] [files...]
+// --size: instead, block a staged edit to a code file over 40 KB at HEAD unless it only moves lines out (general.md
+// item 12); escape ALLOW_LARGE_EDIT=1.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
-const top = Number(
-  args.find((a) => a.startsWith("--top="))?.split("=")[1] ?? 0,
-);
 const MAX_BLOCK = 2;
 const git = (...a) =>
   execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
@@ -29,10 +28,16 @@ process.chdir(root);
 const conf = existsSync("ai/kit/config.json")
   ? (JSON.parse(readFileSync("ai/kit/config.json", "utf8")).comments ?? {})
   : {};
-const INCLUDE = new RegExp(conf.include ?? "\\.(tsx?|jsx?|mjs|cs)$");
-const SKIP = new RegExp(
-  conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)",
-);
+const rx = (key, def) => {
+  try {
+    return new RegExp(conf[key] ?? def);
+  } catch (e) {
+    console.log(`comments: ai/kit/config.json comments.${key} is not a valid regex: ${e.message}`);
+    process.exit(1);
+  }
+};
+const INCLUDE = rx("include", "\\.(tsx?|jsx?|mjs|cs)$");
+const SKIP = rx("skip", "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)");
 // the past-tense phrase is history, unless is/are/be/gets (with at most one adverb) leads it, or a verb of what code
 // does follows it
 const PRESENT_USE = "build|compute|derive|generate|identify|determine|decide|select|match|check|verify|validate|hash|encode|decode|parse|format|sort|find|resolve|sign|locate|authenticate";
@@ -76,6 +81,35 @@ const DOC_OPEN = /^\s*[rRuUbB]{0,2}("""|''')/;
 const DOC_AFTER = /^(async\s+)?(def|class)\b.*:$|\)(\s*->.*)?:$/;
 // not a here-string (<<<) or a shift (inside `(( ))`, or a `let` line)
 const HEREDOC = /(?<!<)<<(?![<(\d])-?\s*['"]?([A-Za-z_]\w*)['"]?/;
+// whether a template literal is open at the end of a code line: backticks inside strings, regexes and a trailing
+// `//` comment do not count
+const RE_AFTER = "(,=:[!&|?{};+-*%<>~^";
+const inTemplate = (l, tpl) => {
+  let q = "";
+  let cls = false;
+  let prev = "";
+  for (let i = 0; i < l.length; i++) {
+    const c = l[i];
+    if (c === "\\") i++;
+    else if (tpl) tpl = c !== "`";
+    else if (q) {
+      if (q === "/" && c === "[") cls = true;
+      else if (cls) cls = c !== "]";
+      else if (c === q) q = "";
+    } else if (c === "`") tpl = true;
+    else if (c === '"' || c === "'") q = c;
+    else if (c === "/" && l[i + 1] === "/") break;
+    else if (c === "/" && l[i + 1] === "*") {
+      const end = l.indexOf("*/", i + 2);
+      if (end < 0) break;
+      i = end + 1;
+    } else if (c === "/" && (!prev || RE_AFTER.includes(prev) || /\b(return|typeof|case)$/.test(l.slice(0, i).trimEnd()))) {
+      q = "/";
+    }
+    if (!/\s/.test(c) && !q) prev = c;
+  }
+  return tpl;
+};
 const commentLines = (f, lines) => {
   const out = [];
   if (HASH.test(f)) {
@@ -117,7 +151,7 @@ const commentLines = (f, lines) => {
     out.push(block >= 0 || open);
     if (open) block = BLOCK_OPEN.test(l) && !l.replace(BLOCK_OPEN, "").includes("*/") ? i : -1;
     else if (block >= 0 && l.includes("*/")) block = -1;
-    else if (js && block < 0 && (l.replace(/\\./g, "").split("`").length - 1) % 2) tpl = !tpl;
+    else if (js && block < 0) tpl = inTemplate(l, tpl);
   });
   // never closed (a `/*` inside a string): only its opening line is a comment
   if (block >= 0) for (let i = block + 1; i < lines.length; i++) out[i] = COMMENT.test(lines[i]);
@@ -137,6 +171,101 @@ const generatedGo = (f, lines, cl) => {
   }
   return false;
 };
+
+// --size: see the header
+if (flag("size")) {
+  const LIMIT = 40 * 1024;
+  const gitRaw = (...a) => execFileSync("git", a, { encoding: "utf8", maxBuffer: 1 << 30 });
+  if (process.env.ALLOW_LARGE_EDIT === "1") process.exit(0);
+  // a merge, cherry-pick or revert brings in lines the committer did not write
+  const has = (h) => {
+    try {
+      return !!gitRaw("rev-parse", "-q", "--verify", h);
+    } catch {
+      return false;
+    }
+  };
+  if (["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"].some(has)) process.exit(0);
+  // a split adds the import of the new file to the old one; a multi-line import runs to its `} from`, `}` / `};` (a trailing `//` comment allowed) or `)` line
+  const WIRING =
+    /^(import\b|export\s*(\*|\{[^}]*\}|type\s*\{[^}]*\})\s*(as\s+\w+\s+)?from\b|export\s*(type\s*)?\{$|using\s+(static\s+)?[\w.]+\s*;$|using\s+(?!var\b)\w+\s*=\s*[\w.<>,\s]+;$|(const|let|var)\b.*=\s*require\(|from\s+\S+\s+import\b|require(_relative)?\s+['"])/;
+  const OPEN = /^(import|export)\b[^;]*\{$|^from\s+\S+\s+import\s*\($/;
+  const CLOSE = /^\}.*\bfrom\b|^\}\s*;?\s*(\/\/.*)?$|^\)$/;
+  const PARTIAL = /^((?:[a-z]+\s+)*)partial\s+(?=(class|struct|interface|record)\b)/;
+
+  // [path now, path at HEAD]: a rename (R) keeps the size of its old path. -M20% pairs a rewrite down to 20% alike;
+  // one rewritten past that counts as a new file (D+A), which has no size at HEAD.
+  const changed = [];
+  const ns = gitRaw("diff", "--cached", "--name-status", "-M20%", "--diff-filter=MR", "-z").split("\0");
+  for (let i = 0; i < ns.length - 1; ) {
+    const two = ns[i].startsWith("R");
+    changed.push([ns[i + (two ? 2 : 1)], ns[i + 1]]);
+    i += two ? 3 : 2;
+  }
+  const big = changed
+    .filter(([f]) => INCLUDE.test(f) && !SKIP.test(f))
+    .map(([f, old]) => {
+      try {
+        return [f, Number(gitRaw("cat-file", "-s", `HEAD:${old}`).trim())];
+      } catch {
+        return [f, 0];
+      }
+    })
+    .filter(([, size]) => size > LIMIT);
+  if (!big.length) process.exit(0);
+
+  // staged lines per file, leading whitespace dropped (a move may re-indent), null at each hunk; one diff per name
+  const lines = (f) => {
+    const out = { "+": [], "-": [] };
+    let body = false;
+    for (const l of gitRaw("diff", "--cached", "-U0", "--no-color", "--no-ext-diff", "--", `:(literal)${f}`).split("\n")) {
+      if (l.startsWith("@@")) {
+        body = true;
+        out["+"].push(null);
+      }
+      else if (body && /^[+-]/.test(l) && l.slice(1).trim()) out[l[0]].push(l.slice(1).trim());
+    }
+    return out;
+  };
+  const staged = gitRaw("diff", "--cached", "--name-only", "--no-renames", "-z").split("\0").filter(Boolean);
+  const diffs = new Map(staged.map((f) => [f, lines(f)]));
+
+  const add = (bag, t) => bag.set(t, (bag.get(t) ?? 0) + 1);
+  const pay = (bag, t) => !!bag.get(t) && !!bag.set(t, bag.get(t) - 1);
+
+  // each removed line elsewhere pays for one added line (a multiset: `}` removed once covers one `}`); a C# split also
+  // adds `partial` to the class line it keeps (csharp.md item 11), paid by that line removed from the same file
+  const moveOnly = (f) => {
+    const left = new Map();
+    const own = new Map();
+    for (const [g, d] of diffs)
+      if (g !== f) for (const t of d["-"]) add(left, t);
+    if (f.endsWith(".cs")) for (const t of diffs.get(f)["-"]) add(own, t);
+    let open = false;
+    for (const t of diffs.get(f)["+"]) {
+      // an import whose `} from` line is context ends with its hunk
+      if (t === null) {
+        open = false;
+        continue;
+      }
+      if (open || WIRING.test(t)) {
+        open = open ? !CLOSE.test(t) : OPEN.test(t);
+        continue;
+      }
+      const plain = t.replace(PARTIAL, "$1");
+      if (!pay(left, t) && (plain === t || !pay(own, plain))) return false;
+    }
+    return true;
+  };
+
+  const bad = big.filter(([f]) => !moveOnly(f));
+  for (const [f, size] of bad)
+    console.log(
+      `${f} is ${Math.round(size / 1024)} KB at HEAD: split it first in a move-only commit (general.md item 12)`,
+    );
+  if (bad.length) process.exit(1);
+  process.exit(0);
+}
 
 let files = args
   .filter((a) => !a.startsWith("--"))
@@ -196,15 +325,10 @@ for (const f of files) {
       issues.push(`${f}:${i + 1} dated: ${l.trim().slice(0, 80)}`);
   });
   close(lines.length);
-  const total = cl.filter(Boolean).length;
-  if (issues.length) report.push({ f, issues, total });
+  if (issues.length) report.push({ f, issues });
 }
 
-if (top) {
-  report.sort((a, b) => b.total - a.total);
-  for (const r of report.slice(0, top))
-    console.log(`${r.total}\t${r.issues.length}\t${r.f}`);
-} else for (const r of report) r.issues.forEach((x) => console.log(x));
+for (const r of report) r.issues.forEach((x) => console.log(x));
 
 const n = report.reduce((s, r) => s + r.issues.length, 0);
 if (n) {

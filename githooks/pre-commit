@@ -77,7 +77,7 @@ fi
 
 # An edit to a code file over 40 KB at HEAD waits for its move-only split (conventions/general.md item 12).
 if [ -n "$(git diff --cached --name-only -M20% --diff-filter=MR)" ]; then
-  node "$ai_kit_plugin/scripts/check-size.mjs" || {
+  node "$ai_kit_plugin/scripts/check-comments.mjs" --size || {
     echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"
     exit 1
   }

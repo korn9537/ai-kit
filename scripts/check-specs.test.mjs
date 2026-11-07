@@ -45,6 +45,33 @@ const CASES = [
     ],
   },
   {
+    desc: "a ~~~ line inside a ``` block does not invert the fences; a later unknown read is reported",
+    head: {
+      "ai/kit/config.json": UI,
+      "ai/api/orders.md": API_MD,
+      "ai/screens/index.md": idx("S-1"),
+      "ai/screens/S-1-orders.md": scr("S-1", "```\n~~~\nreads: GET /nope\n```\nreads: GET /missing\n"),
+    },
+    want: ["! ai/screens/S-1-orders.md: GET /missing is not in ai/api/"],
+  },
+  {
+    desc: "a ```inline``` line opens no fence, so the next read is checked",
+    head: {
+      "ai/kit/config.json": UI,
+      "ai/api/orders.md": API_MD,
+      "ai/screens/index.md": idx("S-1"),
+      "ai/screens/S-1-orders.md": scr("S-1", "```inline``` text\nreads: GET /missing\n"),
+    },
+    want: ["! ai/screens/S-1-orders.md: GET /missing is not in ai/api/"],
+  },
+  {
+    desc: "malformed ai/kit/config.json prints one line and exits 0",
+    head: { "ai/kit/config.json": "{ nope" },
+    raw: true,
+    want: [],
+    rawLine: /^specs: ai\/kit\/config.json is not valid JSON/,
+  },
+  {
     desc: "duplicate id, bad name, bad heading, index drift",
     head: {
       "ai/kit/config.json": UI,
@@ -193,7 +220,10 @@ for (const c of CASES) {
       .split("\n")
       .filter((l) => l.startsWith("!"))
       .map((l) => l.replace(/\s*[;(].*$/, "").replace(/:\s*(one line|endpoint links).*$/, ""));
-    const ok = JSON.stringify(got) === JSON.stringify(c.want);
+    const ok =
+      c.rawLine
+        ? out.split("\n").filter(Boolean).length === 1 && c.rawLine.test(out)
+        : JSON.stringify(got) === JSON.stringify(c.want);
     console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
     if (!ok) {
       fail++;

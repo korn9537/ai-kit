@@ -22,9 +22,13 @@ if (!root) process.exit(0);
 process.chdir(root);
 
 let ui = {};
-try {
-  ui = JSON.parse(readFileSync("ai/kit/config.json", "utf8"))?.ui ?? {};
-} catch {}
+if (existsSync("ai/kit/config.json")) {
+  try {
+    ui = JSON.parse(readFileSync("ai/kit/config.json", "utf8"))?.ui ?? {};
+  } catch (e) {
+    console.log(`specs: ai/kit/config.json is not valid JSON, screen-spec checks are off: ${e.message}`);
+  }
+}
 if (!Array.isArray(ui.platforms) || !ui.platforms.length) process.exit(0);
 const DIR = "ai/screens";
 const API = typeof ui.api === "string" ? ui.api : "ai/api/";
@@ -47,15 +51,19 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const EP = new RegExp(`\\b(${METHODS.join("|")})\\s+(/[^\\s·,;)\`]*)`, "g");
 const norm = (m, p) =>
   `${m.toUpperCase()} ${p.split("?")[0].replace(/\{[^}]*\}|:[A-Za-z_]\w*/g, "{}").replace(/(.)\/$/, "$1")}`;
-// lines outside fenced blocks
+// lines outside fenced blocks: a fence closes on its own marker and length, so ~~~ inside ``` is text; a backtick
+// fence's info string holds no backtick (```x``` is inline)
 const prose = (text) => {
-  let fence = false;
+  let fence = null;
   return text.split(/\r?\n/).filter((l) => {
-    if (/^\s*(```|~~~)/.test(l)) {
-      fence = !fence;
+    const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(l);
+    const f = m && !(m[1][0] === "`" && m[2].includes("`")) ? m[1] : null;
+    if (fence) {
+      if (f && f[0] === fence[0] && f.length >= fence.length && !m[2].trim()) fence = null;
       return false;
     }
-    return !fence;
+    if (f) fence = f;
+    return !f;
   });
 };
 // a value's items, split on ` · ` outside parentheses: `GET /x (roles: a · b)` is one item

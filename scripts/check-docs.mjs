@@ -1,5 +1,7 @@
 // Reports added doc lines breaking docs/ai-docs.md: emoji, bold, filler, dates, Thai; skips and exemptions there.
 // Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs [--staged] [--strict: exit 1 on an issue] [files...]
+// --wrap [--staged]: instead, the kit clone's check: added prose lines over 120 characters in *.md and *.sh (tables,
+// frontmatter and shell code skipped), exit 1 on a hit; run by .githooks/pre-commit.
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -24,7 +26,7 @@ if (!root) {
   process.exit(flag("strict") ? 1 : 0);
 }
 // a merge, cherry-pick or revert brings in lines the committer did not write
-if (staged && ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"].some((h) => git("rev-parse", "-q", "--verify", h)))
+if (staged && !flag("wrap") && ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"].some((h) => git("rev-parse", "-q", "--verify", h)))
   process.exit(0);
 const cwd = process.cwd();
 process.chdir(root);
@@ -78,23 +80,34 @@ const counts = (name, all, t) => {
   }
   return c;
 };
+// the closing line index of a leading frontmatter block, -1 when there is none: a `---` rule opening a doc with a
+// later `---` is no frontmatter unless every line between reads as YAML (a key, an indented or list line, a comment)
+const frontEnd = (ls) => {
+  if (ls[0] !== "---") return -1;
+  const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
+  if (end < 0) return -1;
+  const body = ls.slice(1, end);
+  const first = body.find((l) => l.trim());
+  const yaml = !first || /^[A-Za-z_][\w-]*\s*:/.test(first);
+  return yaml && body.every((l) => !l.trim() || /^([A-Za-z_][\w-]*\s*:|\s|-\s|#)/.test(l)) ? end : -1;
+};
+// a fence marker line: ``` or ~~~ (3 or more), a backtick fence's info string holding no backtick (```x``` is inline)
+const fenceOf = (l) => {
+  const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(l);
+  return m && !(m[1][0] === "`" && m[2].includes("`")) ? { mark: m[1], rest: m[2].trim() } : null;
+};
 // line number -> text of the lines the rules see: outside frontmatter and fenced blocks
 const scan = (text) => {
   const ls = text.replace(/^\uFEFF/, "").split(/\r?\n/);
   const out = new Map();
-  let from = 0;
-  if (ls[0] === "---") {
-    const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
-    if (end > 0) from = end + 1;
-  }
+  const end = frontEnd(ls);
   let fence = null;
-  for (let i = from; i < ls.length; i++) {
+  for (let i = end + 1; i < ls.length; i++) {
     const l = ls[i];
-    const open = /^\s*(`{3,}|~{3,})/.exec(l)?.[1];
+    const f = fenceOf(l);
     if (fence) {
-      if (open && open[0] === fence[0] && open.length >= fence.length && !l.trim().slice(open.length))
-        fence = null;
-    } else if (open) fence = open;
+      if (f && f.mark[0] === fence[0] && f.mark.length >= fence.length && !f.rest) fence = null;
+    } else if (f) fence = f.mark;
     else out.set(i + 1, l);
   }
   return out;
@@ -157,11 +170,31 @@ for (const l of (
     header = false;
     const [start, len] = [Number(m[3]), Number(m[4] ?? 1)];
     // end: first new line after the hunk; delta: new minus old line count
-    hunk = { removed: [], start, end: start + (len || 1), delta: len - Number(m[2] ?? 1), counts: new Map() };
+    hunk = { removed: [], adds: [], start, end: start + (len || 1), delta: len - Number(m[2] ?? 1), counts: new Map() };
     cur.hunks.push(hunk);
     oldNo = Number(m[1]);
     for (let i = 0; i < len; i++) added.get(cur.new)?.set(start + i, hunk);
   } else if (!header && hunk && l.startsWith("-")) hunk.removed.push([oldNo++, l.slice(1)]);
+  else if (!header && hunk && l.startsWith("+")) hunk.adds.push([hunk.start + hunk.adds.length, l.slice(1)]);
+}
+const WRAP = 120;
+if (flag("wrap")) {
+  const hits = [];
+  for (const d of diffs) {
+    const f = d.new;
+    if (!f || !/\.(md|sh)$/.test(f)) continue;
+    const sh = f.endsWith(".sh");
+    // a shell file's code lines hold regexes and strings that cannot wrap; its comments can
+    const long = d.hunks
+      .flatMap((h) => h.adds)
+      .filter(([, t]) => [...t].length > WRAP && (sh ? /^\s*#/.test(t) : !/^\s*\|/.test(t)));
+    if (!long.length) continue;
+    const text = sh ? "" : ((staged ? git("show", `:./${f}`) : existsSync(f) ? readFileSync(f, "utf8") : "") ?? "");
+    const front = frontEnd(text.replace(/^\uFEFF/, "").split(/\r?\n/)) + 1;
+    for (const [n, t] of long) if (n > front) hits.push(`${f}:${n}: ${[...t].length} chars`);
+  }
+  if (hits.length) console.log(`lines over ${WRAP} characters (rewrap):\n${hits.join("\n")}`);
+  process.exit(hits.length ? 1 : 0);
 }
 // keep only removed lines the rules saw in HEAD; their text marks a moved line
 // an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added

@@ -109,8 +109,8 @@ mv "$REPO/big2.new" "$REPO/big two.ts"
 git -C "$REPO" add "big two.ts" "part two.ts"
 check "a move-only split with a multi-line import passes" "$(blocked split2)" committed
 
-# check-size alone: a merge is exempt; a C# using statement and code after an import closed in context are not wiring
-size() { (cd "$REPO" && node "$PLUGIN/scripts/check-size.mjs" >/dev/null 2>&1 && echo pass || echo blocked); }
+# --size alone: a merge is exempt; a C# using statement and code after an import closed in context are not wiring
+size() { (cd "$REPO" && node "$PLUGIN/scripts/check-comments.mjs" --size >/dev/null 2>&1 && echo pass || echo blocked); }
 for i in $(seq 1 1200); do echo "export const value$i = computeSomething($i, 'argument value');"; done >"$REPO/big3.ts"
 printf 'import {\n  a,\n} from "./x";\n' | cat - "$REPO/big3.ts" >"$REPO/big3.new" && mv "$REPO/big3.new" "$REPO/big3.ts"
 git -C "$REPO" add big3.ts && git -C "$REPO" commit -qm big3 2>&1
@@ -127,7 +127,7 @@ git -C "$REPO" add big3.ts
 check "a C# using statement is code, not wiring" "$(size)" blocked
 git -C "$REPO" reset -q && git -C "$REPO" checkout -q -- big3.ts
 
-# check-size alone: the `partial` a C# split adds to its class line is paid by that line, and nothing else is
+# check-comments --size alone: the `partial` a C# split adds to its class line is paid by that line, and nothing else is
 {
   echo 'public class Orders(Db db)'
   echo '{'

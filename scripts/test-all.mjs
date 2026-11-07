@@ -1,4 +1,4 @@
-// Runs every hooks/*.test.sh, githooks/*.test.sh, scripts/*.test.mjs and scripts/check-wrap.mjs in parallel.
+// Runs every hooks/*.test.sh, githooks/*.test.sh, scripts/*.test.mjs in parallel.
 // Usage: node scripts/test-all.mjs; exit 1 when any suite fails.
 import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
@@ -17,7 +17,6 @@ const suites = [
   ...list("hooks", ".test.sh").map((f) => ({ name: f, cmd: "bash", args: [f] })),
   ...list("githooks", ".test.sh").map((f) => ({ name: f, cmd: "bash", args: [f] })),
   ...list("scripts", ".test.mjs").map((f) => ({ name: f, cmd: process.execPath, args: [f] })),
-  { name: "scripts/check-wrap.mjs", cmd: process.execPath, args: ["scripts/check-wrap.mjs"] },
 ];
 
 const run = (s) =>

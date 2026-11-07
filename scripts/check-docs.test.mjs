@@ -8,7 +8,89 @@ import { dirname, join } from "node:path";
 const SCRIPT = join(import.meta.dirname, "check-docs.mjs");
 const B = "```";
 
+const LONG = "x".repeat(130);
 const CASES = [
+  {
+    desc: "a doc opening with a --- rule and holding a later --- is not frontmatter",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nsome prose\n---\nin **bold**\n" },
+    want: ["ai/a.md:4 bold"],
+  },
+  {
+    desc: "real frontmatter is still skipped",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nname: **x**\n---\nbody\n" },
+    want: [],
+  },
+  {
+    desc: "```inline``` text opens no fence: the next line is checked",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": `${B}inline${B} text\nin **bold**\n` },
+    want: ["ai/a.md:2 bold"],
+  },
+  {
+    desc: "a ```js info string still opens a fence",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": `${B}js\nin **bold**\n${B}\n` },
+    want: [],
+  },
+  {
+    desc: "--wrap flags an added prose line over 120 characters",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": `ok\n${LONG}\n` },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:2: 130 chars"],
+  },
+  {
+    desc: "--wrap skips table rows, shell code and frontmatter values, flags a body `note:` line and a shell comment",
+    head: { "a.md": "ok\n" },
+    work: {
+      "a.md": `---\nnote: ${LONG}\n---\n| ${LONG} |\nnote: ${LONG}\n`,
+      "b.sh": `echo ${LONG}\n# ${LONG}\n`,
+    },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:5: 136 chars", "b.sh:2: 132 chars"],
+  },
+  {
+    desc: "--wrap works under color.ui=always",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": `ok\n${LONG}\n` },
+    run: [["config", "color.ui", "always"], ["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:2: 130 chars"],
+  },
+  {
+    desc: "--wrap reads an added `++ x` line as text, not a header",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": `ok\n++ ${LONG}\n` },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:2: 133 chars"],
+  },
+  {
+    desc: "--wrap handles a diff over 1 MB",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": `ok\n${"short line\n".repeat(200000)}${LONG}\n` },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:200002: 130 chars"],
+  },
+  {
+    desc: "--wrap passes short lines",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": "ok\nshort\n" },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: [],
+  },
   {
     desc: "files outside ai/ are not checked by default",
     head: { "docs/a.md": "a\n", "CLAUDE.md": "c\n" },
@@ -164,11 +246,19 @@ for (const c of CASES) {
     for (const r of c.run ?? []) git(...r);
     put(dir, c.after);
     for (const f of c.del ?? []) rmSync(join(dir, f));
-    const out = execFileSync("node", [SCRIPT, ...(c.args ?? [])], { cwd: dir, encoding: "utf8" });
-    const got = out
-      .split("\n")
-      .map((l) => /^(.+?:\d+ [^:]+):/.exec(l)?.[1])
-      .filter(Boolean);
+    let out;
+    try {
+      out = execFileSync("node", [SCRIPT, ...(c.args ?? [])], { cwd: dir, encoding: "utf8" });
+    } catch (e) {
+      if (!c.raw) throw e;
+      out = e.stdout;
+    }
+    const got = c.raw
+      ? out.split("\n").filter(Boolean)
+      : out
+          .split("\n")
+          .map((l) => /^(.+?:\d+ [^:]+):/.exec(l)?.[1])
+          .filter(Boolean);
     const ok = JSON.stringify(got) === JSON.stringify(c.want);
     console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
     if (!ok) {
