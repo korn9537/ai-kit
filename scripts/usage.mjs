@@ -2,7 +2,8 @@
 // Token usage CLI. `record` is the Stop hook: reads the hook JSON on stdin, appends this round's delta record to the
 // buffer <git-common-dir>/claude-usage/<session>.jsonl and prints the one-line summary; nothing is written under
 // ai/usage/. `end` (SessionEnd) records what came after the last Stop, then flushes that session. `flush` (SessionStart
-// --idle) moves other sessions' buffered records into new files there. None ever fails, and none waits over 1.5 s for the lock.
+// --idle) moves other sessions' buffered records into new files there. None ever fails, and none waits over 1.5 s for
+// the lock.
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -51,7 +52,7 @@ function readLines(path) {
   return out;
 }
 
-function record(input, quiet = false, deadline = undefined) {
+function record(input, quiet = false, lockWait = {}) {
   const session = input.session_id;
   const transcript = input.transcript_path;
   if (!session) throw new Error("no session_id in the hook input");
@@ -75,6 +76,8 @@ function record(input, quiet = false, deadline = undefined) {
   const user = git(root, "config", "user.name");
   const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
   const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+  // the lock deadline starts here, not at the process start: a cold transcript scan must not use it up
+  lockWait.deadline ??= Date.now() + LOCK_WAIT_MS;
   // seed, read, build and append under one lock: parallel records would each read the same prior
   withLock(
     bufDir,
@@ -92,7 +95,7 @@ function record(input, quiet = false, deadline = undefined) {
       const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
       process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, { money: conf.money !== false }) })}\n`);
     },
-    { deadline },
+    { deadline: lockWait.deadline },
   );
 }
 
@@ -151,22 +154,22 @@ function main() {
   }
   if (cmd === "end") {
     // SessionEnd: record what came after the last Stop (no summary), then flush; one process and one lock deadline
-    // for both steps. A failure of the first step does not skip the second, except a lock wait that timed out: the
+    // (started at the first lock wait) for both steps. A failure of the first step does not skip the second, except a lock wait that timed out: the
     // lock is still held, so the second would only wait again.
-    const deadline = Date.now() + LOCK_WAIT_MS;
+    const lockWait = {};
     let locked = false;
     let input = {};
     try {
       input = JSON.parse(readFileSync(0, "utf8") || "{}");
     } catch {}
     try {
-      record(input, true, deadline);
+      record(input, true, lockWait);
     } catch (e) {
       locked = e?.code === "ELOCKED";
       process.stderr.write(`usage-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     try {
-      if (input.session_id && !locked) flushCmd(["--session", String(input.session_id)], deadline);
+      if (input.session_id && !locked) flushCmd(["--session", String(input.session_id)], lockWait.deadline);
     } catch (e) {
       process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }

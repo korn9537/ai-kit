@@ -1,7 +1,8 @@
 // The Stop hook buffers records in <git-common-dir>/claude-usage/<session>.jsonl (state, shared by every branch and
 // worktree). Flush copies the not-yet-flushed lines into ai/usage/<YYYY-MM>/ as new files and never modifies one.
 import { randomBytes } from "node:crypto";
-import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { join } from "node:path";
 
 export const IDLE_MS = 6 * 3600 * 1000;
@@ -18,9 +19,12 @@ const readText = (path) => {
     return null;
   }
 };
+const HOST = hostname().replace(/:/g, "_");
+// A PID means something only on the host that wrote it (a git dir shared with a container or WSL has other PIDs).
 const pidDead = (text) => {
-  const pid = Number.parseInt(text, 10);
-  if (!(pid > 0)) return false;
+  const [pidText, host] = text.split(":");
+  const pid = Number.parseInt(pidText, 10);
+  if (!(pid > 0) || host !== HOST) return false;
   try {
     process.kill(pid, 0);
     return false;
@@ -28,35 +32,48 @@ const pidDead = (text) => {
     return e?.code === "ESRCH";
   }
 };
-
-// Takes the lock away from a holder seen with content `seen`: the rename lets one process win, and a file that turns
-// out to be another lock than the one seen is put back (link fails if a new lock exists already).
-function breakLock(lock, seen) {
-  const moved = `${lock}.${process.pid}`;
+const ageOf = (path) => {
+  const m = statSync(path, { throwIfNoEntry: false })?.mtimeMs;
+  return m === undefined ? undefined : Date.now() - m;
+};
+const unlinkQuiet = (path) => {
   try {
-    renameSync(lock, moved);
-  } catch (e) {
-    if (e?.code === "ENOENT") return;
-    throw e;
-  }
-  if (readText(moved) === seen) {
-    unlinkSync(moved);
-    return;
-  }
-  try {
-    linkSync(moved, lock);
+    unlinkSync(path);
   } catch {}
-  unlinkSync(moved);
+};
+
+// Removes the lock seen with content `seen`, never moving it; true when the lock is gone. One process at a time holds
+// `.lock.break` (wx); under it the lock is read again and removed only if it still equals `seen` (an empty one also
+// only when it is past LOCK_STALE_MS, so a fresh holder's still-empty file is spared). A `.lock.break` left by a
+// killed process expires by age.
+export function breakLock(lock, seen) {
+  const brk = `${lock}.break`;
+  try {
+    writeFileSync(brk, String(process.pid), { flag: "wx" });
+  } catch (e) {
+    if (e?.code !== "EEXIST") throw e;
+    if ((ageOf(brk) ?? 0) > LOCK_STALE_MS) unlinkQuiet(brk);
+    return false;
+  }
+  try {
+    if (readText(lock) !== seen) return false;
+    if (seen === "" && !((ageOf(lock) ?? 0) > LOCK_STALE_MS)) return false;
+    unlinkQuiet(lock);
+    return true;
+  } finally {
+    unlinkQuiet(brk);
+  }
 }
 
 // Runs fn holding an O_EXCL lock file in the buffer dir, so parallel flushes and records take turns. The file holds
-// "<pid>:<token>". A lock whose PID is gone, or older than LOCK_STALE_MS, is broken at once; an empty file counts as
-// live (create and write are not atomic). One still held at the deadline (opts.deadline, else now + opts.waitMs,
-// else LOCK_WAIT_MS) throws an error with code ELOCKED.
+// "<pid>:<host>:<token>". A lock whose PID is gone on this host, or older than LOCK_STALE_MS, is broken at once; an
+// empty file counts as live until it is that old (create and write are not atomic). One still held at the deadline
+// (opts.deadline, else now + opts.waitMs, else LOCK_WAIT_MS) throws an error with code ELOCKED, as does one that
+// cannot be read.
 export function withLock(bufDir, fn, opts = {}) {
   mkdirSync(bufDir, { recursive: true });
   const lock = join(bufDir, ".lock");
-  const token = `${process.pid}:${randomBytes(6).toString("hex")}`;
+  const token = `${process.pid}:${HOST}:${randomBytes(6).toString("hex")}`;
   const deadline = opts.deadline ?? Date.now() + (opts.waitMs ?? LOCK_WAIT_MS);
   for (;;) {
     try {
@@ -66,16 +83,7 @@ export function withLock(bufDir, fn, opts = {}) {
       if (e?.code !== "EEXIST") throw e;
     }
     const seen = readText(lock);
-    if (seen === null) continue;
-    const mtime = statSync(lock, { throwIfNoEntry: false })?.mtimeMs;
-    if (seen !== "" && pidDead(seen)) {
-      breakLock(lock, seen);
-      continue;
-    }
-    if (mtime !== undefined && Date.now() - mtime > LOCK_STALE_MS) {
-      breakLock(lock, seen);
-      continue;
-    }
+    if (seen !== null && ((seen !== "" && pidDead(seen)) || (ageOf(lock) ?? 0) > LOCK_STALE_MS) && breakLock(lock, seen)) continue;
     if (Date.now() >= deadline) {
       throw Object.assign(new Error("usage buffer is locked by another process"), { code: "ELOCKED" });
     }

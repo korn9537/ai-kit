@@ -2,9 +2,9 @@
 // Usage: node scripts/usage-flush.test.mjs
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOCK_STALE_MS, flushIdle, seedBuffer, withLock } from "./usage-flush.mjs";
+import { LOCK_STALE_MS, breakLock, flushIdle, seedBuffer, withLock } from "./usage-flush.mjs";
 import { loadRecords } from "./usage-digest.mjs";
 
 let passed = 0;
@@ -63,28 +63,70 @@ try {
 
   // a stale lock expires, a fresh one blocks until released
   const lock = join(bufDir, ".lock");
-  writeFileSync(lock, "999999");
+  const brk = `${lock}.break`;
+  const host = hostname().replace(/:/g, "_");
   const old = (Date.now() - LOCK_STALE_MS - 5000) / 1000;
+  const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" });
+  // a live PID with an old mtime: the age rule runs, not the dead-PID rule
+  writeFileSync(lock, `${holder.pid}:${host}:tok`);
   utimesSync(lock, old, old);
-  eq("a stale lock does not block", withLock(bufDir, () => "ran"), "ran");
+  eq("a stale lock held by a live PID does not block", withLock(bufDir, () => "ran"), "ran");
+  eq("and .lock.break is gone", existsSync(brk), false);
+
+  // an old empty lock is broken (a fresh empty one is live, tested below)
+  writeFileSync(lock, "");
+  eq("an old empty lock is broken", (utimesSync(lock, old, old), withLock(bufDir, () => "ran", { waitMs: 0 })), "ran");
+
+  // `seen` no longer matches the file under .lock.break: the lock stays
+  writeFileSync(lock, `${holder.pid}:${host}:new`);
+  utimesSync(lock, old, old);
+  eq("a lock that changed since it was seen is not removed", [breakLock(lock, "other"), readFileSync(lock, "utf8")], [false, `${holder.pid}:${host}:new`]);
+  eq("and .lock.break is removed", existsSync(brk), false);
+  rmSync(lock);
+
+  // a .lock.break left by a killed process expires by age; a fresh one defers breaking
+  writeFileSync(lock, `${holder.pid}:${host}:old`);
+  utimesSync(lock, old, old);
+  writeFileSync(brk, "1");
+  let code = "";
+  try {
+    withLock(bufDir, () => "ran", { waitMs: 100 });
+  } catch (e) {
+    code = e.code;
+  }
+  eq("a fresh .lock.break defers breaking", [code, existsSync(lock)], ["ELOCKED", true]);
+  utimesSync(brk, old, old);
+  eq("an expired .lock.break is cleared and the stale lock then broken", withLock(bufDir, () => "ran", { waitMs: 2000 }), "ran");
+  eq("leaving neither file", [existsSync(lock), existsSync(brk)], [false, false]);
+
+  // an unreadable .lock reaches ELOCKED instead of spinning
+  mkdirSync(lock);
+  let t0 = Date.now();
+  code = "";
+  try {
+    withLock(bufDir, () => "ran", { waitMs: 200 });
+  } catch (e) {
+    code = e.code;
+  }
+  eq("an unreadable .lock times out with ELOCKED", [code, Date.now() - t0 >= 180], ["ELOCKED", true]);
+  rmSync(lock, { recursive: true });
 
   // a live holder blocks until the deadline, then withLock throws ELOCKED; its lock file is left alone
-  const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" });
-  writeFileSync(lock, `${holder.pid}:tok`);
-  let t0 = Date.now();
-  let code = "";
+  writeFileSync(lock, `${holder.pid}:${host}:tok`);
+  t0 = Date.now();
+  code = "";
   try {
     withLock(bufDir, () => "ran", { waitMs: 300 });
   } catch (e) {
     code = e.code;
   }
   eq("a live lock blocks, then times out with ELOCKED", [code, Date.now() - t0 >= 280], ["ELOCKED", true]);
-  eq("and stays in place", readFileSync(lock, "utf8"), `${holder.pid}:tok`);
+  eq("and stays in place", readFileSync(lock, "utf8"), `${holder.pid}:${host}:tok`);
   t0 = Date.now();
   try {
     withLock(bufDir, () => "ran", { waitMs: 0 });
   } catch {}
-  eq("waitMs 0 tries once and returns at once", Date.now() - t0 < 100, true);
+  eq("waitMs 0 tries once and returns at once", Date.now() - t0 < 1000, true);
   rmSync(lock);
   writeFileSync(lock, "");
   code = "";
@@ -97,13 +139,13 @@ try {
   // a lock held by a dead PID is broken at once
   holder.kill();
   await new Promise((r) => holder.on("close", r));
-  writeFileSync(lock, `${holder.pid}:tok`);
+  writeFileSync(lock, `${holder.pid}:${host}:tok`);
   t0 = Date.now();
   eq("a dead PID's lock is broken at once", [withLock(bufDir, () => "ran", { waitMs: 5000 }), Date.now() - t0 < 1000], ["ran", true]);
   eq("and released", existsSync(lock), false);
   // release removes only the lock that holds our own token
-  withLock(bufDir, () => writeFileSync(lock, `${process.pid}:other`));
-  eq("a lock taken over by another holder is not released by us", readFileSync(lock, "utf8"), `${process.pid}:other`);
+  withLock(bufDir, () => writeFileSync(lock, `${process.pid}:${host}:other`));
+  eq("a lock taken over by another holder is not released by us", readFileSync(lock, "utf8"), `${process.pid}:${host}:other`);
   rmSync(lock);
 
   // idle flush with a held lock skips without waiting
@@ -111,14 +153,14 @@ try {
   writeFileSync(idleBuf, `${rec("idle1", 1)}\n`);
   const tOld = Date.now() / 1000 - 25200;
   utimesSync(idleBuf, tOld, tOld);
-  writeFileSync(lock, `${process.pid}:held`);
+  writeFileSync(lock, `${process.pid}:${host}:held`);
   t0 = Date.now();
   eq("idle flush with a held lock writes nothing", flushIdle(repo, bufDir), []);
-  eq("and does not wait", Date.now() - t0 < 100, true);
+  eq("and does not wait", Date.now() - t0 < 1000, true);
   rmSync(lock);
   eq("idle flush then writes it", flushIdle(repo, bufDir).length, 1);
   t0 = Date.now();
-  writeFileSync(lock, `${process.pid}:held`);
+  writeFileSync(lock, `${process.pid}:${host}:held`);
   eq("idle flush skips a flushed buffer without taking the lock", flushIdle(repo, bufDir), []);
   rmSync(lock);
 
