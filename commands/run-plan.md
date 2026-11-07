@@ -15,7 +15,7 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    - `job`: the request's job id, one for the whole plan (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
    - `repo`: only when the repo is not the session's working directory.
    - `batches`, in plan order: `{id, title, brief, verify, waitsFor, alsoInScope}`. `brief` is the
-     `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (paths and lines already found), the
+     `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (`path:start-end` already found), the
      decisions and requirements it follows. `verify` holds the project's verify commands for it, leaving out what
      CLAUDE.md says the pre-commit runs. `waitsFor` lists
      the ids it needs. `alsoInScope` lists each item the main session added beyond the request.

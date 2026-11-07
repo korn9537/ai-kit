@@ -82,7 +82,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   workflow's batches stay out of the main session's context. PostToolUse on Bash, Read, Grep and Glob: every
   `handoff.max_reads` (5; 0 is off) reads or searches since the last prompt, past `handoff.reads_from` (100k) tokens of
   context, a note to send the search to a subagent. A subagent's reads and Bash lines that do not start as a read do not
-  count.
+  count. A `Read` with no range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a
+  note to read a line range, once per prompt in the main session and once per subagent. Agents
+  find a symbol with the `LSP` tool when an LSP plugin is on (`typescript-lsp`, `gopls-lsp`, `csharp-lsp`), else `grep`.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
   without `node_modules` (a fresh worktree) only the project's checks are skipped.
@@ -130,7 +132,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`max_reads`/`reads_from`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`max_reads`/`reads_from`/`big_read`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations` |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`                                                                                                                                                                                                                    |

@@ -80,7 +80,7 @@ who leaves: it tries failed committers again and writes the one report when noth
 - The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands (not
   what CLAUDE.md says the pre-commit runs),
   the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id for its `Batch: <id>`
-  trailer (§Plan file; a fix commit has none) and anything the coordinator already found (paths, line numbers), so
+  trailer (§Plan file; a fix commit has none) and anything the coordinator already found (`path:start-end`), so
   the subagent does not search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for
   the main session to ask.

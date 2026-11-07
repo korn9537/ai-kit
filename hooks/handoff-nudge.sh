@@ -4,6 +4,8 @@
 # session" prompt; a coordinator launches no new batch. Never blocks; repeats only every further 50k.
 # PostToolUse on Bash|Read|Grep|Glob: every handoff.max_reads reads or searches since the last prompt, past
 # handoff.reads_from tokens, a note to send the search to a subagent (CLAUDE.core.md, heavy reads). max_reads 0: off.
+# A Read with no range or a plain cat of a code file of handoff.big_read lines or more: a note to read a range, once
+# per prompt in the main session and once per subagent. big_read 0: off.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -15,8 +17,6 @@ session="$(jq -r '.session_id // empty' <<<"$input")"
 [[ -n "$transcript" && -f "$transcript" && -n "$session" ]] || exit 0
 event="$(jq -r '.hook_event_name // "UserPromptSubmit"' <<<"$input")"
 [[ "$event" == UserPromptSubmit || "$event" == PostToolUse ]] || exit 0
-# a subagent's own Agent or SendMessage call is no coordinator's
-[[ "$event" == UserPromptSubmit || -z "$(jq -r '.agent_id // empty' <<<"$input")" ]] || exit 0
 
 # a read or search: Read, Grep, Glob, or a Bash line starting as one (after a cd or env settings); other Bash ends here
 reading=""
@@ -30,6 +30,10 @@ case "$(jq -r '.tool_name // empty' <<<"$input")" in
       <<<"$input" >/dev/null 2>&1 || exit 0
     reading=1 ;;
 esac
+# a subagent's own Agent or SendMessage call is no coordinator's; its reads reach only the whole-file note
+agent=""
+[[ "$event" == UserPromptSubmit ]] || agent="$(jq -r '.agent_id // empty' <<<"$input")"
+[[ -z "$agent" || -n "$reading" ]] || exit 0
 
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 [[ -n "$project" ]] && project="$(kit_project_root "$project")"
@@ -45,11 +49,38 @@ context_used() {
 }
 
 if [[ -n "$reading" ]]; then
-  limit="$(kit_conf '.handoff.max_reads' 5)"
-  ((limit > 0)) || exit 0
   mkdir -p "$gitdir/claude-review"
   # one byte per read: an append stays whole when parallel reads run this hook at once
-  printf . >>"$reads"
+  [[ -n "$agent" ]] || printf . >>"$reads"
+
+  # the file taken whole, against the tool's cwd (it follows a cd); docs under ai/ are read whole on purpose
+  whole="$(jq -r 'if .tool_name == "Read" and .tool_input.offset == null and .tool_input.limit == null
+      then .tool_input.file_path // empty
+    elif .tool_name == "Bash"
+      then (.tool_input.command // ""
+        | capture("^\\s*cat\\s+[\"\u0027]?(?<f>[^\\s<>|;&\"\u0027]+)[\"\u0027]?\\s*$")? | .f) // empty
+    else empty end' <<<"$input" 2>/dev/null || true)"
+  big="$(kit_conf '.handoff.big_read' 300)"
+  if [[ -n "$whole" ]] && ((big > 0)); then
+    whole="$(kit_path "$whole")"
+    cwd="$(kit_path "$(jq -r '.cwd // empty' <<<"$input")")"
+    [[ -d "$cwd" ]] || cwd="$project"
+    [[ "$whole" == /* || "$whole" =~ ^[A-Za-z]:/ ]] || whole="$cwd/$whole"
+    case "$whole" in
+      "$project/ai/"*) ;;
+      *.ts | *.tsx | *.js | *.jsx | *.mjs | *.cjs | *.cs | *.go | *.dart | *.py | *.rb | *.java | *.kt | *.swift | \
+        *.rs | *.php | *.vue | *.svelte | *.c | *.cc | *.cpp | *.h | *.sql | *.sh)
+        if [[ -f "$whole" ]] && (($(wc -l <"$whole") >= big)) && mkdir "$reads.big$agent" 2>/dev/null; then
+          note="${whole##*/} is $(($(wc -l <"$whole"))) lines, read whole. Next time find the symbol with the LSP tool when you have it, else grep -n, and read only its line range: all of it stays in every later call."
+          jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $n}}'
+          exit 0
+        fi ;;
+    esac
+  fi
+
+  [[ -z "$agent" ]] || exit 0
+  limit="$(kit_conf '.handoff.max_reads' 5)"
+  ((limit > 0)) || exit 0
   count=$(($(wc -c <"$reads")))
   # a step is claimed, not tested by modulo: parallel hooks may all see one total, or skip a multiple
   step=$((count / limit))

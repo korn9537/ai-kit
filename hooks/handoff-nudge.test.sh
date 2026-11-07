@@ -100,5 +100,59 @@ for i in 1 2 3 4 5; do read_tool Read; done
 check "max_reads 0: off" "$(t test -z "$OUT")" "$OUT"
 rm -f "$REPO/ai/kit/config.json"
 
+# big <tool> <path or command> [cwd] [agent]: a whole read of a file, stdout in $OUT
+big() {
+  OUT="$(jq -n --arg t "$T" --arg n "$1" --arg p "$2" --arg c "${3:-x}" --arg a "${4:-}" '{transcript_path: $t,
+    session_id: "s3", hook_event_name: "PostToolUse", tool_name: $n, cwd: $c,
+    tool_input: (if $n == "Read" then {file_path: $p} else {command: $p} end)}
+    + (if $a == "" then {} else {agent_id: $a} end)' |
+    env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>&1)"
+}
+prompt3() {
+  jq -n --arg t "$T" '{transcript_path: $t, session_id: "s3", hook_event_name: "UserPromptSubmit", cwd: "x"}' |
+    env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" >/dev/null 2>&1
+}
+said() { jq -e '.hookSpecificOutput.additionalContext | test("read only its line range")' <<<"$OUT"; }
+mkdir -p "$REPO/src/ai" "$REPO/ai" "$REPO/api"
+for f in big.ts big.md data.json src/ai/model.ts ai/gen.ts api/deep.ts; do seq 1 400 >"$REPO/$f"; done
+seq 1 10 >"$REPO/small.ts"
+ctx 1000
+big Read "$REPO/small.ts"
+check "a small file: no note" "$(t test -z "$OUT")" "$OUT"
+big Read "$REPO/big.md"
+check "a large doc: no note" "$(t test -z "$OUT")" "$OUT"
+big Read "$REPO/data.json"
+check "a large data file: no note, and the mark is not spent" "$(t test -z "$OUT")" "$OUT"
+big Read "$REPO/ai/gen.ts"
+check "under the project's ai/: no note" "$(t test -z "$OUT")" "$OUT"
+big Read "$REPO/big.ts" "" sub1
+check "a subagent's whole read: its own note" "$(t said)" "$OUT"
+big Read "$REPO/big.ts" "" sub1
+check "once per subagent" "$(t test -z "$OUT")" "$OUT"
+big Read "$REPO/big.ts"
+check "a large code file read whole: the range note" "$(t said)" "$OUT"
+check "the note's read is counted" "$(t test -s "$REPO/.git/claude-review/s3.reads")"
+big Read "$REPO/src/ai/model.ts"
+check "once per prompt" "$(t test -z "$OUT")" "$OUT"
+prompt3
+big Read "$REPO/src/ai/model.ts"
+check "a folder named ai under src is code" "$(t said)" "$OUT"
+prompt3
+big Bash "cat deep.ts" "$REPO/api"
+check "a relative cat goes by the tool's cwd" "$(t said)" "$OUT"
+prompt3
+big Bash 'cat "big.ts"' "$REPO"
+check "a quoted cat" "$(t said)" "$OUT"
+prompt3
+OUT="$(jq -n --arg t "$T" --arg p "$REPO/big.ts" '{transcript_path: $t, session_id: "s3", cwd: "x",
+  hook_event_name: "PostToolUse", tool_name: "Read", tool_input: {file_path: $p, offset: 1, limit: 50}}' |
+  env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>&1)"
+check "a read with a range: no note" "$(t test -z "$OUT")" "$OUT"
+prompt3
+echo '{"handoff": {"big_read": 0}}' >"$REPO/ai/kit/config.json"
+big Read "$REPO/big.ts"
+check "big_read 0: off" "$(t test -z "$OUT")" "$OUT"
+rm -f "$REPO/ai/kit/config.json"
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

@@ -86,7 +86,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   No unprompted tests.
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
-- Independent reads, searches and checks go out together in one message.
+- Independent reads, searches and checks go out together in one message. A symbol is found with the `LSP` tool when
+  the session has it, else `grep -n`; then read its line range, not the whole file.
 
 ## Delegation and report
 
@@ -98,8 +99,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
   bullet); a typed agent (Explore, web-fetch) keeps its own model. It returns evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
   done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
-  out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying
-  the paths, lines and decisions already found. The main session edits code itself only for: at most
+  out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the
+  `path:start-end` and decisions already found. The main session edits code itself only for: at most
   `review.skip_lines` code lines with no new file and no `review.always` path; a small job (list under the summary
   rule); debugging or a UI tweak iterated with the user watching each step (settled and over the limit → one
   committer); the large-refactor exception of §Coordinator pipeline. Review fixes follow §Coordinator pipeline.

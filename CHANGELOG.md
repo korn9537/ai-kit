@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.31.0
+
+Agents read less: whole files were 43.5% of what was read, searches only 21%. A repo with `unattended` on runs
+`kit.mjs sync` and commits; no other project needs to edit anything.
+
+- The four kit agents and the main session may use the `LSP` tool, loaded through `ToolSearch`, to find a symbol before
+  opening a file, and fall back to `grep -n`. Needs an LSP plugin (`typescript-lsp`, `gopls-lsp`, `csharp-lsp`). Probed
+  on Claude Code 2.1.318: a subagent got the tool in 6 of 6 runs; on 2.1.234 in about half.
+- `handoff-nudge.sh` notes a `Read` with no range or a plain `cat` of a code file of `handoff.big_read` lines or more
+  (default 300, 0 is off), once per prompt in the main session and once per subagent.
+- Briefs and the business analyst's sources name `path:start-end`, so the next agent reads only that range.
+
 ## 2.30.0
 
 Less work on the main session, from a measure of four projects' transcripts: searches there were 25% of its cost, and
