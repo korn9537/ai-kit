@@ -44,6 +44,19 @@ directive="$(commit directive)"
 printf 'caf\xe9\n' >"$REPO/src/l.txt"
 echo "export const y = 2;" >>"$REPO/src/z.ts"
 latin="$(commit latin)"
+# one line moved between files is code; a docs commit, a code commit, a docs commit make a range
+printf 'a1\nrequireAdmin(req);\na2\n' >"$REPO/src/one.ts"
+printf 'b1\nb2\n' >"$REPO/src/two.ts"
+commit pre-single >/dev/null
+printf 'a1\na2\n' >"$REPO/src/one.ts"
+printf 'b1\nrequireAdmin(req);\nb2\n' >"$REPO/src/two.ts"
+single="$(commit single)"
+echo "note" >>"$REPO/README.md"
+docs1="$(commit docs1)"
+echo "export const w = 3;" >>"$REPO/src/a.ts"
+commit rangecode >/dev/null
+echo "note 2" >>"$REPO/README.md"
+docs2="$(commit docs2)"
 
 # run_case <desc> <want exit> <tool_input json>
 run_case() {
@@ -82,6 +95,10 @@ run_case "pass: no commit named (a work-tree review)" 0 "$(rev "the changed file
 run_case "pass: a hex word that is no commit" 0 "$(rev "id deadbeef12")"
 run_case "pass: not a reviewer" 0 "$(rev "git show $moved" ai-kit:committer "commit: review fixes")"
 run_case "block: general-purpose review fallback" 2 "$(rev "git show $moved" general-purpose "review split")"
+run_case "pass: one line moved between files is code" 0 "$(rev "git show $single")"
+run_case "pass: a range whose ends are docs and whose middle is code" 0 "$(rev "git show $docs1..$docs2")"
+run_case "pass: a three-dot range" 0 "$(rev "git show $docs1...$docs2")"
+run_case "block: docs commits named one by one" 2 "$(rev "git show $docs1 $docs2")"
 
 # scripts/review-needed.sh shares the check: skip for a move-only commit, review otherwise
 needed() {
@@ -97,6 +114,7 @@ needed() {
 }
 needed "review-needed: a move-only commit" skip "$moved"
 needed "review-needed: a code commit" review "$code"
+needed "review-needed: one line moved between files" review "$single"
 needed "review-needed: a move under a review.always path" review "$migration"
 needed "review-needed: no commit given" review ""
 needed "review-needed: an unknown commit" review deadbeef12

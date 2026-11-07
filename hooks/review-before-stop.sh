@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Stop hook: code edited in this session after the last review → block the stop once and ask for a fresh-eyes
 # review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Delegation and report"). A review = an Agent call with
-# that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
-# (fallback). Docs (*.md), ai/usage records and files outside the repo do not count; a Bash command that writes
+# that subagent_type, or a general-purpose one whose description has the word "review" (not "preview") and does not
+# start "commit:" (fallback; lib.sh kit_is_reviewer). A launch whose tool_result is an error was denied and is no
+# review; one with no result yet (background) counts. Docs (*.md), ai/usage records and files outside the repo do
+# not count; a Bash command that writes
 # into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a
 # .md-only Bash write does not; a relative redirect, tee, mv, cp or rm target counts when the line's cwd is in the
 # repo. Edits by a finished commit subagent (ai-kit:committer or description "commit: ...") count too; one still
@@ -46,8 +48,20 @@ read -r -d '' events_jq <<'JQ' || true
   # cd into the root, spelled with or without its trailing slash
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
   # $in: the command ran with its cwd in the repo, as a cd into the root does
+  # command position: line start, after ; & | ( or a newline, or after sudo, time, xargs, find -exec
+  | ("(^|[;&|(\n] *|\\s-exec +|\\bxargs +(-\\S+ +)*|\\b(sudo|time|command) +)") as $cp
   | def writes_repo($in):
-      test("(sed -i|perl -pi)(?![^;&|]*/(private/)?tmp/)|git apply|apply_patch|write_text|writeFileSync")
+      # quoted text blanked (a grep pattern naming sed -i is no write); a quoted /tmp path stays visible
+      gsub("(?<m>\"[^\"]*\"|'[^']*')"; if (.m | test("/tmp/")) then "Q/tmp/" else "Q" end) as $b
+      | test("git apply|apply_patch|write_text|writeFileSync")
+      # in-place editors with flags before -i, a formatter without --write, patch, git checkout <rev> -- f, restore
+      or ($b | test($cp + "(sed|gsed) +((-[-\\w=.]+|Q) +)*(-[A-Za-z]*i|--in-place)\\S*( |$)(?![^;&|]*/(private/)?tmp/)"))
+      or ($b | test($cp + "perl +((-[-\\w=.]+|Q) +)*-[A-Za-z0-9]*i\\S*( |$)(?![^;&|]*/(private/)?tmp/)"))
+      or ($b | test($cp + "(npx +|pnpm +(exec +|dlx +)?|yarn +|bunx +)?prettier\\b[^;&|\n]* (-w|--write)\\b"))
+      or ($b | test($cp + "(uv run +|python3? -m +)?ruff +format\\b(?![^;&|\n]*--(check|diff))"))
+      or ($b | test($cp + "patch\\b(?![^;&|\n]*--dry-run)"))
+      or ($b | test($cp + "git +(-C +\\S+ +)?(restore\\b|checkout\\b[^;&|\n]* -- )"))
+      or ($b | test($cp + "(npm|pnpm|yarn|bun) +(run +)?[\\w:-]*(fix|format)( |$)"))
       or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']")
       # as a command word: a codemod or a fixing formatter; mv/cp/rm on a repo path, or after cd into the repo
       or test("(^|[;&|(\n] *)(npx +|node +|bun +)?[\\w./-]*(codemod|jscodeshift)")
@@ -81,22 +95,27 @@ read -r -d '' events_jq <<'JQ' || true
           {k: "edit", p: "(via Bash)", ts: $ts}
         elif $side then empty
         elif (.name == "Agent" or .name == "Task")
-             and ((.input.subagent_type // "") as $t | ($t | test("change-reviewer"))
-               or (($t == "" or $t == "general-purpose") and ((.input.description // "") as $d
-                 | ($d | test("review"; "i")) and ($d | test("^\\s*commit:"; "i") | not)))) then
-          {k: "review", ts: $ts, recheck: false}
-        elif .name == "SendMessage" and ((.input.summary // "") | test("review"; "i")) then
+             and (.input | kit_is_reviewer) then
+          {k: "review", ts: $ts, recheck: false, id: .id}
+        elif .name == "SendMessage" and ((.input.summary // "") | kit_review_text) then
           {k: "review", ts: $ts, recheck: true}
         else empty end
     elif $side then empty
-    elif .type == "user" and .isMeta != true then
-      (.message.content | if type == "string" then [.] else [.[]? | select(.type == "text") | .text] end)
-      | select(any(.[]; (startswith("<") | not) and test("^\\s*(ไม่ต้อง ?review|skip review)"; "i")))
-      | {k: "review", ts: $ts}
+    elif .type == "user" then
+      # a denied or failed call: its launch is no review (a result not yet there, a background launch, still counts)
+      ((.message.content | arrays | .[] | select(.type == "tool_result" and .is_error == true))
+        | {k: "denied", id: .tool_use_id, ts: $ts}),
+      (if .isMeta == true then empty else
+        (.message.content | if type == "string" then [.] else [.[]? | select(.type == "text") | .text] end)
+        | select(any(.[]; (startswith("<") | not) and test("^\\s*(ไม่ต้อง ?review|skip review)"; "i")))
+        | {k: "review", ts: $ts} end)
     else empty end
 JQ
+events_jq="$KIT_REVIEWER_JQ$events_jq"
 read -r -d '' tail_jq <<'JQ' || true
-  sort_by(.ts) | . as $e
+  [.[] | select(.k == "denied") | .id] as $denied
+  | map(select(.k != "denied" and ((.k == "review" and .id != null and (.id as $i | any($denied[]; . == $i))) | not)))
+  | sort_by(.ts) | . as $e
   | [range(length) as $i | $e[$i]
      | if .k != "closed" then . elif ([$e[:$i][] | select(.k == "review")] | last | .recheck) == true then .k = "review" else empty end]
   | . as $x | (map(.k == "review") | rindex(true)) as $last

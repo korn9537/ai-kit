@@ -144,6 +144,37 @@ run_case "pass: the same relative redirect from a cwd outside the repo" pass - \
 rm -rf "$REPO/lib"
 reset
 
+# a reviewer test is the word review, not preview; a type claude counts like general-purpose
+sed -i.bak '1,40s/$/x/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
+run_case "block: an Agent described preview is no review" block "no review yet" "$(edit src/c.ts)" \
+  "$(line Agent '{"subagent_type": "general-purpose", "description": "Check the preview build in the browser"}')"
+run_case "pass: a claude-type review fallback counts" pass - "$(edit src/c.ts)" \
+  "$(line Agent '{"subagent_type": "claude", "description": "review commit"}')"
+# a denied launch is no review; a result not yet present (background) still is one
+idline() { line Agent '{"subagent_type": "ai-kit:change-reviewer", "description": "x"}' | jq -c --arg id "$1" '.message.content[0].id = $id'; }
+result() { jq -cn --arg id "$1" --argjson err "$2" '{type: "user", timestamp: "2030-01-01T00:00:50Z",
+  message: {content: [{type: "tool_result", tool_use_id: $id, is_error: $err, content: "x"}]}}'; }
+run_case "block: a reviewer launch the hook denied is no review" block "no review yet" \
+  "$(edit src/c.ts)" "$(idline r1)" "$(result r1 true)"
+run_case "pass: a reviewer launch with a non-error result counts" pass - \
+  "$(edit src/c.ts)" "$(idline r1)" "$(result r1 false)"
+run_case "pass: a background launch with no result yet counts" pass - "$(edit src/c.ts)" "$(idline r1)"
+reset
+
+# Bash writes in other spellings; 40 changed lines are in the tree, the Bash line is the only edit seen
+seq 1 40 | sed 's/$/q/' >"$REPO/src/a.ts"
+bashw() { run_case "$1" "$2" - "$(incwd "$3")"; }
+for cmd in "sed -E -i '' s/a/b/ src/a.ts" "sed -Ei s/a/b/ src/a.ts" "perl -i -pe 's/a/b/' src/a.ts" \
+  "npx prettier -w src/a.ts" "ruff format src" "patch -p1 < d.diff" "git checkout other -- src/a.ts" \
+  "git restore src/a.ts" "pnpm lint:fix" "cd x && sed -i s/a/b/ f" "find . -name '*.ts' | xargs sed -i s/a/b/"; do
+  bashw "block: $cmd" block "$cmd"
+done
+bashw "pass: a read-only grep for sed -i" pass 'grep -rn "sed -i" hooks'
+bashw "pass: a quoted perl -pi in echo" pass "echo 'perl -pi -e x'"
+bashw "pass: ruff format --check" pass "ruff format --check src"
+bashw "pass: sed -n is no write" pass "sed -n 1,5p src/a.ts"
+reset
+
 # snapshot branch: the snapshot is the reviewed tree
 snap() { mkdir -p "$REPO/.git/claude-review" && ./review-snapshot.sh --tree "$REPO" >"$REPO/.git/claude-review/s1"; }
 reviewer="$(line Agent '{"subagent_type": "ai-kit:change-reviewer", "description": "x"}')"

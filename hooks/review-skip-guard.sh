@@ -4,7 +4,7 @@
 # commit's review is skipped. Only a commit review counts (a brief with `git show`); its commits are the hashes the
 # brief or description names as whole words. A brief naming none, or any commit with a code line, a mode change, an
 # empty new file, a merge, a root commit or a review.always path (old or new name; an invalid pattern counts as a
-# match), launches as usual.
+# match), launches as usual; so does a brief with an A..B range, whose middle commits are not named.
 set -euo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
 . "$(dirname "$0")/lib.sh"
@@ -13,12 +13,12 @@ input="$(cat)"
 tool="$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null || true)"
 [[ "$tool" == Agent || "$tool" == Task ]] || exit 0
 # same reviewer test as review-before-stop.sh: the type, or a general-purpose "review" not starting "commit:"
-jq -e '.tool_input | (.subagent_type // "") as $t | (.description // "") as $d
-  | ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose")
-    and ($d | test("review"; "i")) and ($d | test("^\\s*commit:"; "i") | not))' <<<"$input" >/dev/null 2>&1 || exit 0
+jq -e "$KIT_REVIEWER_JQ"'.tool_input | kit_is_reviewer' <<<"$input" >/dev/null 2>&1 || exit 0
 
 brief="$(jq -r '.tool_input | "\(.description // "") \(.prompt // "")"' <<<"$input")"
 grep -q 'git show' <<<"$brief" || exit 0
+# a range (A..B, A...B) holds commits between its ends that are not named: not judged here
+grep -qE '[0-9A-Za-z~^_/-]\.\.\.?[0-9A-Za-z~^_/-]' <<<"$brief" && exit 0
 hashes="$(grep -owE '[0-9a-f]{7,40}' <<<"$brief" | sort -u || true)"
 skipped=()
 while IFS= read -r h; do

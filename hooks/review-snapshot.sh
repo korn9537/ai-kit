@@ -30,10 +30,8 @@ input="$(cat)"
 # A subagent's own calls are not the main session's review.
 [[ -n "$(jq -r '.agent_id // empty' <<<"$input" 2>/dev/null || true)" ]] && exit 0
 # same test as review-before-stop.sh: the reviewer type, a general-purpose "review" fallback, or a "review" re-check
-jq -e '(.tool_input // {}) as $i | (.tool_input.subagent_type // "") as $t
-  | if .tool_name == "SendMessage" then ($i.summary // "") | test("review"; "i")
-    else ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose") and (($i.description // "") as $d
-      | ($d | test("review"; "i")) and ($d | test("^\\s*commit:"; "i") | not))) end' \
+jq -e "$KIT_REVIEWER_JQ"'(.tool_input // {}) as $i
+  | if .tool_name == "SendMessage" then ($i.summary // "") | kit_review_text else $i | kit_is_reviewer end' \
   <<<"$input" >/dev/null 2>&1 || exit 0
 
 session="$(jq -r '.session_id // empty' <<<"$input")"
