@@ -37,6 +37,8 @@ export function loadRecords(usageDir, since = "") {
   } catch {
     return out;
   }
+  // a flush that crashed after writing its file (or an older racing one) leaves the same lines in two files: once each
+  const seen = new Set();
   for (const f of files) {
     let text = "";
     try {
@@ -57,6 +59,11 @@ export function loadRecords(usageDir, since = "") {
       if (!validRecord(r)) {
         out.skipped++;
         continue;
+      }
+      if (typeof r.session === "string") {
+        const key = `${r.session}\n${r.ts}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
       }
       if (since && !(r.ts >= since)) continue;
       out.recs.push(r);

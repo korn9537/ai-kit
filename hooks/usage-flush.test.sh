@@ -49,8 +49,9 @@ stop() { # <session> <transcript>
   jq -n --arg t "$2" --arg s "$1" --arg c "$REPO" '{transcript_path: $t, session_id: $s, cwd: $c}' |
     env -i PATH="$PATH" HOME="$HOME" "$HOOKS/usage-log.sh" >/dev/null 2>&1
 }
-flush() { # <session> → exit code of the SessionEnd hook
-  jq -n --arg s "$1" --arg c "$REPO" '{session_id: $s, cwd: $c, hook_event_name: "SessionEnd"}' |
+flush() { # <session> [transcript] → exit code of the SessionEnd hook
+  jq -n --arg s "$1" --arg c "$REPO" --arg t "${2:-}" '{session_id: $s, cwd: $c, hook_event_name: "SessionEnd"}
+    + (if $t == "" then {} else {transcript_path: $t} end)' |
     env -i PATH="$PATH" HOME="$HOME" "$HOOKS/usage-flush.sh" 2>"$TMP/err"
 }
 sum_reads() { jq -s '[.[].agents[].read] | add' "$@"; }
@@ -117,6 +118,21 @@ age "$BUFS/s9.jsonl" 25200
 out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOKS/session-start.sh" 2>&1 >/dev/null)"
 check "session-start flushes other sessions' stale buffers, not its own, and prints nothing on stderr" \
   "$(t bash -c '[[ -f "$1/s8.jsonl" && ! -e "$1/s9.jsonl" && -z "$2" ]]' _ "$UD" "$out")" "$out"
+
+# SessionEnd records what came after the last Stop, then flushes
+T12="$REPO/.git/t12.jsonl"
+transcript "$T12" "tail ask"
+asst "$T12" m1 1000
+stop s12 "$T12"
+asst "$T12" m2 5000
+flush s12 "$T12"
+check "SessionEnd records the tokens after the last Stop: summed records equal the transcript total" \
+  "$(t test "$(sum_reads "$UD"/s12*.jsonl)" == 6000)" "$(cat "$TMP/err")"
+flush s12 "$T12"
+check "a second SessionEnd adds nothing" "$(t test "$(sum_reads "$UD"/s12*.jsonl)" == 6000)"
+jq -n --arg s s13 --arg c "$REPO" '{session_id: $s, cwd: $c, transcript_path: "/nonexistent"}' |
+  env -i PATH="$PATH" HOME="$HOME" "$HOOKS/usage-flush.sh" >/dev/null 2>&1
+check "SessionEnd with an unreadable transcript still exits 0" "$(t test "$?" == 0)"
 
 # usage.enabled false → the SessionEnd hook writes nothing
 T10="$REPO/.git/t10.jsonl"

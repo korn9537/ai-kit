@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# SessionEnd: move this session's buffered token records into new files under ai/usage/ (scripts/usage.mjs flush).
-# Never blocks: any failure is one stderr line and exit 0.
+# SessionEnd: record what came after the last Stop, then move this session's buffered token records into new files
+# under ai/usage/ (scripts/usage.mjs end). Never blocks: any failure is one stderr line and exit 0.
 set -euo pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -14,4 +14,5 @@ kit_enabled || exit 0
 session="$(jq -r '.session_id // empty' <<<"$input")"
 [[ -n "$session" ]] || exit 0
 
-CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/usage.mjs" flush --session "$session" || exit 0
+# `end` records the tokens after the last Stop, then flushes, in one node process
+printf '%s' "$input" | CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/usage.mjs" end || exit 0

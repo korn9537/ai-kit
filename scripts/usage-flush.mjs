@@ -1,9 +1,44 @@
 // The Stop hook buffers records in <git-common-dir>/claude-usage/<session>.jsonl (state, shared by every branch and
 // worktree). Flush copies the not-yet-flushed lines into ai/usage/<YYYY-MM>/ as new files and never modifies one.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const IDLE_MS = 6 * 3600 * 1000;
+
+export const LOCK_STALE_MS = 30 * 1000;
+const LOCK_WAIT_MS = 10 * 1000;
+
+// Runs fn holding an O_EXCL lock file in the buffer dir, so parallel flushes and records take turns. A lock older than
+// LOCK_STALE_MS (its holder died) is removed; one still held after LOCK_WAIT_MS throws, and the caller reports it.
+export function withLock(bufDir, fn) {
+  mkdirSync(bufDir, { recursive: true });
+  const lock = join(bufDir, ".lock");
+  const start = Date.now();
+  for (;;) {
+    try {
+      writeFileSync(lock, String(process.pid), { flag: "wx" });
+      break;
+    } catch (e) {
+      if (e?.code !== "EEXIST") throw e;
+      const mtime = statSync(lock, { throwIfNoEntry: false })?.mtimeMs;
+      if (mtime !== undefined && Date.now() - mtime > LOCK_STALE_MS) {
+        try {
+          unlinkSync(lock);
+        } catch {}
+        continue;
+      }
+      if (Date.now() - start > LOCK_WAIT_MS) throw new Error("usage buffer is locked by another process");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      unlinkSync(lock);
+    } catch {}
+  }
+}
 
 const linesOf = (path) => {
   try {
@@ -23,6 +58,10 @@ function setFlushed(sidecar, lines, files) {
 
 // Writes the buffer's new lines to <session>.jsonl, or <session>.2.jsonl, .3, ... for a resumed session.
 export function flushSession(root, bufDir, session) {
+  return withLock(bufDir, () => flushLocked(root, bufDir, session));
+}
+
+function flushLocked(root, bufDir, session) {
   const lines = linesOf(join(bufDir, `${session}.jsonl`));
   if (!lines) return null;
   const sidecar = join(bufDir, `${session}.flushed`);

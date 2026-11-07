@@ -8,7 +8,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
-import { flushIdle, flushSession, seedBuffer } from "./usage-flush.mjs";
+import { flushIdle, flushSession, seedBuffer, withLock } from "./usage-flush.mjs";
 import { DEFAULT_PRICES, DEFAULT_RATIOS, buildRecord, summaryLine } from "./usage-record.mjs";
 
 const git = (cwd, ...args) => {
@@ -50,7 +50,7 @@ function readLines(path) {
   return out;
 }
 
-function record(input) {
+function record(input, quiet = false) {
   const session = input.session_id;
   const transcript = input.transcript_path;
   if (!session) throw new Error("no session_id in the hook input");
@@ -70,27 +70,30 @@ function record(input) {
   saveCache(cachePath, cache);
 
   const bufDir = join(common, "claude-usage");
-  seedBuffer(root, bufDir, session);
   const buffer = join(bufDir, `${session}.jsonl`);
-  const prior = readLines(buffer);
-  // `git commit -q` prints no hash, so HEAD's commits since the last record (first record: since this round's prompt,
-  // not the transcript's start, which a fork or resume carries over) count too
-  const since = prior.length ? prior[prior.length - 1].ts : sess.prompts[sess.prompts.length - 1]?.ts || sess.firstTs;
-  if (since) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${since}`, "--format=%H %h %cI", "HEAD"));
-  const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
-  const rec = buildRecord(sess, prior, {
-    now: new Date(),
-    session,
-    kit,
-    project: basename(root),
-    user: git(root, "config", "user.name"),
-    branch: git(root, "rev-parse", "--abbrev-ref", "HEAD"),
+  // seed, read, build and append under one lock: parallel records would each read the same prior
+  withLock(bufDir, () => {
+    seedBuffer(root, bufDir, session);
+    const prior = readLines(buffer);
+    // `git commit -q` prints no hash, so HEAD's commits since the last record (first record: since this round's prompt,
+    // not the transcript's start, which a fork or resume carries over) count too
+    const since = prior.length ? prior[prior.length - 1].ts : sess.prompts[sess.prompts.length - 1]?.ts || sess.firstTs;
+    if (since) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${since}`, "--format=%H %h %cI", "HEAD"));
+    const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+    const rec = buildRecord(sess, prior, {
+      now: new Date(),
+      session,
+      kit,
+      project: basename(root),
+      user: git(root, "config", "user.name"),
+      branch: git(root, "rev-parse", "--abbrev-ref", "HEAD"),
   });
   if (!rec) return;
-  mkdirSync(bufDir, { recursive: true });
   appendFileSync(buffer, `${JSON.stringify(rec)}\n`);
+  if (quiet) return;
   const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
   process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, { money: conf.money !== false }) })}\n`);
+  });
 }
 
 // flush --session <id> | flush --idle [--except <id>]: moves buffered records into ai/usage/ (never modifies a file there).
@@ -146,6 +149,25 @@ function main() {
     }
     return;
   }
+  if (cmd === "end") {
+    // SessionEnd: record what came after the last Stop (no summary), then flush; one process, a failure of the first
+    // step never skips the second
+    let input = {};
+    try {
+      input = JSON.parse(readFileSync(0, "utf8") || "{}");
+    } catch {}
+    try {
+      record(input, true);
+    } catch (e) {
+      process.stderr.write(`usage-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+    }
+    try {
+      if (input.session_id) flushCmd(["--session", String(input.session_id)]);
+    } catch (e) {
+      process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+    }
+    return;
+  }
   if (cmd === "flush") {
     try {
       flushCmd(process.argv.slice(3));
@@ -163,7 +185,7 @@ function main() {
     }
     return;
   }
-  process.stderr.write("usage: usage.mjs record | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline]\n");
+  process.stderr.write("usage: usage.mjs record | end | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline]\n");
   process.exitCode = 2;
 }
 
