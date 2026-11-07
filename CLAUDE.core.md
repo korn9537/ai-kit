@@ -77,7 +77,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - **Recommend, do not list.** Options come with a verdict, the reason and the one condition that would flip it; an
   anomaly found while checking: in scope → fix it; outside the request → follow-up.
 - **Project knowledge lives in the repo, never in auto-memory** (one machine only; `init` sets
-  `"autoMemoryEnabled": false`, writes are hook-guarded), in the same commit as the work. Where each kind goes:
+  `"autoMemoryEnabled": false`, Write and Edit are hook-guarded), in the same commit as the work. Where each kind goes:
   `ai-kit/docs/ai-layout.md` §Where a fact goes.
 - **Comments** are for AI readers: at most two lines, a constraint or a pointer, no history
   (`ai-kit/scripts/check-comments.mjs`, `ai-kit/docs/code-comments.md`).

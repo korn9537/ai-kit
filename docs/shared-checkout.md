@@ -8,7 +8,8 @@ push triggers, is in the project's CLAUDE.md (branch and deploy).
   (`plan-batching.md`), and commit each as soon as its verification passes (verify once per commit), above all a
   contract change whose consumers break until both sides land.
 - Stage named files only: never `git add -A`, `.`, a directory or a glob, never `git commit -a`
-  (the ai-kit plugin's `hooks/git-add-all-guard.sh` blocks them, also on a heredoc line that starts with such a command).
+  (the ai-kit plugin's `hooks/bash-guard.sh` blocks them, also after `cd`, `git -C`, `&` or as `git stage`;
+  quoted text and heredoc bodies are not read).
   Before `git add <file>` read `git diff <file>` for hunks that are not yours; before committing read
   `git diff --cached --stat`. Then `git commit` with no paths: `git commit -- <path>` commits the whole working-tree
   file, other hunks included, and leaves the token records behind.

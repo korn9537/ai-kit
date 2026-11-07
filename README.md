@@ -18,7 +18,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `build-while-dev-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `git-add-all-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
@@ -111,16 +111,21 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   worktrees never conflict on it), on SubagentStop from the hook's `last_assistant_message`; a call still running is
   not logged. The pre-commit stages the log with `ai/usage`; reviews skip it.
   `/ai-kit:decisions` prints it as a report.
-- `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit/Bash) blocks writes into
-  `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead; reading and
-  `rm` stay allowed.
-- `git-add-all-guard.sh` (PreToolUse on Bash) blocks `git add -A`, `-u`, `.`, a directory or a glob, and
-  `git commit -a` (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, or behind
-  `env`/`command`/`sudo`.
-- `build-while-dev-guard.sh` (PreToolUse on Bash) blocks a build command (`build_guard.build_re`; default
-  `pnpm`/`npm`/`yarn build` with `--prefix`/`-C`/`--cwd`/`-w`/`--workspace`/`--filter`, `next build`, `turbo build`)
-  while the dev port listens. It probes the port with `lsof`, else `ss`, `netstat` (Git Bash on Windows) or `nc`;
-  with none it lets the build run and says the port was not checked.
+- `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit) blocks writes into
+  `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead; Bash is not
+  inspected (`init` sets `autoMemoryEnabled` false, which `kit.mjs check` verifies).
+- `bash-guard.sh` (PreToolUse on Bash) cuts the command into simple commands (`;`, `&&`, `||`, `|`, `&`, newline,
+  parentheses; quoted text, comments and heredoc bodies are dropped, so a commit message that names a command
+  never blocks) and runs two checks:
+  - blocks `git add`/`git stage` of `-A`, `-u`, `.`, a directory or a glob, and `git commit -a` or with such a path
+    (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, behind `env`/`command`/`sudo`,
+    after `cd` or `git -C` (the directory is resolved there); `git add -n` passes. Not seen: `xargs git add`,
+    `bash -c "..."`, `git add $(...)`.
+  - blocks a build command while the dev port listens: `build_guard.build_re` when set, else `pnpm`/`npm`/`yarn`/`bun`
+    running a `build` or `build:*` script (options such as `--filter`, `-C`, `--dir`, `-w`, `-r`, `-s`; `run`,
+    `exec`, `workspace`) and `next`/`turbo`/`vite`/`nuxt`/`nx`/`ng`... `build`, also behind `npx`, `time`, `env`,
+    `timeout`. It probes the port with `lsof`, else `ss`, `netstat` (Git Bash on Windows) or `nc`; with none it lets
+    the build run and says the port was not checked. `ALLOW_BUILD_WHILE_DEV=1 <command>` skips this check.
 
 ## Project settings (`ai/kit/`)
 

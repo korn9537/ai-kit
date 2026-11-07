@@ -34,17 +34,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/build-while-dev-guard.sh\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/git-add-all-guard.sh\"",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/memory-guard.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/bash-guard.sh\"",
             "timeout": 5
           }
         ]

@@ -16,6 +16,8 @@ root="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)" || e
 rel="${file#"$root"/}"
 [[ "$rel" != "$file" ]] || exit 0
 cd "$root" || exit 0
+# no node: the checks cannot run; the pre-commit blocks loudly then
+command -v node >/dev/null 2>&1 || exit 0
 # a checkout without ai/kit/ is not set up; the kit's checks need only node, a project's may need its packages
 [[ -d ai/kit ]] || exit 0
 

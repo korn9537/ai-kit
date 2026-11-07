@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Tests for memory-guard.sh: writes into the auto-memory dir are blocked (exit 2), with POSIX and Windows paths and
-# under CLAUDE_CONFIG_DIR; reads and other paths pass.
+# Tests for memory-guard.sh: Write/Edit into the auto-memory dir is blocked (exit 2), with POSIX and Windows paths
+# and under CLAUDE_CONFIG_DIR; other paths pass. Bash commands are not inspected.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 HOOK="$PWD/memory-guard.sh"
@@ -26,10 +26,9 @@ run_case() {
 
 run_case "block: Write into ~/.claude/projects/*/memory" 2 Write "/home/u/.claude/projects/-r/memory/a.md"
 run_case "block: Write with a Windows path" 2 Write 'C:\Users\u\.claude\projects\C--r\memory\a.md'
-run_case "block: a redirect with a Windows path" 2 Bash 'echo x > C:\Users\u\.claude\projects\C--r\memory\a.md'
 run_case "block: Write under CLAUDE_CONFIG_DIR" 2 Write "/cfg/my.dir/projects/-r/memory/a.md" /cfg/my.dir
 run_case "block: Write under a Windows CLAUDE_CONFIG_DIR" 2 Write 'D:\cfg\projects\D--r\memory\a.md' 'D:\cfg\'
-run_case "pass: reading the memory dir" 0 Bash "cat /home/u/.claude/projects/-r/memory/a.md"
+run_case "pass: Bash is not inspected" 0 Bash "echo x > /home/u/.claude/projects/-r/memory/a.md"
 run_case "pass: a path that only looks like the config dir" 0 Write "/cfg/myxdir/projects/-r/memory/a.md" /cfg/my.dir
 run_case "pass: a repo file" 0 Write "$REPO/ai/notes.md"
 # a session opened in a subfolder, spelled with backslashes (Windows): the kit still finds ai/kit at the root

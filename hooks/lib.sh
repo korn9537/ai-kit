@@ -144,3 +144,80 @@ kit_memory_dir() {
   [[ -n "$main" ]] || main="$kit_root"
   printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/${main//[^a-zA-Z0-9]/-}/memory"
 }
+
+# kit_split_cmd: a Bash command on stdin as one simple command per line. Splits on ; && || | a single & (not >& or &>)
+# a newline, backtick and parentheses; drops heredoc bodies and # comments. Quote characters are removed and the text
+# inside a quote stays one word: its space becomes \001, ( \002, ) \003, ; & | backtick newline \004, an empty
+# quote \005. awk under LC_ALL=C: bash 3.2 replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s).
+kit_split_cmd() {
+  LC_ALL=C awk '
+function flush() { sub(/^[ \t]+/, "", seg); if (seg != "") print seg; seg = "" }
+function enc(s) {
+  gsub("[ \t]", "\001", s); gsub("[(]", "\002", s); gsub("[)]", "\003", s); gsub("[;&|`]", "\004", s)
+  return s
+}
+function dqend(s,   off, k, pos, b, j) {
+  off = 0
+  while ((k = index(substr(s, off + 1), DQ)) > 0) {
+    pos = off + k; b = 0; j = pos - 1
+    while (j >= 1 && substr(s, j, 1) == BS) { b++; j-- }
+    if (b % 2 == 0) return pos
+    off = pos
+  }
+  return 0
+}
+BEGIN { SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]" }
+{
+  if (hd) {
+    t = $0
+    if (hdtab) sub(/^\t+/, "", t)
+    if (t == hdword) hd = 0
+    next
+  }
+  line = $0
+  while (line != "") {
+    if (q != "") {
+      p = (q == SQ) ? index(line, SQ) : dqend(line)
+      if (p == 0) { chunk = line; line = "" } else { chunk = substr(line, 1, p - 1); line = substr(line, p + 1) }
+      seg = seg enc(chunk); qn += length(chunk)
+      if (p) { if (qn == 0) seg = seg "\005"; q = "" }
+      continue
+    }
+    if (!match(line, special)) { seg = seg line; line = ""; break }
+    seg = seg substr(line, 1, RSTART - 1)
+    c = substr(line, RSTART, 1)
+    line = substr(line, RSTART + 1)
+    prev = substr(seg, length(seg), 1)
+    if (c == SQ || c == DQ) { q = c; qn = 0 }
+    else if (c == BS) {
+      if (line == "") cont = 1
+      else { seg = seg enc(substr(line, 1, 1)); line = substr(line, 2) }
+    }
+    else if (c == "#") { if (seg == "" || prev == " " || prev == "\t") line = ""; else seg = seg c }
+    else if (c == "&") { if (prev == ">" || prev == "<" || substr(line, 1, 1) == ">") seg = seg c; else flush() }
+    else if (c == "<") {
+      if (substr(line, 1, 2) == "<<") { seg = seg "<<<"; line = substr(line, 3) }
+      else if (substr(line, 1, 1) == "<") {
+        r = substr(line, 2); hdtab = 0
+        if (substr(r, 1, 1) == "-") { hdtab = 1; r = substr(r, 2) }
+        sub(/^[ \t]+/, "", r)
+        d1 = substr(r, 1, 1)
+        if (d1 == SQ || d1 == DQ) {
+          r = substr(r, 2); p = index(r, d1)
+          if (p) { w = substr(r, 1, p - 1); r = substr(r, p + 1) } else { w = r; r = "" }
+        } else {
+          if (d1 == BS) r = substr(r, 2)
+          match(r, "^[^ \t;&|()<>]*"); w = substr(r, 1, RLENGTH); r = substr(r, RLENGTH + 1)
+        }
+        hdword = w; hdpend = 1; line = r
+      } else seg = seg c
+    }
+    else flush()
+  }
+  if (q != "") { seg = seg "\004"; qn++ }
+  else if (cont) cont = 0
+  else flush()
+  if (hdpend) { hd = 1; hdpend = 0 }
+}
+END { flush() }'
+}
