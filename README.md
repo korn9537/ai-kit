@@ -26,7 +26,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
-| `scripts/usage.mjs`           | `record` (Stop hook) / `flush` (SessionEnd, SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
+| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
@@ -36,7 +36,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close; test `scripts/plan.test.mjs` |
 | `scripts/run-plan-status.mjs` | live status of a run-plan workflow from its journal, one line per batch; test `scripts/run-plan-status.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
-| `scripts/usage-*.test.mjs`    | fixture tests for the usage modules: `node scripts/usage-<name>.test.mjs`                      |
+| `scripts/usage-*.test.mjs`    | fixture tests for the usage modules (`usage-flush.test.mjs`: buffer lock, parallel flush and record): `node scripts/usage-<name>.test.mjs`                   |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite and `check-wrap.mjs` in parallel: `node scripts/test-all.mjs` |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit    |
@@ -91,10 +91,12 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   without `node_modules` (a fresh worktree) only the project's checks are skipped.
 - `usage-log.sh` (Stop) appends each round's token use to a buffer in the git common dir
   (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
-  summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks.
-- `usage-flush.sh` (SessionEnd) writes the buffer's new records to a new file `ai/usage/<YYYY-MM>/<session>.jsonl`
-  (`<session>.2.jsonl`, `.3`, ... after a resume; an existing file is never modified). `session-start.sh` does the
-  same for other sessions' buffers idle over 6 hours (a crashed session). The next commit carries the files.
+  summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks (the buffer
+  lock is waited for at most 1.5 s, then the record is skipped with one stderr line).
+- `usage-flush.sh` (SessionEnd) first records what came after the last Stop, then writes the buffer's new records
+  to a new file `ai/usage/<YYYY-MM>/<session>.jsonl` (`<session>.2.jsonl`, `.3`, ... after a resume; an existing file
+  is never modified). `session-start.sh` does the same for other sessions' buffers idle over 6 hours (a crashed
+  session), trying the buffer lock once without waiting. The next commit carries the files.
 - `ask-guard.sh` (PreToolUse on AskUserQuestion) blocks a question to the owner until an `ai-kit:decider` call of
   the session returned OWNER in the last 30 minutes; one such call serves one ask (the used ids are kept in
   `<git-common-dir>/claude-decider/<session>.json`). The verdict is read from the decider's own subagent transcript

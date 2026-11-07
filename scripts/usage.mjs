@@ -1,19 +1,20 @@
 #!/usr/bin/env node
 // Token usage CLI. `record` is the Stop hook: reads the hook JSON on stdin, appends this round's delta record to the
 // buffer <git-common-dir>/claude-usage/<session>.jsonl and prints the one-line summary; nothing is written under
-// ai/usage/. `flush` (SessionEnd, SessionStart) moves buffered records into new files there. Neither ever fails.
+// ai/usage/. `end` (SessionEnd) records what came after the last Stop, then flushes that session. `flush` (SessionStart
+// --idle) moves other sessions' buffered records into new files there. None ever fails, and none waits over 1.5 s for the lock.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
 import { baselineRecords, digest, loadRecords } from "./usage-digest.mjs";
-import { flushIdle, flushSession, seedBuffer, withLock } from "./usage-flush.mjs";
+import { LOCK_WAIT_MS, flushIdle, flushSession, seedBuffer, withLock } from "./usage-flush.mjs";
 import { DEFAULT_PRICES, DEFAULT_RATIOS, buildRecord, summaryLine } from "./usage-record.mjs";
 
 const git = (cwd, ...args) => {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
@@ -50,7 +51,7 @@ function readLines(path) {
   return out;
 }
 
-function record(input, quiet = false) {
+function record(input, quiet = false, deadline = undefined) {
   const session = input.session_id;
   const transcript = input.transcript_path;
   if (!session) throw new Error("no session_id in the hook input");
@@ -71,40 +72,39 @@ function record(input, quiet = false) {
 
   const bufDir = join(common, "claude-usage");
   const buffer = join(bufDir, `${session}.jsonl`);
+  const user = git(root, "config", "user.name");
+  const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
+  const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
   // seed, read, build and append under one lock: parallel records would each read the same prior
-  withLock(bufDir, () => {
-    seedBuffer(root, bufDir, session);
-    const prior = readLines(buffer);
-    // `git commit -q` prints no hash, so HEAD's commits since the last record (first record: since this round's prompt,
-    // not the transcript's start, which a fork or resume carries over) count too
-    const since = prior.length ? prior[prior.length - 1].ts : sess.prompts[sess.prompts.length - 1]?.ts || sess.firstTs;
-    if (since) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${since}`, "--format=%H %h %cI", "HEAD"));
-    const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
-    const rec = buildRecord(sess, prior, {
-      now: new Date(),
-      session,
-      kit,
-      project: basename(root),
-      user: git(root, "config", "user.name"),
-      branch: git(root, "rev-parse", "--abbrev-ref", "HEAD"),
-  });
-  if (!rec) return;
-  appendFileSync(buffer, `${JSON.stringify(rec)}\n`);
-  if (quiet) return;
-  const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
-  process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, { money: conf.money !== false }) })}\n`);
-  });
+  withLock(
+    bufDir,
+    () => {
+      seedBuffer(root, bufDir, session);
+      const prior = readLines(buffer);
+      // `git commit -q` prints no hash, so HEAD's commits since the last record (first record: since this round's
+      // prompt, not the transcript's start, which a fork or resume carries over) count too
+      const since = prior.length ? prior[prior.length - 1].ts : sess.prompts[sess.prompts.length - 1]?.ts || sess.firstTs;
+      if (since) sess.commits = mergeCommits(sess.commits, git(root, "log", "-n", "500", `--since=${since}`, "--format=%H %h %cI", "HEAD"));
+      const rec = buildRecord(sess, prior, { now: new Date(), session, kit, project: basename(root), user, branch });
+      if (!rec) return;
+      appendFileSync(buffer, `${JSON.stringify(rec)}\n`);
+      if (quiet) return;
+      const prices = { ...DEFAULT_PRICES, ...(conf.prices ?? {}) };
+      process.stdout.write(`${JSON.stringify({ systemMessage: summaryLine(rec, [...prior, rec], prices, { money: conf.money !== false }) })}\n`);
+    },
+    { deadline },
+  );
 }
 
 // flush --session <id> | flush --idle [--except <id>]: moves buffered records into ai/usage/ (never modifies a file there).
-function flushCmd(args) {
+function flushCmd(args, deadline) {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
   const common = git(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
   if (!common) return;
   const bufDir = join(common, "claude-usage");
   const val = (flag) => (args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "") : "");
-  if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"));
+  if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"), { deadline });
   else if (args[0] === "--idle") flushIdle(root, bufDir, val("--except"));
   else throw new Error("usage: usage.mjs flush --session <id> | --idle [--except <id>]");
 }
@@ -150,19 +150,23 @@ function main() {
     return;
   }
   if (cmd === "end") {
-    // SessionEnd: record what came after the last Stop (no summary), then flush; one process, a failure of the first
-    // step never skips the second
+    // SessionEnd: record what came after the last Stop (no summary), then flush; one process and one lock deadline
+    // for both steps. A failure of the first step does not skip the second, except a lock wait that timed out: the
+    // lock is still held, so the second would only wait again.
+    const deadline = Date.now() + LOCK_WAIT_MS;
+    let locked = false;
     let input = {};
     try {
       input = JSON.parse(readFileSync(0, "utf8") || "{}");
     } catch {}
     try {
-      record(input, true);
+      record(input, true, deadline);
     } catch (e) {
+      locked = e?.code === "ELOCKED";
       process.stderr.write(`usage-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     try {
-      if (input.session_id) flushCmd(["--session", String(input.session_id)]);
+      if (input.session_id && !locked) flushCmd(["--session", String(input.session_id)], deadline);
     } catch (e) {
       process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }

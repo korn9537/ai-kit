@@ -4,7 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOCK_STALE_MS, withLock } from "./usage-flush.mjs";
+import { LOCK_STALE_MS, flushIdle, seedBuffer, withLock } from "./usage-flush.mjs";
 import { loadRecords } from "./usage-digest.mjs";
 
 let passed = 0;
@@ -67,6 +67,71 @@ try {
   const old = (Date.now() - LOCK_STALE_MS - 5000) / 1000;
   utimesSync(lock, old, old);
   eq("a stale lock does not block", withLock(bufDir, () => "ran"), "ran");
+
+  // a live holder blocks until the deadline, then withLock throws ELOCKED; its lock file is left alone
+  const holder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" });
+  writeFileSync(lock, `${holder.pid}:tok`);
+  let t0 = Date.now();
+  let code = "";
+  try {
+    withLock(bufDir, () => "ran", { waitMs: 300 });
+  } catch (e) {
+    code = e.code;
+  }
+  eq("a live lock blocks, then times out with ELOCKED", [code, Date.now() - t0 >= 280], ["ELOCKED", true]);
+  eq("and stays in place", readFileSync(lock, "utf8"), `${holder.pid}:tok`);
+  t0 = Date.now();
+  try {
+    withLock(bufDir, () => "ran", { waitMs: 0 });
+  } catch {}
+  eq("waitMs 0 tries once and returns at once", Date.now() - t0 < 100, true);
+  rmSync(lock);
+  writeFileSync(lock, "");
+  code = "";
+  try {
+    withLock(bufDir, () => "ran", { waitMs: 100 });
+  } catch (e) {
+    code = e.code;
+  }
+  eq("an empty lock file counts as live", code, "ELOCKED");
+  // a lock held by a dead PID is broken at once
+  holder.kill();
+  await new Promise((r) => holder.on("close", r));
+  writeFileSync(lock, `${holder.pid}:tok`);
+  t0 = Date.now();
+  eq("a dead PID's lock is broken at once", [withLock(bufDir, () => "ran", { waitMs: 5000 }), Date.now() - t0 < 1000], ["ran", true]);
+  eq("and released", existsSync(lock), false);
+  // release removes only the lock that holds our own token
+  withLock(bufDir, () => writeFileSync(lock, `${process.pid}:other`));
+  eq("a lock taken over by another holder is not released by us", readFileSync(lock, "utf8"), `${process.pid}:other`);
+  rmSync(lock);
+
+  // idle flush with a held lock skips without waiting
+  const idleBuf = join(bufDir, "idle1.jsonl");
+  writeFileSync(idleBuf, `${rec("idle1", 1)}\n`);
+  const tOld = Date.now() / 1000 - 25200;
+  utimesSync(idleBuf, tOld, tOld);
+  writeFileSync(lock, `${process.pid}:held`);
+  t0 = Date.now();
+  eq("idle flush with a held lock writes nothing", flushIdle(repo, bufDir), []);
+  eq("and does not wait", Date.now() - t0 < 100, true);
+  rmSync(lock);
+  eq("idle flush then writes it", flushIdle(repo, bufDir).length, 1);
+  t0 = Date.now();
+  writeFileSync(lock, `${process.pid}:held`);
+  eq("idle flush skips a flushed buffer without taking the lock", flushIdle(repo, bufDir), []);
+  rmSync(lock);
+
+  // seeding from duplicate files keeps each line once and counts the deduped lines as flushed
+  const seedRoot = join(tmp, "seedroot");
+  const seedBufDir = join(tmp, "seedbuf");
+  mkdirSync(join(seedRoot, "ai", "usage", "2030-01"), { recursive: true });
+  const two = `${rec("sd", 1)}\n${rec("sd", 2)}\n`;
+  writeFileSync(join(seedRoot, "ai", "usage", "2030-01", "sd.jsonl"), two);
+  writeFileSync(join(seedRoot, "ai", "usage", "2030-01", "sd.2.jsonl"), two);
+  seedBuffer(seedRoot, seedBufDir, "sd");
+  eq("seed dedupes lines", readFileSync(join(seedBufDir, "sd.jsonl"), "utf8"), two);
+  eq("and flags the deduped count", readFileSync(join(seedBufDir, "sd.flushed"), "utf8"), "2 2");
 
   // parallel records: three Stop hooks at once must sum to the transcript
   const transcript = join(tmp, "t.jsonl");

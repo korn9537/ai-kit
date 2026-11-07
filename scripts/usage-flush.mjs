@@ -1,42 +1,94 @@
 // The Stop hook buffers records in <git-common-dir>/claude-usage/<session>.jsonl (state, shared by every branch and
 // worktree). Flush copies the not-yet-flushed lines into ai/usage/<YYYY-MM>/ as new files and never modifies one.
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const IDLE_MS = 6 * 3600 * 1000;
 
 export const LOCK_STALE_MS = 30 * 1000;
-const LOCK_WAIT_MS = 10 * 1000;
+// Live holders need milliseconds; a hook must not stall (its timeout is 10 s), so a waiter gives up after this.
+export const LOCK_WAIT_MS = 1500;
 
-// Runs fn holding an O_EXCL lock file in the buffer dir, so parallel flushes and records take turns. A lock older than
-// LOCK_STALE_MS (its holder died) is removed; one still held after LOCK_WAIT_MS throws, and the caller reports it.
-export function withLock(bufDir, fn) {
+const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+const readText = (path) => {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+};
+const pidDead = (text) => {
+  const pid = Number.parseInt(text, 10);
+  if (!(pid > 0)) return false;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (e) {
+    return e?.code === "ESRCH";
+  }
+};
+
+// Takes the lock away from a holder seen with content `seen`: the rename lets one process win, and a file that turns
+// out to be another lock than the one seen is put back (link fails if a new lock exists already).
+function breakLock(lock, seen) {
+  const moved = `${lock}.${process.pid}`;
+  try {
+    renameSync(lock, moved);
+  } catch (e) {
+    if (e?.code === "ENOENT") return;
+    throw e;
+  }
+  if (readText(moved) === seen) {
+    unlinkSync(moved);
+    return;
+  }
+  try {
+    linkSync(moved, lock);
+  } catch {}
+  unlinkSync(moved);
+}
+
+// Runs fn holding an O_EXCL lock file in the buffer dir, so parallel flushes and records take turns. The file holds
+// "<pid>:<token>". A lock whose PID is gone, or older than LOCK_STALE_MS, is broken at once; an empty file counts as
+// live (create and write are not atomic). One still held at the deadline (opts.deadline, else now + opts.waitMs,
+// else LOCK_WAIT_MS) throws an error with code ELOCKED.
+export function withLock(bufDir, fn, opts = {}) {
   mkdirSync(bufDir, { recursive: true });
   const lock = join(bufDir, ".lock");
-  const start = Date.now();
+  const token = `${process.pid}:${randomBytes(6).toString("hex")}`;
+  const deadline = opts.deadline ?? Date.now() + (opts.waitMs ?? LOCK_WAIT_MS);
   for (;;) {
     try {
-      writeFileSync(lock, String(process.pid), { flag: "wx" });
+      writeFileSync(lock, token, { flag: "wx" });
       break;
     } catch (e) {
       if (e?.code !== "EEXIST") throw e;
-      const mtime = statSync(lock, { throwIfNoEntry: false })?.mtimeMs;
-      if (mtime !== undefined && Date.now() - mtime > LOCK_STALE_MS) {
-        try {
-          unlinkSync(lock);
-        } catch {}
-        continue;
-      }
-      if (Date.now() - start > LOCK_WAIT_MS) throw new Error("usage buffer is locked by another process");
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
     }
+    const seen = readText(lock);
+    if (seen === null) continue;
+    const mtime = statSync(lock, { throwIfNoEntry: false })?.mtimeMs;
+    if (seen !== "" && pidDead(seen)) {
+      breakLock(lock, seen);
+      continue;
+    }
+    if (mtime !== undefined && Date.now() - mtime > LOCK_STALE_MS) {
+      breakLock(lock, seen);
+      continue;
+    }
+    if (Date.now() >= deadline) {
+      throw Object.assign(new Error("usage buffer is locked by another process"), { code: "ELOCKED" });
+    }
+    sleep(20);
   }
   try {
     return fn();
   } finally {
-    try {
-      unlinkSync(lock);
-    } catch {}
+    if (readText(lock) === token) {
+      try {
+        unlinkSync(lock);
+      } catch {}
+    }
   }
 }
 
@@ -57,15 +109,18 @@ function setFlushed(sidecar, lines, files) {
 }
 
 // Writes the buffer's new lines to <session>.jsonl, or <session>.2.jsonl, .3, ... for a resumed session.
-export function flushSession(root, bufDir, session) {
-  return withLock(bufDir, () => flushLocked(root, bufDir, session));
+export function flushSession(root, bufDir, session, opts) {
+  return withLock(bufDir, () => flushLocked(root, bufDir, session), opts);
 }
+
+const flushedOf = (bufDir, session) =>
+  (linesOf(join(bufDir, `${session}.flushed`))?.[0] ?? "").split(" ").map((x) => Number.parseInt(x, 10) || 0);
 
 function flushLocked(root, bufDir, session) {
   const lines = linesOf(join(bufDir, `${session}.jsonl`));
   if (!lines) return null;
   const sidecar = join(bufDir, `${session}.flushed`);
-  const [done = 0, files = 0] = (linesOf(sidecar)?.[0] ?? "").split(" ").map((x) => Number.parseInt(x, 10) || 0);
+  const [done = 0, files = 0] = flushedOf(bufDir, session);
   const fresh = lines.slice(done);
   if (!fresh.length) return null;
   let month = new Date().toISOString().slice(0, 7);
@@ -87,7 +142,8 @@ function flushLocked(root, bufDir, session) {
   }
 }
 
-// Every buffer other than `except` whose last write is older than IDLE_MS; returns the files written.
+// Every buffer other than `except` with new lines whose last write is older than IDLE_MS; returns the files written.
+// It tries the lock once and stops at a held one (the next session retries), so a session start never waits.
 export function flushIdle(root, bufDir, except = "", now = Date.now()) {
   let names = [];
   try {
@@ -97,8 +153,14 @@ export function flushIdle(root, bufDir, except = "", now = Date.now()) {
   for (const n of names) {
     const session = n.slice(0, -".jsonl".length);
     if (session === except || now - (statSync(join(bufDir, n), { throwIfNoEntry: false })?.mtimeMs ?? now) <= IDLE_MS) continue;
-    const f = flushSession(root, bufDir, session);
-    if (f) out.push(f);
+    if ((linesOf(join(bufDir, n))?.length ?? 0) <= (flushedOf(bufDir, session)[0] ?? 0)) continue;
+    try {
+      const f = flushSession(root, bufDir, session, { waitMs: 0 });
+      if (f) out.push(f);
+    } catch (e) {
+      if (e?.code !== "ELOCKED") throw e;
+      break;
+    }
   }
   return out;
 }
@@ -125,7 +187,7 @@ export function seedBuffer(root, bufDir, session) {
       else if (/^\d+$/.test(mid)) found.push({ n: Number(mid), path: join(usage, m, f) });
     }
   }
-  const lines = found.sort((a, b) => a.n - b.n).flatMap((f) => linesOf(f.path) ?? []);
+  const lines = [...new Set(found.sort((a, b) => a.n - b.n).flatMap((f) => linesOf(f.path) ?? []))];
   if (!lines.length) return;
   mkdirSync(bufDir, { recursive: true });
   writeFileSync(buf, `${lines.join("\n")}\n`);
