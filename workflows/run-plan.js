@@ -164,16 +164,18 @@ async function reviewChain(b, r, need) {
   if (!fx || !fx.hash) {
     r.status = 'partial'
     r.review = 'CONFIRMED findings left unfixed'
+    r.owner = [...(r.owner || []), ...((fx && fx.owner) || [])]
     r.blockers.push(...((fx && fx.blockers) || []))
     r.notes.push(...((fx && fx.notes) || []))
     return
   }
   r.fix = pick(fx)
   // like the first commit: an owner decision or blocker the fix agent left open holds the batch, not only r.fix
-  const open = (fx.owner || []).length + (fx.blockers || []).length
-  if (open) {
-    r.owner = [...(r.owner || []), ...fx.owner]
-    r.blockers.push(...fx.blockers)
+  const owner = fx.owner || []
+  const blockers = fx.blockers || []
+  if (owner.length + blockers.length) {
+    r.owner = [...(r.owner || []), ...owner]
+    r.blockers.push(...blockers)
     r.status = 'partial'
   }
   const fresh = confirmed.some((f) => f.dataRule)

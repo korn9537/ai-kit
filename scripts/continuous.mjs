@@ -44,9 +44,9 @@ export function next(state, run, repo, now = Date.now()) {
   const s = structuredClone(state);
   const slept = s.lastTick && now - s.lastTick > SLEPT_AFTER;
   s.lastTick = now;
-  const stopped = () => {
+  const stopped = (reason) => {
     const open = s.args.batches.filter((b) => s.batches[b.id]?.status !== "committed").map((b) => b.id);
-    return { state: s, step: { action: "stopped", open, commits: [...repo.commits.keys()], loose: repo.loose } };
+    return { state: s, step: { action: "stopped", open, commits: [...repo.commits.keys()], loose: repo.loose, ...(reason && { reason }) } };
   };
   // a turn lost between `run` and `started`: a workflow may be going, and a second one would commit everything twice
   if (s.launching || s.abandoned) return stopped();
@@ -62,7 +62,7 @@ export function next(state, run, repo, now = Date.now()) {
     s.lastEnd = now;
   }
   // `commits` says nothing: a batch whose agent died after its commit would look unrun, and run again
-  if (repo.logFailed) return stopped();
+  if (repo.logFailed) return stopped("log");
   const done = (id) => s.batches[id]?.status === "committed";
   const retry = [];
   const again = new Set();
@@ -172,10 +172,13 @@ export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
     if (e.code !== "ETIMEDOUT") {
       try {
         git("rev-parse", "--git-dir");
+        // unborn: HEAD names a branch with no commit; a failed rev-parse alone proves nothing
+        const ref = git("symbolic-ref", "-q", "HEAD").trim();
         try {
-          git("rev-parse", "-q", "--verify", "HEAD");
-        } catch {
-          logFailed = false;
+          git("show-ref", "--verify", "-q", ref);
+        } catch (e) {
+          // status 1 is a ref that does not exist; 128 is a ref whose object is gone
+          if (e.status === 1) logFailed = false;
         }
       } catch {
         // not a repo

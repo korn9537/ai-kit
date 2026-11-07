@@ -319,6 +319,10 @@ try {
   const kitDir = join(top, "pkg");
   mkdirSync(join(kitDir, "ai", "kit"), { recursive: true });
   ok("projectRoot: a directory holding ai/kit is its own root", projectRoot(kitDir) === kitDir);
+  const deep = join(top, "app");
+  mkdirSync(join(deep, "ai", "kit"), { recursive: true });
+  mkdirSync(join(deep, "src"));
+  ok("projectRoot: a project below the top is found from its subdirectory", projectRoot(join(deep, "src")) === deep);
   ok("projectRoot: a subdirectory goes to the git top", projectRoot(join(top, "src")) === top);
 } finally {
   rmSync(tmp, { recursive: true, force: true });

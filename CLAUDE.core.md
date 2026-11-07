@@ -86,6 +86,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
 - Independent reads, searches and checks go out together in one message.
+
 ## Delegation and report
 
 - **Heavy reads go to a subagent**, plan or not: a browser check (screenshots, page reads, clicking through a flow)
@@ -123,7 +124,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
      the cross-repo test (`ai-kit/docs/kit-proposals.md`).
      4. **Git** — commit hash or uncommitted; pushed or not. 5. **User sees** — what looks or behaves
      differently. 6. **Decided** — each choice the agent made that the owner might want otherwise: the choice,
-     one-line reason, where recorded. 7. **Open** — only an owner decision (the four kinds above) or in-scope work
-     that is blocked (with what blocks it), each with its proposed fix (file:line, cost)
+     one-line reason, where recorded. 7. **Open** — only an owner decision (the four kinds in Working conventions) or
+     in-scope work that is blocked (with what blocks it), each with its proposed fix (file:line, cost)
      where one exists. In-scope and fixable → fix it before the report; a limit kept on purpose → note it in the
      code or doc. 8. **Next session** — only when the handoff hook asks; it says what to include.

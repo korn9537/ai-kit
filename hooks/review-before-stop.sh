@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Stop hook: code edited in this session after the last review → block the stop once and ask for a fresh-eyes
-# review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Working conventions"). A review = an Agent call with
+# review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Delegation and report"). A review = an Agent call with
 # that subagent_type, or a general-purpose one whose description contains "review" and does not start "commit:"
 # (fallback). Docs (*.md), ai/usage records and files outside the repo do not count; a Bash command that writes
 # into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a

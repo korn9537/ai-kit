@@ -204,7 +204,7 @@ const gitIn = (root) => (...a) =>
 function commit(root, job, subject, kind, stage, undo) {
   const git = gitIn(root);
   const prefix = git("rev-parse", "--show-prefix").trim();
-  const top = (p) => `:(top,exclude)${prefix}${p}`;
+  const top = (p) => `:(top,literal,exclude)${prefix}${p}`;
   const others = git("diff", "--cached", "--name-only", "--", ":/", top("ai/usage"), top(relPath(job))).trim();
   if (others) throw new Error(`the index holds other files, commit them first:\n${others}`);
   try {
@@ -246,8 +246,19 @@ export function projectRoot(dir) {
   if (existsSync(join(dir, "ai", "kit"))) return dir;
   try {
     const prefix = gitIn(dir)("rev-parse", "--show-prefix").trim().replace(/\/$/, "");
-    // the given spelling, not the resolved one (/tmp is /private/tmp)
-    return prefix && dir.endsWith(`/${prefix}`) ? dir.slice(0, -prefix.length - 1) : dir;
+    if (!prefix) return dir;
+    // the given spelling, not the resolved one (/tmp is /private/tmp); a Windows cwd compares with / for \
+    const norm = dir.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (!norm.endsWith(`/${prefix}`)) return dir;
+    const cut = (n) => {
+      let end = dir.replace(/[\\/]+$/, "").length;
+      for (; n > 0; n--) end = Math.max(dir.lastIndexOf("/", end - 1), dir.lastIndexOf("\\", end - 1));
+      return dir.slice(0, end);
+    };
+    const depth = prefix.split("/").length;
+    // the nearest directory up to the git top holding ai/kit, else the top
+    for (let n = 0; n < depth; n++) if (existsSync(join(cut(n), "ai", "kit"))) return cut(n);
+    return cut(depth);
   } catch {
     return dir;
   }

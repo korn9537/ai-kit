@@ -79,6 +79,7 @@ ok("a turn lost around the launch never starts a second run", again.step.action 
 const blind = next(live(), finished(committed("a"), failedAgent("b")), { ...clean, logFailed: true }, T);
 ok("a failed log stops the run, no batch is sent again", blind.step.action === "stopped" && !blind.step.args, blind);
 const blindDone = next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, { ...clean, logFailed: true }, T);
+ok("a failed log is marked reason log", blind.step.reason === "log" && !next(live(), none, clean, T).step.reason, blind);
 ok("a failed log never reads as done or run", blindDone.step.action === "stopped", blindDone);
 
 const second = next(started(tick.state, "d2", "t", T + RETRY_GAP), finished(committed("b"), committed("c")), clean, T + RETRY_GAP + 1);

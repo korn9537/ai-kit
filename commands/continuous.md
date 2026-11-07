@@ -43,10 +43,14 @@ says the workflow did not complete, and act on the printed `action`:
   `node <plugin>/scripts/continuous.mjs started <state> <Transcript dir from the Workflow result> <its task id>`. End
   the turn. The
   call refused, or no Workflow tool: say so and do §Close, every batch of those args under Open.
-- `stopped`: the workflow failed, nothing moved for two hours, or a turn was lost around its launch. TaskStop it if it
-  still runs (`task` in `<state>`), then `node <plugin>/scripts/continuous.mjs abandon <state>`. Commits may exist
-  that `<state>` does not hold, so run nothing again: report what `node <plugin>/scripts/jobs.mjs <job>` prints from
-  the project root, and do §Close. Under Open: each printed `open` batch as not run, each id in `commits` and hash in
+- `stopped` with `reason` `log`: `git log` could not be read, so the commits are unknown and `commits` is empty.
+  Report nothing as not run, do not `abandon`; end the turn and let the next tick retry. With no cron, do §Close with
+  the cause under Open.
+- `stopped` otherwise: the workflow failed, nothing moved for two hours, or a turn was lost around its launch.
+  TaskStop it if it still runs (`task` in `<state>`), then
+  `node <plugin>/scripts/continuous.mjs abandon <state>`. Commits may exist that `<state>` does not hold, so run
+  nothing again: report what `node <plugin>/scripts/jobs.mjs <job>` prints from the project root, and do §Close.
+  Under Open: each printed `open` batch as not run, each id in `commits` and hash in
   `loose` as committed but not reviewed.
 - `done`: do §Close, each batch in the printed `open` under Open, the printed `dirty` paths as edits a dead agent or
   someone else left in the tree.
