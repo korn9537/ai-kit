@@ -32,6 +32,21 @@ const CASES = [
     want: [],
   },
   {
+    desc: "the / of a closing JSX tag opens no regex over a later backtick",
+    files: { "a.ts": "const a = <b>x</b>; const t = `\n// used to be bad\n`;\n" },
+    want: [],
+  },
+  {
+    desc: "a / after ++ divides: it opens no regex over a later backtick",
+    files: { "a.ts": "const a = y++ / 2 : `\n// used to be bad\n`;\n" },
+    want: [],
+  },
+  {
+    desc: "an apostrophe in JSX text does not hide a template literal",
+    files: { "a.tsx": "const a = <p>don't</p>; const t = `\n// used to be bad\n`;\n" },
+    want: [],
+  },
+  {
     desc: "a long // block is reported",
     files: { "a.ts": `${block("//", 3)}\nconst a = 1;\n` },
     want: ["a.ts:1 block of 3 lines"],
@@ -175,6 +190,14 @@ const STAGED = [
     out: /comments: ai\/kit\/config.json comments.include is not a valid regex/,
   },
   {
+    desc: "--size under ALLOW_LARGE_EDIT=1 ignores a bad comments.include",
+    files: { "ai/kit/config.json": '{"comments":{"include":"("}}', "a.ts": "const a = 1;\n" },
+    setup: () => {},
+    args: ["--size"],
+    env: { ALLOW_LARGE_EDIT: "1" },
+    want: 0,
+  },
+  {
     desc: "a bad comments.skip regex exits 1 even without --strict findings",
     files: { "ai/kit/config.json": '{"comments":{"skip":"[a"}}', "a.ts": "const a = 1;\n" },
     setup: () => {},
@@ -314,7 +337,7 @@ for (const c of STAGED) {
     c.setup(dir, git);
     let rc = 0;
     try {
-      execFileSync("node", [SCRIPT, "--staged", "--strict"], { cwd: dir, stdio: "pipe" });
+      execFileSync("node", [SCRIPT, ...(c.args ?? ["--staged", "--strict"])], { cwd: dir, stdio: "pipe", env: { ...process.env, ...c.env } });
     } catch (e) {
       rc = e.status;
       if (c.out && (String(e.stdout).split("\n").length > 2 || !c.out.test(String(e.stdout)))) rc = -1;

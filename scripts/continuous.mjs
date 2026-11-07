@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { isMain } from "./is-main.mjs";
 
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
@@ -228,7 +228,7 @@ function stash(cwd, name) {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   const [cmd, path, arg] = process.argv.slice(2);
   if (cmd === "init" && path && arg) {
     try {

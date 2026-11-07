@@ -10,6 +10,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isMain } from "./is-main.mjs";
 import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./usage-digest.mjs";
 
@@ -344,7 +345,7 @@ function main() {
     try {
       record(JSON.parse(readFileSync(0, "utf8") || "{}"));
     } catch (e) {
-      process.stderr.write(`usage-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.stderr.write(`kit-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     return;
   }
@@ -362,12 +363,12 @@ function main() {
       record(input, true, lockWait);
     } catch (e) {
       locked = e?.code === "ELOCKED";
-      process.stderr.write(`usage-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.stderr.write(`kit-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     try {
       if (input.session_id && !locked) flushCmd(["--session", String(input.session_id)], lockWait.deadline);
     } catch (e) {
-      process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.stderr.write(`kit-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     return;
   }
@@ -375,7 +376,7 @@ function main() {
     try {
       flushCmd(process.argv.slice(3));
     } catch (e) {
-      process.stderr.write(`usage-flush: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.stderr.write(`kit-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
     }
     return;
   }
@@ -392,4 +393,4 @@ function main() {
   process.exitCode = 2;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+if (isMain(import.meta.url)) main();

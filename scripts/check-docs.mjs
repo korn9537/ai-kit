@@ -81,15 +81,29 @@ const counts = (name, all, t) => {
   return c;
 };
 // the closing line index of a leading frontmatter block, -1 when there is none: a `---` rule opening a doc with a
-// later `---` is no frontmatter unless every line between reads as YAML (a key, an indented or list line, a comment)
+// later `---` is no frontmatter unless every line between reads as YAML (a key, quoted or with spaces; an indented,
+// list or comment line; a line inside an open [ ] / { } flow collection). Not a YAML parser; its limits: the line
+// after the opening `---` must not be blank, and a block of one key whose value holds `<` (`Note: <200 chars>`) is
+// prose, not frontmatter, unless a second key joins it.
+const KEY = /^("[^"]+"|'[^']+'|[A-Za-z_][\w -]*?)\s*:(\s|$)/;
 const frontEnd = (ls) => {
   if (ls[0] !== "---") return -1;
   const end = ls.findIndex((l, i) => i > 0 && (l === "---" || l === "..."));
   if (end < 0) return -1;
   const body = ls.slice(1, end);
-  const first = body.find((l) => l.trim());
-  const yaml = !first || /^[A-Za-z_][\w-]*\s*:/.test(first);
-  return yaml && body.every((l) => !l.trim() || /^([A-Za-z_][\w-]*\s*:|\s|-\s|#)/.test(l)) ? end : -1;
+  if (body.length && !body[0].trim()) return -1;
+  let depth = 0;
+  let keys = 0;
+  for (const l of body) {
+    const inFlow = depth > 0;
+    if (!inFlow && l.trim() && !/^(\s|-\s|#)/.test(l)) {
+      if (!KEY.test(l)) return -1;
+      keys++;
+      if (keys === 1 && body.length === 1 && l.includes("<")) return -1;
+    }
+    for (const c of l.replace(/"[^"]*"|'[^']*'/g, "")) depth = Math.max(0, depth + (c === "[" || c === "{") - (c === "]" || c === "}"));
+  }
+  return end;
 };
 // a fence marker line: ``` or ~~~ (3 or more), a backtick fence's info string holding no backtick (```x``` is inline)
 const fenceOf = (l) => {
@@ -124,7 +138,9 @@ const unquote = (s) =>
         )
     : s;
 // per file: new line number -> its hunk, and the HEAD path (renames paired with -M); a hunk holds its removed lines
-const range = staged ? ["--cached"] : ["HEAD"];
+// no HEAD yet (unborn branch): diff against the empty tree
+const EMPTY_TREE = () => git("hash-object", "-t", "tree", "/dev/null")?.trim();
+const range = staged ? ["--cached"] : [git("rev-parse", "-q", "--verify", "HEAD") !== null ? "HEAD" : EMPTY_TREE()];
 const added = new Map();
 const diffs = [];
 const byNew = new Map();
@@ -132,9 +148,12 @@ let cur = null;
 let hunk = null;
 let oldNo = 0;
 let header = false;
-for (const l of (
-  git("diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", ...range) ?? ""
-).split("\n")) {
+const diffText = git("diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/", ...range);
+if (diffText === null) {
+  console.log("docs: git diff failed, the added lines are not known");
+  process.exit(flag("strict") || flag("wrap") ? 1 : 0);
+}
+for (const l of diffText.split("\n")) {
   if (l.startsWith("diff --git ")) {
     header = true;
     cur = { old: null, hunks: [] };

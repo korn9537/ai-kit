@@ -23,6 +23,43 @@ const CASES = [
     want: [],
   },
   {
+    desc: "YAML frontmatter with a spaced key and a multi-line flow list is skipped",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\nLast updated: 2026-01-02\n\"tools\": [\n  Read,\nWrite\n]\nname: x\n---\nbody\n" },
+    want: [],
+  },
+  {
+    desc: "a blank line after the opening --- means no frontmatter",
+    head: { "ai/a.md": "ok\n" },
+    work: { "ai/a.md": "---\n\nStatus: **done** 2026-01-02\n\n---\nbody\n" },
+    want: ["ai/a.md:3 bold", "ai/a.md:3 dated"],
+  },
+  {
+    desc: "--wrap still reports a long `Note: <...>` line between two --- rules",
+    head: { "a.md": "ok\n" },
+    work: { "a.md": `---\nNote: <${LONG}>\n---\n` },
+    run: [["add", "-A"]],
+    args: ["--wrap", "--staged"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:2: 138 chars"],
+  },
+  {
+    desc: "unstaged --wrap on an unborn HEAD reports a long line",
+    head: { "a.md": `ok\n${LONG}\n` },
+    unborn: true,
+    args: ["--wrap"],
+    raw: true,
+    want: ["lines over 120 characters (rewrap):", "a.md:2: 130 chars"],
+  },
+  {
+    desc: "--wrap fails, not passes, when git diff fails",
+    head: { "a.md": "ok\n" },
+    corrupt: true,
+    args: ["--wrap"],
+    raw: true,
+    want: ["docs: git diff failed, the added lines are not known"],
+  },
+  {
     desc: "```inline``` text opens no fence: the next line is checked",
     head: { "ai/a.md": "ok\n" },
     work: { "ai/a.md": `${B}inline${B} text\nin **bold**\n` },
@@ -241,7 +278,8 @@ for (const c of CASES) {
     mkdirSync(join(dir, "ai"));
     put(dir, c.head);
     git("add", "-A");
-    git("commit", "-qm", "head");
+    if (!c.unborn) git("commit", "-qm", "head");
+    if (c.corrupt) writeFileSync(join(dir, ".git", "index"), "garbage");
     put(dir, c.work);
     for (const r of c.run ?? []) git(...r);
     put(dir, c.after);

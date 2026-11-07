@@ -110,12 +110,12 @@ check "skip: \"usage\": {\"enabled\": false} → no buffer" \
 echo '{}' >"$REPO/ai/kit/config.json"
 stop_hook s3 "$REPO/.git/missing.jsonl"
 check "skip: unreadable transcript → exit 0, one stderr line" \
-  "$(t bash -c '[[ ! -e "$1" && "$2" == 0 && "$3" == usage-log:* && "$(wc -l <<<"$3" | tr -d " ")" == 1 ]]' _ "$(buf s3)" "$RC" "$ERR")" \
+  "$(t bash -c '[[ ! -e "$1" && "$2" == 0 && "$3" == kit-log:* && "$(wc -l <<<"$3" | tr -d " ")" == 1 ]]' _ "$(buf s3)" "$RC" "$ERR")" \
   "rc=$RC err=$ERR"
 echo '{"transcript_path": "/nope"}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" stop 2>"$TMP/err"
 rc=$?
 check "skip: no session id → exit 0, one stderr line" \
-  "$(t bash -c '[[ "$1" == 0 && "$(cat "$2")" == usage-log:* ]]' _ "$rc" "$TMP/err")"
+  "$(t bash -c '[[ "$1" == 0 && "$(cat "$2")" == kit-log:* ]]' _ "$rc" "$TMP/err")"
 
 echo '{"usage": {"prices": {"claude-opus-5-5": 100}}}' >"$REPO/ai/kit/config.json"
 stop_hook s5 "$T"
@@ -285,6 +285,15 @@ check "git merge feature succeeds" "$(t test "$(git -C "$REPO" rev-list --count 
 check "after the merge the summed records equal the transcript total" "$(t test "$(sum_reads "$UD"/s11*.jsonl)" == 6000)"
 git -C "$REPO" switch -q feature 2>"$TMP/switch-err"
 check "git switch feature succeeds" "$(t test "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == feature)" "$(cat "$TMP/switch-err")"
+
+# subagent-stop: a finished decider's verdict is logged under ai/usage/decisions/, and the hook exits 0
+mkdir -p "$TMP/proj/ss/subagents"
+jq -n --arg t "$TMP/proj/ss.jsonl" --arg c "$REPO" '{session_id: "ss", cwd: $c, transcript_path: $t, agent_id: "a9",
+  agent_type: "ai-kit:decider", last_assistant_message: "Verdict: DECIDED\nChoice: x\nReason: y"}' |
+  env -i PATH="$PATH" HOME="$HOME" "$HOOK" subagent-stop 2>"$TMP/err"
+rc=$?
+check "subagent-stop logs a decider verdict to ai/usage/decisions/, exit 0" \
+  "$(t bash -c '[[ "$1" == 0 ]] && grep -q "\"choice\":\"x\"" "$2"/ai/usage/decisions/*/ss.a9.jsonl' _ "$rc" "$REPO")" "rc=$rc $(cat "$TMP/err")"
 
 echo "$pass passed, $fail failed"
 ((fail == 0))

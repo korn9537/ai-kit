@@ -5,7 +5,7 @@
 // Usage: node run-plan-status.mjs [<workflow transcript dir>]; with none, the newest wf_* of this project's sessions.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isMain } from "./is-main.mjs";
 import { transcriptsDir } from "./usage-collect.mjs";
 
 const IDLE_MIN = 15;
@@ -122,7 +122,7 @@ export function newestRun(projectDir) {
   return best.dir;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (isMain(import.meta.url)) {
   const dir = (process.argv[2] && nodePath(process.argv[2])) || newestRun(transcriptsDir(process.cwd()));
   if (!dir || !existsSync(join(dir, "journal.jsonl"))) {
     console.error(`run-plan-status: no workflow journal${dir ? ` in ${dir}` : " for this project"}`);

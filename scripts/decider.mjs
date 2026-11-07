@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { isMain } from "./is-main.mjs";
 
 const FIELDS = ["verdict", "kind", "question", "choice", "reason", "confidence", "undo", "sources"];
 const MAX_FIELD = 500;
@@ -251,7 +251,7 @@ export function report(recs, since = "") {
   return lines.join("\n") + "\n";
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   const [cmd, ...args] = process.argv.slice(2);
   const stdin = () => {
     try {

@@ -24,6 +24,8 @@ const gitText = (...a) => {
 const root = git("rev-parse", "--show-toplevel")[0];
 const cwd = process.cwd();
 process.chdir(root);
+// the size escape needs no config, so a bad comments.include does not stop it
+if (flag("size") && process.env.ALLOW_LARGE_EDIT === "1") process.exit(0);
 // scope: comments.include/skip in the repo's ai/kit/config.json
 const conf = existsSync("ai/kit/config.json")
   ? (JSON.parse(readFileSync("ai/kit/config.json", "utf8")).comments ?? {})
@@ -84,7 +86,10 @@ const HEREDOC = /(?<!<)<<(?![<(\d])-?\s*['"]?([A-Za-z_]\w*)['"]?/;
 // whether a template literal is open at the end of a code line: backticks inside strings, regexes and a trailing
 // `//` comment do not count
 const RE_AFTER = "(,=:[!&|?{};+-*%<>~^";
-const inTemplate = (l, tpl) => {
+// A JSX text apostrophe (`<p>don't</p>`) opens a string no parser of ours can tell from a real one; in .tsx/.jsx a
+// line that ends inside a string or regex is of unknown state, so it falls back to counting its backticks.
+const inTemplate = (l, tpl, jsx = false) => {
+  const start = tpl;
   let q = "";
   let cls = false;
   let prev = "";
@@ -103,11 +108,13 @@ const inTemplate = (l, tpl) => {
       const end = l.indexOf("*/", i + 2);
       if (end < 0) break;
       i = end + 1;
-    } else if (c === "/" && (!prev || RE_AFTER.includes(prev) || /\b(return|typeof|case)$/.test(l.slice(0, i).trimEnd()))) {
+    } else if (c === "/" && l[i - 1] !== "<" && (!prev || RE_AFTER.includes(prev) || /\b(return|typeof|case)$/.test(l.slice(0, i).trimEnd()))) {
       q = "/";
     }
-    if (!/\s/.test(c) && !q) prev = c;
+    // `++` / `--` end an operand, so a `/` after them divides
+    if (!/\s/.test(c) && !q) prev = (c === "+" || c === "-") && l[i - 1] === c ? "x" : c;
   }
+  if (jsx && q && !tpl) return (l.replace(/\\./g, "").split("`").length - 1) % 2 ? !start : start;
   return tpl;
 };
 const commentLines = (f, lines) => {
@@ -144,6 +151,7 @@ const commentLines = (f, lines) => {
   }
   // JS/TS: a line inside a template literal (odd backticks on code lines so far) is data, never a comment
   const js = /\.[cm]?[jt]sx?$/.test(f);
+  const jsx = /\.[jt]sx$/.test(f);
   let tpl = false;
   let block = -1;
   lines.forEach((l, i) => {
@@ -151,7 +159,7 @@ const commentLines = (f, lines) => {
     out.push(block >= 0 || open);
     if (open) block = BLOCK_OPEN.test(l) && !l.replace(BLOCK_OPEN, "").includes("*/") ? i : -1;
     else if (block >= 0 && l.includes("*/")) block = -1;
-    else if (js && block < 0) tpl = inTemplate(l, tpl);
+    else if (js && block < 0) tpl = inTemplate(l, tpl, jsx);
   });
   // never closed (a `/*` inside a string): only its opening line is a comment
   if (block >= 0) for (let i = block + 1; i < lines.length; i++) out[i] = COMMENT.test(lines[i]);

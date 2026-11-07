@@ -4,7 +4,8 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
+import { isMain } from "./is-main.mjs";
 import { readRepo } from "./continuous.mjs";
 
 const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -382,7 +383,7 @@ export function status(root, job, budget = 0) {
     });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2);
   const flags = argv.filter((a) => a.startsWith("--"));
   const [cmd, arg] = argv.filter((a) => !a.startsWith("--"));
