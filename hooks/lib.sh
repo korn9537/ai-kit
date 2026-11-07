@@ -29,6 +29,23 @@ kit_plugin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 kit_enabled() { [[ -d "$kit_root/ai/kit" ]]; }
 
+# kit_core 1|2: CLAUDE.core.md before or from its "Delegation and report" heading, ai-kit/ paths made absolute. Two
+# hooks inject one half each: Claude Code keeps only a 2,000-character preview of a string over 10,000 characters.
+# sed, not ${core//…}: bash 3.2 (macOS) replaces in a UTF-8 string in quadratic time, 2 s for this file
+kit_core() {
+  sed "s|ai-kit/|$(printf '%s' "$kit_plugin/" | sed 's/[|&\\]/\\&/g')|g" "$kit_plugin/CLAUDE.core.md" |
+    awk -v half="$1" '/^## Delegation and report$/ { second = 1 } (half == 2) == (second == 1)'
+}
+
+# kit_inject <text>: SessionStart context, plain text without jq
+kit_inject() {
+  if command -v jq >/dev/null 2>&1; then
+    jq -n --arg c "$1" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $c}}'
+  else
+    printf '%s\n' "$1"
+  fi
+}
+
 kit_conf() {
   local v=""
   [[ -f "$kit_config" ]] && v="$(jq -r "$1 // empty" "$kit_config" 2>/dev/null || true)"

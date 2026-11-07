@@ -56,7 +56,9 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 
 Hooks (each exits silently when the project has no `ai/kit/`):
 
-- `session-start.sh` (SessionStart) injects `CLAUDE.core.md` with its paths pointing into the plugin, writes
+- `session-context.sh` and `session-start.sh` (SessionStart) each inject one half of `CLAUDE.core.md`, split at its
+  Delegation and report heading, with paths pointing into the plugin: Claude Code replaces a string over 10,000
+  characters with a 2,000-character preview. `session-start.sh` also writes
   the plugin path to `<git-common-dir>/ai-kit-root` for the pre-commit shim, records a new session's work tree as
   its review snapshot (`review-snapshot.sh --tree`), and asks for
   `/ai-kit:memory-export` while the repo's auto-memory dir holds files.

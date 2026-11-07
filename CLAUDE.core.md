@@ -86,6 +86,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
 - Independent reads, searches and checks go out together in one message.
+## Delegation and report
+
 - **Heavy reads go to a subagent**, plan or not: a browser check (screenshots, page reads, clicking through a flow)
   or a search likely to need more than about five reads or greps. The brief names what to check or find and what
   comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report, never the

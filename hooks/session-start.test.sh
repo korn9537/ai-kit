@@ -64,5 +64,19 @@ PLAN="$PWD/../scripts/plan.mjs"
 (cd "$REPO" && node "$PLAN" write "$TMP/args.json" >/dev/null)
 bash "$HOOK" </dev/null >"$TMP/plan.out"
 check "an open plan is named with its status" "$(grep -q "$job: 0 of 1 batches committed; ready a" "$TMP/plan.out" && echo 0 || echo 1)"
+
+# each half fits under Claude Code's 10,000-character cap with room for a plugin path longer than this clone's and notes
+len() { jq -r '.hookSpecificOutput.additionalContext | length' "$1"; }
+bash "$PWD/session-context.sh" </dev/null >"$TMP/first.json"
+bash "$HOOK" </dev/null >"$TMP/second.json"
+first="$(len "$TMP/first.json")"
+second="$(len "$TMP/second.json")"
+check "the first half stays under 9000 characters" "$((first > 0 && first < 9000 ? 0 : 1))" "$first"
+check "the second half stays under 7000 characters" "$((second > 0 && second < 7000 ? 0 : 1))" "$second"
+core="$(jq -r .hookSpecificOutput.additionalContext "$TMP/first.json" "$TMP/second.json")"
+check "the halves hold the four owner kinds and the report" \
+  "$(grep -q 'four kinds of decision' <<<"$core" && grep -q 'ends with this report' <<<"$core" && echo 0 || echo 1)"
+check "the first half stops before the heading" \
+  "$(jq -r .hookSpecificOutput.additionalContext "$TMP/first.json" | grep -q 'Delegation and report' && echo 1 || echo 0)"
 echo "$pass passed, $fail failed"
 ((fail == 0))
