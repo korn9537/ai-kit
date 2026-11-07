@@ -107,6 +107,47 @@ const CASES = [
     files: { "a.py": "# this used to retry\nx = 1\n" },
     want: ["a.py:1 history"],
   },
+  {
+    desc: "present-tense used to, no longer than, until N, previously computed, ไม่เคย pass",
+    files: {
+      "a.ts":
+        "// used to build the cache key\n\n// no longer than 40 chars\n\n// retry until 3 attempts\n\n// the previously computed value\n\n// ไม่เคยคืน null\n",
+    },
+    want: [],
+  },
+  {
+    desc: "history phrases are still reported",
+    files: {
+      "a.ts": "// used to be 2\n\n// previously this called foo\n\n// เคยคืน null\n\n// no longer retries\n",
+    },
+    want: ["a.ts:1 history", "a.ts:3 history", "a.ts:5 history", "a.ts:7 history"],
+  },
+];
+
+// --staged cases: `setup` runs in the repo after the files are staged
+const STAGED = [
+  {
+    desc: "--staged reads the index: a dirty staged line is reported with a clean work tree",
+    files: { "a.ts": "const a = 1;\n" },
+    setup: (dir, git) => {
+      writeFileSync(join(dir, "a.ts"), "// used to be bad 2026-01-01\nconst a = 1;\n");
+      git("add", "a.ts");
+      writeFileSync(join(dir, "a.ts"), "const a = 1;\n");
+    },
+    want: 1,
+  },
+  {
+    desc: "--staged ignores a dirty work tree over a clean index",
+    files: { "a.ts": "const a = 1;\n" },
+    setup: (dir) => writeFileSync(join(dir, "a.ts"), "// used to be bad\nconst a = 1;\n"),
+    want: 0,
+  },
+  {
+    desc: "--staged checks a file staged but deleted from the work tree",
+    files: { "a.ts": "// used to be bad\nconst a = 1;\n" },
+    setup: (dir) => rmSync(join(dir, "a.ts")),
+    want: 1,
+  },
 ];
 
 const put = (dir, files) => {
@@ -140,5 +181,26 @@ for (const c of CASES) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-console.log(`\n${CASES.length - fail} passed, ${fail} failed`);
+for (const c of STAGED) {
+  const dir = mkdtempSync(join(tmpdir(), "check-comments-"));
+  const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
+  try {
+    git("init", "-q");
+    put(dir, { "ai/kit/config.json": JSON.stringify(ALL), ...c.files });
+    git("add", "-A");
+    c.setup(dir, git);
+    let rc = 0;
+    try {
+      execFileSync("node", [SCRIPT, "--staged", "--strict"], { cwd: dir, stdio: "pipe" });
+    } catch (e) {
+      rc = e.status;
+    }
+    const ok = rc === c.want;
+    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
+    if (!ok) fail++;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+console.log(`\n${CASES.length + STAGED.length - fail} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

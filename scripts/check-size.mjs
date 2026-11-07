@@ -25,15 +25,22 @@ const SKIP = new RegExp(conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.
 const WIRING =
   /^(import\b|export\s*(\*|\{[^}]*\}|type\s*\{[^}]*\})\s*(as\s+\w+\s+)?from\b|export\s*(type\s*)?\{$|using\s+(static\s+)?[\w.]+\s*;$|using\s+(?!var\b)\w+\s*=\s*[\w.<>,\s]+;$|(const|let|var)\b.*=\s*require\(|from\s+\S+\s+import\b|require(_relative)?\s+['"])/;
 const OPEN = /^(import|export)\b[^;]*\{$|^from\s+\S+\s+import\s*\($/;
-const CLOSE = /^\}.*\bfrom\b|^\)$/;
+const CLOSE = /^\}.*\bfrom\b|^\}\s*;?$|^\)$/;
 const PARTIAL = /^((?:[a-z]+\s+)*)partial\s+(?=(class|struct|interface|record)\b)/;
 
-const big = git("diff", "--cached", "--name-only", "--diff-filter=M", "-z")
-  .split("\0")
-  .filter((f) => f && INCLUDE.test(f) && !SKIP.test(f))
-  .map((f) => {
+// [path now, path at HEAD]: a rename (R) keeps the size of its old path
+const changed = [];
+const ns = git("diff", "--cached", "--name-status", "-M", "--diff-filter=MR", "-z").split("\0");
+for (let i = 0; i < ns.length - 1; ) {
+  const two = ns[i].startsWith("R");
+  changed.push([ns[i + (two ? 2 : 1)], ns[i + 1]]);
+  i += two ? 3 : 2;
+}
+const big = changed
+  .filter(([f]) => INCLUDE.test(f) && !SKIP.test(f))
+  .map(([f, old]) => {
     try {
-      return [f, Number(git("cat-file", "-s", `HEAD:${f}`).trim())];
+      return [f, Number(git("cat-file", "-s", `HEAD:${old}`).trim())];
     } catch {
       return [f, 0];
     }

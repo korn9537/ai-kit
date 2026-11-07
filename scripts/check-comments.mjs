@@ -15,6 +15,13 @@ const git = (...a) =>
 // NUL-separated path lists: git C-quotes a name with `"`, `\` or non-ASCII otherwise
 const gitz = (...a) =>
   execFileSync("git", [...a, "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
+const gitText = (...a) => {
+  try {
+    return execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 28 });
+  } catch {
+    return null;
+  }
+};
 const root = git("rev-parse", "--show-toplevel")[0];
 const cwd = process.cwd();
 process.chdir(root);
@@ -27,7 +34,7 @@ const SKIP = new RegExp(
   conf.skip ?? "(/generated/|/node_modules/|\\.d\\.ts$|\\.Designer\\.cs$)",
 );
 const HISTORY =
-  /\b(used to|previously|was once|no longer|until \d|formerly)\b|เคย|ก่อนหน้านี้/i;
+  /\bused to (be|have|had|do|does|did|work|worked|call|called|return|returned|retry|run|ran|send|sent|take|took|go|went|throw|fail)\b|(?<!\b(the|an?|already|any) )\bpreviously\b|\bwas once\b|\bno longer(?! than)\b|\bformerly\b|(?<!ไม่)เคย|ก่อนหน้านี้/i;
 // History by date or by who asked (git log has both); tests skip it — a fixture date is data, not history.
 const MONTH =
   "(Jan(uary)?|Feb(ruary)?|Mar(ch)?|Apr(il)?|May|June?|July?|Aug(ust)?|Sep(t(ember)?)?|Oct(ober)?|Nov(ember)?|Dec(ember)?)\\.?";
@@ -126,11 +133,15 @@ if (!files.length)
   files = flag("staged")
     ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR")
     : gitz("ls-files");
-files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && existsSync(f));
+// --staged reads the index, so a file deleted from the work tree is still checked
+const staged = !args.some((a) => !a.startsWith("--")) && flag("staged");
+files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && (staged || existsSync(f)));
 
 const report = [];
 for (const f of files) {
-  const lines = readFileSync(f, "utf8").split(/\r?\n/);
+  const text = staged ? gitText("show", `:${f}`) : readFileSync(f, "utf8");
+  if (text === null) continue;
+  const lines = text.split(/\r?\n/);
   const cl = commentLines(f, lines);
   if (generatedGo(f, lines, cl)) continue;
   const dart = f.endsWith(".dart");

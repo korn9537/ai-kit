@@ -244,7 +244,7 @@ if (!files.length)
         ...z(git("diff", "HEAD", "--name-only", "--diff-filter=ACMR", "-z")),
         ...z(git("ls-files", "--others", "--exclude-standard", "-z")),
       ];
-files = files.filter((f) => inScope(f) && existsSync(f));
+files = files.filter((f) => inScope(f) && (staged || existsSync(f)));
 
 const issues = [];
 const todo = [];
