@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook: code edited in this session after the last review → block the stop once and ask for a fresh-eyes
 # review by the ai-kit:change-reviewer agent (CLAUDE.core.md "Delegation and report"). A review = an Agent call with
-# that subagent_type, or a general-purpose one whose description has the word "review" (not "preview") and does not
+# that subagent_type, or a general-purpose one whose description contains review (not preview) and does not
 # start "commit:" (fallback; lib.sh kit_is_reviewer). A launch whose tool_result is an error was denied and is no
 # review; one with no result yet (background) counts. Docs (*.md), ai/usage records and files outside the repo do
 # not count; a Bash command that writes
@@ -48,20 +48,28 @@ read -r -d '' events_jq <<'JQ' || true
   # cd into the root, spelled with or without its trailing slash
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
   # $in: the command ran with its cwd in the repo, as a cd into the root does
-  # command position: line start, after ; & | ( or a newline, or after sudo, time, xargs, find -exec
-  | ("(^|[;&|(\n] *|\\s-exec +|\\bxargs +(-\\S+ +)*|\\b(sudo|time|command) +)") as $cp
-  | def writes_repo($in):
-      # quoted text blanked (a grep pattern naming sed -i is no write); a quoted /tmp path stays visible
-      gsub("(?<m>\"[^\"]*\"|'[^']*')"; if (.m | test("/tmp/")) then "Q/tmp/" else "Q" end) as $b
-      | test("git apply|apply_patch|write_text|writeFileSync")
-      # in-place editors with flags before -i, a formatter without --write, patch, git checkout <rev> -- f, restore
-      or ($b | test($cp + "(sed|gsed) +((-[-\\w=.]+|Q) +)*(-[A-Za-z]*i|--in-place)\\S*( |$)(?![^;&|]*/(private/)?tmp/)"))
-      or ($b | test($cp + "perl +((-[-\\w=.]+|Q) +)*-[A-Za-z0-9]*i\\S*( |$)(?![^;&|]*/(private/)?tmp/)"))
-      or ($b | test($cp + "(npx +|pnpm +(exec +|dlx +)?|yarn +|bunx +)?prettier\\b[^;&|\n]* (-w|--write)\\b"))
-      or ($b | test($cp + "(uv run +|python3? -m +)?ruff +format\\b(?![^;&|\n]*--(check|diff))"))
-      or ($b | test($cp + "patch\\b(?![^;&|\n]*--dry-run)"))
-      or ($b | test($cp + "git +(-C +\\S+ +)?(restore\\b|checkout\\b[^;&|\n]* -- )"))
-      or ($b | test($cp + "(npm|pnpm|yarn|bun) +(run +)?[\\w:-]*(fix|format)( |$)"))
+  | def ro_stage: test("^\\s*(grep|rg|ag|cat|ls|head|tail|wc|echo|printf|git +(log|show|diff|status|grep))(\\s|$)");
+    # plainly read-only: one read-only command, or a pipe of them; no ; && || & newline, substitution or backtick
+    def readonly: (test(";|&&|\\|\\||\n|`|\\$\\(") | not) and (gsub("[0-9]*>&[0-9]*"; "") | test("&") | not)
+      and (split("|") | all(ro_stage));
+    def has_heredoc: test("(?<!<)<<(?!<)");
+    # write forms matched on the raw text: a quoted or odd-looking command still counts (a false hit costs one
+    # reviewer, a miss skips the review)
+    def raw_write:
+      test("\\bg?sed\\b[^;&|\n]* (-[A-Za-z]*i|--in-place)\\S*( |$)(?![^;&|]*/(private/)?tmp/)")
+      or test("\\bperl\\b[^;&|\n]* -(?!M)[A-Za-z0-9]*i\\S*( |$)(?![^;&|]*/(private/)?tmp/)")
+      or test("\\bprettier\\b[^;&|\n]* (-w|--write)\\b")
+      or test("\\bruff +format\\b(?![^;&|\n]*--(check|diff))")
+      # patch: not --version/--help/--dry-run; with a heredoc a body line starting "patch" is text, so only after a
+      # space or operator
+      or (if has_heredoc then test("(\\A|[ \t;&|(/])patch(?![\\w-])(?![^;&|\n]*--(version|help|dry-run))")
+          else test("(^|[\\s;&|(/])patch(?![\\w-])(?![^;&|\n]*--(version|help|dry-run))") end)
+      or test("\\bgit +(-C +\\S+ +)?checkout\\b[^;&|\n]* -- ")
+      or (test("\\bgit +(-C +\\S+ +)?restore\\b") and ((test("\\brestore\\b[^;&|\n]*--staged") | not) or test("--worktree|restore\\b[^;&|\n]* -W\\b")))
+      or test("\\b(npm|pnpm|yarn|bun) +(run +)?([\\w-]+:)?(fix|format)(:[\\w:-]+)?(?=[\\s;&|)\"']|$)");
+  def writes_repo($in):
+      test("git apply|apply_patch|write_text|writeFileSync")
+      or (raw_write and (readonly | not))
       or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']")
       # as a command word: a codemod or a fixing formatter; mv/cp/rm on a repo path, or after cd into the repo
       or test("(^|[;&|(\n] *)(npx +|node +|bun +)?[\\w./-]*(codemod|jscodeshift)")
@@ -98,7 +106,7 @@ read -r -d '' events_jq <<'JQ' || true
              and (.input | kit_is_reviewer) then
           {k: "review", ts: $ts, recheck: false, id: .id}
         elif .name == "SendMessage" and ((.input.summary // "") | kit_review_text) then
-          {k: "review", ts: $ts, recheck: true}
+          {k: "review", ts: $ts, recheck: true, id: .id}
         else empty end
     elif $side then empty
     elif .type == "user" then

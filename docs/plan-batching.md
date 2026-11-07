@@ -84,7 +84,8 @@ who leaves: it tries failed committers again and writes the one report when noth
   repo while one runs.
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
   one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
-  `ai/usage`) gets no reviewer; `review-skip-guard.sh` blocks such a launch. Reviewer brief: read
+  `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for it, as the run-plan
+  workflow calls it). Reviewer brief: read
   `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; name each item the main session added beyond the
   user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;

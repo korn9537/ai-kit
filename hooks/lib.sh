@@ -53,19 +53,21 @@ kit_conf() {
 }
 
 # KIT_REVIEWER_JQ: jq defs shared by the review hooks. kit_is_reviewer takes a tool_input: the change-reviewer type, or
-# a general-purpose (type missing, general-purpose or claude, as agent-model-guard.sh) whose description has the word
-# "review" (not "preview") and does not start "commit:". kit_review_text: a SendMessage summary naming a review.
+# a general-purpose (type missing, general-purpose or claude, as agent-model-guard.sh) whose description contains
+# review (any case: CodeReview, rereview; not preview) and does not start "commit:". kit_review_text: a SendMessage
+# summary naming a review.
 KIT_REVIEWER_JQ='def kit_is_reviewer: (.subagent_type // "") as $t | (.description // "") as $d
   | ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose" or $t == "claude")
-    and ($d | test("\\breview"; "i")) and ($d | test("^\\s*commit:"; "i") | not));
-  def kit_review_text: test("\\breview"; "i");
+    and ($d | test("(?<!p)review"; "i")) and ($d | test("^\\s*commit:"; "i") | not));
+  def kit_review_text: test("(?<!p)review"; "i");
 '
 
 # kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line (a tool
 # directive such as // @ts-ignore or //go:build is code), none in ai/usage, and none that moved to another file
-# (--color-moved marks moved lines "ul"; a line counts as moved only in a run of 3 or more consecutive moved lines
-# whose counterpart, leading whitespace aside, is in a different file, so a reorder or re-indent within a file still
-# counts), plus a numstat row per binary file.
+# (--color-moved marks moved lines "ul"; a line counts as moved only when its run, or its counterpart's, holds 3 or
+# more consecutive moved code lines (comment and blank lines do not count toward the run) and the counterpart, leading
+# whitespace aside, is in a different file, so a reorder or re-indent within a file still counts), plus a numstat row
+# per binary file.
 # A failing git diff prints a line too, so a caller never reads it as "no change". Byte-safe (LC_ALL=C): non-UTF-8
 # text must not end the pipeline early.
 kit_code_lines() {
@@ -84,6 +86,11 @@ kit_code_lines() {
     diff --no-ext-diff -U0 --color=always --color-moved=plain --color-moved-ws=allow-indentation-change "$@" "${ex[@]}" \
     | LC_ALL=C awk '
       function strip(s) { gsub(/\033\[[0-9;]*m/, "", s); return s }
+      function iscode(s) {
+        sub(/^[+-][ \t]*/, "", s)
+        return (s ~ /^\/\/[ \t]*(@ts-|eslint-|prettier-ignore|biome-ignore|deno-lint-ignore|go:|\+build|nolint)/) ||
+          !(s ~ /^$|^\/\/|^\/\*([^*]|\*+[^*\/])*\*+\/$|^\{\/\*([^*]|\*+[^*\/])*\*+\/\}$/)
+      }
       { line = strip($0) }
       line ~ /^diff --git / { file = line; hunk = 0; next }
       line ~ /^@@/ { hunk++; next }
@@ -93,22 +100,28 @@ kit_code_lines() {
         # a run: consecutive moved lines of one hunk, one file, one sign
         key = file SUBSEP hunk SUBSEP substr(line, 1, 1)
         run[n] = (m[n] && n > 1 && m[n - 1] && key == prev) ? run[n - 1] : n
-        if (m[n]) len[run[n]]++
+        if (m[n] && iscode(line)) len[run[n]]++
         prev = key
       }
       END {
-        # one moved line is no move (requireAdmin(req); from a.ts to b.ts): a run needs 3 or more lines
-        for (i = 1; i <= n; i++) if (m[i] && len[run[i]] >= 3) {
-          k = l[i]; sub(/^[+-][ \t]*/, substr(l[i], 1, 1), k); at[k] = at[k] SUBSEP f[i]
+        # one moved code line is no move (requireAdmin(req); from a.ts to b.ts): a run needs 3 or more code lines, on
+        # either side of the move; comment and blank lines do not count
+        for (i = 1; i <= n; i++) if (m[i]) {
+          k = l[i]; sub(/^[+-][ \t]*/, substr(l[i], 1, 1), k)
+          at[k] = at[k] SUBSEP f[i]
+          if (len[run[i]] >= 3) atq[k] = atq[k] SUBSEP f[i]
         }
         for (i = 1; i <= n; i++) {
-          if (m[i] && len[run[i]] >= 3) {
+          if (m[i]) {
             other = l[i]; sub(/^[+-][ \t]*/, "", other)
             other = (substr(l[i], 1, 1) == "+" ? "-" : "+") other
             cnt = split(at[other], fs, SUBSEP)
             cross = 0
             for (k = 1; k <= cnt; k++) if (fs[k] != "" && fs[k] != f[i]) cross = 1
-            if (cross) continue
+            cnt = split(atq[other], fs, SUBSEP)
+            crossq = 0
+            for (k = 1; k <= cnt; k++) if (fs[k] != "" && fs[k] != f[i]) crossq = 1
+            if (cross && (len[run[i]] >= 3 || crossq)) continue
           }
           print l[i]
         }

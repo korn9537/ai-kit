@@ -54,11 +54,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-skip-guard.sh\"",
-            "timeout": 10
-          },
-          {
-            "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/agent-model-guard.sh\"",
             "timeout": 5
           }

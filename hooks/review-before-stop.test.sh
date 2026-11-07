@@ -95,6 +95,11 @@ sed -n '1,20p' "$REPO/src/a.ts" | sed 's/^/  /' >>"$REPO/src/b.ts"
 : >"$REPO/src/a.ts"
 run_case "pass: a block moved to another file is no code change" pass - "$(edit src/a.ts)" "$(edit src/b.ts)"
 git -C "$REPO" checkout -q HEAD~1 -- src/a.ts src/b.ts && git -C "$REPO" reset -q HEAD~1
+run_case "pass: a reviewer described CodeReview counts" pass - "$(edit src/c.ts)" \
+  "$(line Agent '{"subagent_type": "general-purpose", "description": "CodeReview of batch 2"}')"
+run_case "block: a failed SendMessage re-check is no review" block "no review yet" "$(edit src/c.ts)" \
+  "$(line SendMessage '{"to": "r", "summary": "review fix diff"}' | jq -c '.message.content[0].id = "m1"')" \
+  "$(jq -cn '{type: "user", timestamp: "2030-01-01T00:00:50Z", message: {content: [{type: "tool_result", tool_use_id: "m1", is_error: true, content: "x"}]}}')"
 run_case "block: an ai-kit:committer is not a review" block "no review yet" "$(edit src/c.ts)" \
   "$(line Agent '{"subagent_type": "ai-kit:committer", "description": "commit: review fixes"}')"
 run_case "pass: general-purpose review fallback" pass - "$(edit src/c.ts)" \
@@ -166,14 +171,46 @@ seq 1 40 | sed 's/$/q/' >"$REPO/src/a.ts"
 bashw() { run_case "$1" "$2" - "$(incwd "$3")"; }
 for cmd in "sed -E -i '' s/a/b/ src/a.ts" "sed -Ei s/a/b/ src/a.ts" "perl -i -pe 's/a/b/' src/a.ts" \
   "npx prettier -w src/a.ts" "ruff format src" "patch -p1 < d.diff" "git checkout other -- src/a.ts" \
-  "git restore src/a.ts" "pnpm lint:fix" "cd x && sed -i s/a/b/ f" "find . -name '*.ts' | xargs sed -i s/a/b/"; do
+  "git restore src/a.ts" "git restore --staged --worktree src/a.ts" "pnpm lint:fix" "npm run format:all" \
+  "yarn fix" "cd x && sed -i s/a/b/ f" "find . -name '*.ts' | xargs sed -i s/a/b/" \
+  "sed --in-place s/a/b/ src/a.ts" "for f in src/*.ts; do sed -i 's/a/b/' \"\$f\"; done" \
+  "LC_ALL=C sed -i '' x src/a.ts" "xargs -n 1 sed -i s/a/b/" 'bash -c "sed -i s/a/b/ src/a.ts"' \
+  $'# don\'t touch b\nsed -i s/a/b/ src/a.ts' "echo don\\'t && sed -i s/a/b/ src/a.ts" \
+  "grep x; sed -i y src/a.ts" "grep x && patch -p1 < d" 'grep -rn "sed -i" hooks | xargs sed -i s/a/b/' \
+  $'grep x\nsed -i y src/a.ts' $'cat <<EOF\nx\nEOF\npatch -p1 < d.diff && patch -p0 < e'; do
   bashw "block: $cmd" block "$cmd"
 done
-bashw "pass: a read-only grep for sed -i" pass 'grep -rn "sed -i" hooks'
-bashw "pass: a quoted perl -pi in echo" pass "echo 'perl -pi -e x'"
-bashw "pass: ruff format --check" pass "ruff format --check src"
-bashw "pass: sed -n is no write" pass "sed -n 1,5p src/a.ts"
+for cmd in 'grep -rn "sed -i" hooks' 'grep -rn "sed -i" hooks | head' "echo 'perl -pi -e x'" "ruff format --check src" \
+  "sed -n 1,5p src/a.ts" "git restore --staged src/a.ts" "patch --version" "patch --help" "patch --dry-run -p1 < d" \
+  "npm prefix" "npm run check-format" "pnpm run check-format" "git log --grep='sed -i' | head" \
+  $'cat > /tmp/x <<EOF\npatch the thing\nEOF'; do
+  bashw "pass: $cmd" pass "$cmd"
+done
 reset
+
+# kit_code_lines: a moved run counts code lines only, and either side of the move may form the run
+M="$(mktemp -d)" && git -C "$M" init -q
+code5=$'const alpha = computeSomethingLong(1, "argument");\nconst beta = computeSomethingLong(2, "argument");\nconst gamma = computeSomethingLong(3, "argument");'
+printf '%s\n' "// only admins from here on" "requireAdmin(req, res, next, options);" "" "x1" >"$M/a.ts"
+printf '%s\n' "y1" >"$M/b.ts"
+printf '%s\n' "$code5" "z" >"$M/c.ts"
+printf '%s\n' "w" >"$M/d.ts"
+printf '%s\n' "$code5" "z" >"$M/e.ts"
+printf '%s\n' "const alpha = computeSomethingLong(1, \"argument\");" "w" >"$M/f.ts"
+git -C "$M" add -A && git -C "$M" -c user.name=t -c user.email=t@t commit -qm base
+printf '%s\n' "x1" >"$M/a.ts"
+printf '%s\n' "y1" "// only admins from here on" "requireAdmin(req, res, next, options);" "" >"$M/b.ts"
+printf '%s\n' "z" >"$M/c.ts"
+printf '%s\n' "w" "$code5" >"$M/d.ts"
+printf '%s\n' "z" >"$M/e.ts"
+printf '%s\n' "$code5" "w" >"$M/f.ts"
+moved="$(bash -c '. ./lib.sh; kit_code_lines "$1" HEAD --' _ "$M" 2>&1)"
+chk() { if [[ "$2" == "$3" ]]; then echo "ok   - $1"; pass=$((pass + 1)); else echo "FAIL - $1: $3"; fail=$((fail + 1)); fi; }
+chk "moved: one code line with its comment and blank lines is no move" "yes" \
+  "$(grep -qF 'requireAdmin(req' <<<"$moved" && echo yes || echo "no: $moved")"
+chk "moved: a run of 3 code lines to another file is no change" "yes" \
+  "$(grep -qF 'const beta' <<<"$moved" && echo "no: $moved" || echo yes)"
+rm -rf "$M"
 
 # snapshot branch: the snapshot is the reviewed tree
 snap() { mkdir -p "$REPO/.git/claude-review" && ./review-snapshot.sh --tree "$REPO" >"$REPO/.git/claude-review/s1"; }
