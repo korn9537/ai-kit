@@ -80,7 +80,7 @@ Builder's calls made in this design (the owner may overrule):
   `ai/usage/` is never modified, so branch switches, merges and rebases are never blocked. A buffer lost on this
   machine is seeded from the session's files in `ai/usage/`. `ai/usage` becomes an allowed `ai/` entry (`kit.mjs`
   `AI_LAYOUT`, `docs/ai-layout.md`).
-- Flush triggers: `hooks/usage-flush.sh` on `SessionEnd` (silent without `ai/kit/` or when `usage.enabled` is
+- Flush triggers: `hooks/kit-log.sh session-end` on `SessionEnd` (silent without `ai/kit/` or when `usage.enabled` is
   `false`; never blocks) flushes the ending session; `hooks/session-start.sh` flushes every other session's buffer
   whose last write is over 6 hours old (a session that never reached SessionEnd).
 - Commit: the kit's `githooks/pre-commit` stages new files under `ai/usage/` by name on every commit. No separate
@@ -93,7 +93,7 @@ Builder's calls made in this design (the owner may overrule):
 
 ### 1. Recorder (Stop hook)
 
-- New `hooks/usage-log.sh` on `Stop`, beside `review-before-stop.sh`; exits 0 silently without `ai/kit/` or when
+- New `hooks/kit-log.sh stop` on `Stop`, beside `review-before-stop.sh`; exits 0 silently without `ai/kit/` or when
   `usage.enabled` is `false` (default `true`). Never blocks; any error → exit 0, one stderr line.
 - Calls `node <plugin>/scripts/usage.mjs record` with the hook input. The script reads the main transcript and every
   `<session>/subagents/agent-*.jsonl` (+ `.meta.json` for description and type).

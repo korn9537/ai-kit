@@ -23,7 +23,7 @@ const git = (cwd, ...args) => {
   }
 };
 
-// As hooks/lib.sh kit_project_root (usage.mjs runs its CLI on import, so not shared from there).
+// As hooks/lib.sh kit_project_root (usage.mjs keeps its own copy).
 function projectRoot(dir) {
   let d = (dir || "/").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
   if (existsSync(join(d, "ai", "kit"))) return d;

@@ -3,14 +3,13 @@
 import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { availableParallelism } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const self = basename(fileURLToPath(import.meta.url));
 const list = (dir, suffix) =>
   readdirSync(join(root, dir))
-    .filter((f) => f.endsWith(suffix) && f !== self)
+    .filter((f) => f.endsWith(suffix))
     .sort()
     .map((f) => `${dir}/${f}`);
 

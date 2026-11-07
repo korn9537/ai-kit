@@ -18,7 +18,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `usage-log.sh`, `usage-flush.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
+| `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `kit-log.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
@@ -26,7 +26,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/kit.mjs`             | `init` / `check` / `migrate` / `inventory` (§Commands)                                         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
-| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `usage-collect`, `usage-record`, `usage-flush`, `usage-digest` |
+| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `usage-collect` and `usage-digest` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
@@ -36,7 +36,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close; test `scripts/plan.test.mjs` |
 | `scripts/run-plan-status.mjs` | live status of a run-plan workflow from its journal, one line per batch; test `scripts/run-plan-status.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
-| `scripts/usage-*.test.mjs`    | fixture tests for the usage modules (`usage-flush.test.mjs`: buffer lock, parallel flush and record): `node scripts/usage-<name>.test.mjs`                   |
+| `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record): `node scripts/<name>.test.mjs`                   |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite and `check-wrap.mjs` in parallel: `node scripts/test-all.mjs` |
 | `scripts/check-wrap.mjs`      | kit clone only: added prose lines over 120 characters, run by `.githooks/pre-commit`          |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit    |
@@ -87,14 +87,14 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
   without `node_modules` (a fresh worktree) only the project's checks are skipped.
-- `usage-log.sh` (Stop) appends each round's token use to a buffer in the git common dir
+- `kit-log.sh stop` (Stop) appends each round's token use to a buffer in the git common dir
   (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
   summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks (the buffer
   lock is waited for at most 1.5 s, then the record is skipped with one stderr line).
-- `usage-flush.sh` (SessionEnd) first records what came after the last Stop, then writes the buffer's new records
-  to a new file `ai/usage/<YYYY-MM>/<session>.jsonl` (`<session>.2.jsonl`, `.3`, ... after a resume; an existing file
-  is never modified). `session-start.sh` does the same for other sessions' buffers idle over 6 hours (a crashed
-  session), trying the buffer lock once without waiting. The next commit carries the files.
+- `kit-log.sh session-end` (SessionEnd) first records what came after the last Stop, then writes the buffer's new
+  records to a new file `ai/usage/<YYYY-MM>/<session>.jsonl` (`<session>.2.jsonl`, `.3`, ... after a resume; an
+  existing file is never modified). `session-start.sh` does the same for other sessions' buffers idle over 6 hours
+  (a crashed session), trying the buffer lock once without waiting. The next commit carries the files.
 - `ask-guard.sh` (PreToolUse on AskUserQuestion) blocks a question to the owner until an `ai-kit:decider` call of
   the session returned OWNER in the last 30 minutes; one such call serves one ask (the used ids are kept in
   `<git-common-dir>/claude-decider/<session>.json`). The verdict is read from the decider's own subagent transcript
@@ -103,7 +103,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   question. A general-purpose call whose description names the decider counts too (the type not loaded). Off with
   `decider.enabled: false`; a question matching `decider.always_owner` goes through, and so does every ask when node
   is missing or the guard errs.
-- `decider-log.sh` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
+- `kit-log.sh subagent-stop` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
   `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl` (one file per call, never rewritten, so branches and
   worktrees never conflict on it), on SubagentStop from the hook's `last_assistant_message`; a call still running is
   not logged. The pre-commit stages the log with `ai/usage`; reviews skip it.

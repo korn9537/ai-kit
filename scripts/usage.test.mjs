@@ -1,10 +1,10 @@
-// Tests for the buffer lock, flush idempotence under parallel processes and parallel records.
-// Usage: node scripts/usage-flush.test.mjs
+// Tests for usage.mjs: the buffer lock, flush idempotence under parallel processes and parallel records.
+// Usage: node scripts/usage.test.mjs
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
-import { LOCK_STALE_MS, breakLock, flushIdle, seedBuffer, withLock } from "./usage-flush.mjs";
+import { LOCK_STALE_MS, breakLock, flushIdle, seedBuffer, withLock } from "./usage.mjs";
 import { loadRecords } from "./usage-digest.mjs";
 
 let passed = 0;

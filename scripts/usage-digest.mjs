@@ -1,9 +1,176 @@
-// Usage records to a fixed-size digest for an agent (docs/ai-docs.md form; every list capped), plus loading records
-// from ai/usage/** and building in-memory baseline records from local transcripts.
+// Usage records: per-round delta record and summary line (prices: base input $/MTok by model prefix), then the fixed-size
+// digest of them (docs/ai-docs.md form; every list capped), record loading and local-transcript baseline records.
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { collectSession, transcriptsDir } from "./usage-collect.mjs";
-import { buildRecord, dec, fmtTok, fmtUsd, modelShort, uniqueCommits, weight } from "./usage-record.mjs";
+
+export const DEFAULT_PRICES = {
+  "claude-opus-5-5": 4,
+  "claude-sonnet-5-5": 2,
+};
+
+const DEFAULT_RATIOS = {
+  "claude-opus-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
+  "claude-sonnet-5-5": { read: 0.05, write_5m: 1.25, write_1h: 2, output: 5 },
+};
+
+// A record holds no prompt text, only its length; desc is stored base64 (UTF-8) so a grep does not hit it.
+export const enc = (s) => Buffer.from(String(s ?? ""), "utf8").toString("base64");
+export const dec = (s) => (typeof s === "string" ? Buffer.from(s, "base64").toString("utf8") : "");
+
+const one = (s, n) => {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return [...t].length > n ? `${[...t].slice(0, n - 1).join("")}…` : t;
+};
+const rawTokens = (a) => (a.input ?? 0) + (a.read ?? 0) + (a.write_5m ?? 0) + (a.write_1h ?? 0) + (a.output ?? 0);
+const LIMIT = 200;
+const DESC_MAX = 200;
+const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
+const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", decider: "decider", other: "other" };
+
+// Delta of every agent against the sum of its fields in prior records; peak and largest_result stay cumulative maxima.
+function deltaAgents(session, prior) {
+  const out = [];
+  for (const a of Object.values(session.agents)) {
+    const was = Object.fromEntries(COUNTED.map((k) => [k, 0]));
+    const wasTools = {};
+    for (const r of prior) {
+      for (const p of r.agents ?? []) {
+        if (p.id !== a.id) continue;
+        for (const k of COUNTED) was[k] += p[k] ?? 0;
+        for (const [t, n] of Object.entries(p.tools ?? {})) wasTools[t] = (wasTools[t] ?? 0) + n;
+      }
+    }
+    const d = { id: a.id, role: a.role, desc: enc([...String(a.desc ?? "")].slice(0, DESC_MAX).join("")), model: a.model };
+    if (a.effort) d.effort = String(a.effort).slice(0, 12);
+    for (const k of COUNTED) d[k] = Math.max(0, (a[k] ?? 0) - was[k]);
+    d.peak = a.peak ?? 0;
+    d.tools = {};
+    for (const [t, n] of Object.entries(a.tools ?? {})) {
+      const x = n - (wasTools[t] ?? 0);
+      if (x > 0) d.tools[t] = x;
+    }
+    d.largest_result = a.largest_result ?? 0;
+    if (a.findings) d.findings = { ...a.findings };
+    if (COUNTED.some((k) => d[k] > 0) || Object.keys(d.tools).length) out.push(d);
+  }
+  return out;
+}
+
+// Hash spellings of one commit differ in length (git's abbreviation grows with the repo): a prefix is the same commit.
+export const sameCommit = (a, b) => a.startsWith(b) || b.startsWith(a);
+// Hashes are at least 7 characters (git's shortest abbreviation), so only one 7-character bucket is compared.
+export function uniqueCommits(hashes, same = sameCommit) {
+  const out = [];
+  const byStem = new Map();
+  for (const h of [...hashes].sort((a, b) => b.length - a.length)) {
+    const kept = byStem.get(h.slice(0, 7)) ?? [];
+    if (kept.some((x) => same(x, h))) continue;
+    byStem.set(h.slice(0, 7), [...kept, h]);
+    out.push(h);
+  }
+  return out;
+}
+
+export function buildRecord(session, prior, ctx) {
+  const agents = deltaAgents(session, prior);
+  if (!agents.length) return null;
+  const round = session.prompts.length;
+  const p = session.prompts[round - 1];
+  const last = prior[prior.length - 1];
+  const sameRound = last?.round === round;
+  const since = Date.parse(sameRound ? last.ts : p?.ts || session.firstTs);
+  const seen = prior.flatMap((r) => r.commits ?? []);
+  const sessionId = ctx.session ?? prior[0]?.session;
+  if (!sessionId) throw new Error("buildRecord: no session id in ctx or prior records");
+  const rec = {
+    v: 1,
+    ts: ctx.now.toISOString(),
+    session: sessionId,
+    round,
+    kit: ctx.kit,
+    project: ctx.project,
+    user: ctx.user,
+    branch: ctx.branch,
+  };
+  if (p && !prior.some((r) => r.round === round)) rec.prompt_chars = p.chars;
+  rec.duration_s = Number.isFinite(since) ? Math.max(0, Math.round((ctx.now.getTime() - since) / 1000)) : 0;
+  rec.commits = [...new Set(session.commits.map((c) => c.hash))].filter((h, i, a) => !seen.some((s) => sameCommit(s, h))
+    && !a.slice(0, i).some((x) => sameCommit(x, h)));
+  if (!prior.length && session.baseContext != null) rec.base_context = session.baseContext;
+  rec.agents = agents;
+  return rec;
+}
+
+const FALLBACK_RATIOS = { read: 0.1, write_5m: 1.25, write_1h: 2, output: 5 };
+
+function byPrefix(model, table) {
+  let best = null;
+  for (const k of Object.keys(table)) if ((model ?? "").startsWith(k) && (best === null || k.length > best.length)) best = k;
+  return best === null ? null : table[best];
+}
+
+// Input-equivalent tokens, each token type at its model's ratio to base input.
+function units(a) {
+  const r = byPrefix(a.model, DEFAULT_RATIOS) ?? FALLBACK_RATIOS;
+  return (a.input ?? 0) + r.read * (a.read ?? 0) + r.write_5m * (a.write_5m ?? 0) + r.write_1h * (a.write_1h ?? 0) + r.output * (a.output ?? 0);
+}
+
+export function weight(a, prices) {
+  const price = byPrefix(a.model, prices);
+  return price === null ? null : (price * units(a)) / 1e6;
+}
+
+export const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${Math.round(n / 1e3)}k` : String(Math.round(n)));
+export const fmtUsd = (x) => `$${x < 100 ? x.toFixed(2) : Math.round(x)}`;
+
+function totals(agents, prices) {
+  let usd = 0;
+  let priced = false;
+  let unpriced = 0;
+  for (const a of agents) {
+    const w = weight(a, prices);
+    if (w === null) unpriced += rawTokens(a);
+    else {
+      usd += w;
+      priced = true;
+    }
+  }
+  return [priced ? fmtUsd(usd) : "", unpriced ? `${fmtTok(unpriced)} tok unpriced` : ""].filter(Boolean).join(" + ") || "$0.00";
+}
+
+export const modelShort = (m) => one(String(/opus|sonnet|haiku/.exec(m ?? "")?.[0] ?? (m || "?")), 30);
+
+// money false (config usage.money; a subscription bills no tokens) shows input-equivalent tokens only.
+export function summaryLine(rec, sessionRecs, prices, { money = true } = {}) {
+  const total = rec.agents.reduce((n, a) => n + units(a), 0);
+  const byRole = new Map();
+  for (const a of rec.agents) {
+    const label = ROLE_LABEL[a.role] ?? "other";
+    byRole.set(label, (byRole.get(label) ?? 0) + units(a));
+  }
+  const split = [...byRole].sort((x, y) => y[1] - x[1]).slice(0, 4)
+    .map(([label, u]) => `${label} ${Math.round((100 * u) / (total || 1))}%`).join(" · ");
+  let mainPeak = 0;
+  for (const r of [...sessionRecs, rec]) for (const a of r.agents) if (a.id === "main") mainPeak = Math.max(mainPeak, a.peak);
+  const cost = (a) => weight(a, prices) ?? 0;
+  const anyPriced = rec.agents.some((a) => weight(a, prices) !== null);
+  const top = [...rec.agents].sort((x, y) => (anyPriced ? cost(y) - cost(x) : units(y) - units(x)))[0];
+  const name = (dec(top.desc) || ROLE_LABEL[top.role] || top.id).replace(/\s+/g, " ").trim();
+  const sessionAgents = sessionRecs.flatMap((r) => r.agents);
+  const sessionEq = fmtTok(sessionAgents.reduce((n, a) => n + units(a), 0));
+  // money false: tokens are the amount and always shown; money true: the in-eq is a droppable note after the cost
+  const amount = (agents, eq, withEq) => (money ? `${totals(agents, prices)}${withEq ? ` (in-eq ${eq})` : ""}` : `in-eq ${eq}`);
+  const build = (n, roundEq, sessionEq_) => `tokens this round ≈ ${amount(rec.agents, fmtTok(total), roundEq)}: ${split}`
+    + ` | peak ${Math.round(mainPeak / 1000)}k | top: ${one(name, n)} (${modelShort(top.model)}, ${top.calls} calls,`
+    + ` peak ${Math.round(top.peak / 1000)}k) | session ≈ ${amount(sessionAgents, sessionEq, sessionEq_)}`;
+  // Cap at 200 code points: shrink desc first, then drop the round's in-eq, the session's last.
+  let line = "";
+  for (const [min, roundEq, sessEq] of [[8, true, true], [1, false, true], [1, false, false]])
+    for (let n = 24; n >= min && !line; n--) if ([...build(n, roundEq, sessEq)].length <= LIMIT) line = build(n, roundEq, sessEq);
+  line ||= one(build(1, false, false), LIMIT);
+  return line;
+}
 
 const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
 const PEAK_OUTLIER = 150000;
@@ -104,11 +271,6 @@ export function baselineRecords(repoRoot, who = {}, since = "") {
 // ---- digest ----
 
 const pct = (x, total) => `${total > 0 ? Math.round((100 * x) / total) : 0}%`;
-const one = (s, n) => {
-  const t = String(s ?? "").replace(/\s+/g, " ").trim();
-  return [...t].length > n ? `${[...t].slice(0, n - 1).join("")}…` : t;
-};
-const rawTokens = (a) => TYPES.reduce((n, k) => n + (a[k] ?? 0), 0);
 const sum = (xs) => xs.reduce((n, x) => n + x, 0);
 const mean = (xs) => (xs.length ? sum(xs) / xs.length : 0);
 const top = (map, n) => [...map].sort((x, y) => y[1] - x[1]).slice(0, n);

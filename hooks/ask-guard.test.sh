@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Tests for ask-guard.sh and decider-log.sh: a throwaway repo and session transcript dir; each case checks that an
-# AskUserQuestion is blocked (exit 2) or let through (exit 0) given the decider subagents the session holds.
+# Tests for ask-guard.sh and kit-log.sh subagent-stop: a throwaway repo and session transcript dir; each case checks
+# that an AskUserQuestion is blocked (exit 2) or let through (exit 0) given the decider subagents the session holds.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 GUARD="$PWD/ask-guard.sh"
-LOG="$PWD/decider-log.sh"
+LOG="$PWD/kit-log.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 TMP="$(cd "$TMP" && pwd -P)" || exit 1
@@ -69,12 +69,12 @@ agent a3 OWNER
 run_case "pass: the decider returned OWNER" 0
 run_case "block: one OWNER call serves one ask" 2
 hook_input | jq -c '.transcript_path = "'"$SUBS"'/agent-a3.jsonl"' |
-  env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$LOG" >/dev/null 2>&1
+  env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$LOG" subagent-stop >/dev/null 2>&1
 if [[ "$(ls "$REPO"/ai/usage/decisions/2026-10/ 2>/dev/null | tr '\n' ' ')" == "s1.a1.jsonl s1.a2.jsonl s1.a3.jsonl " ]]; then
-  echo "ok   - decider-log logged each decider call"
+  echo "ok   - kit-log subagent-stop logged each decider call"
   pass=$((pass + 1))
 else
-  echo "FAIL - decider-log logged: $(ls "$REPO"/ai/usage/decisions/2026-10/ 2>&1)"
+  echo "FAIL - kit-log subagent-stop logged: $(ls "$REPO"/ai/usage/decisions/2026-10/ 2>&1)"
   fail=$((fail + 1))
 fi
 

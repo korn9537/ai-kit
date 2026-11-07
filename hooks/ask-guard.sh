@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # PreToolUse (AskUserQuestion): a question reaches the owner only after an ai-kit:decider call of this session
 # returned OWNER within the last 30 minutes; one such call serves one ask (scripts/decider.mjs guard reads the
-# decider's subagent transcript; decider-log.sh logs it). Otherwise the ask is blocked and the main session runs the
-# decider. Gap: the verdict is matched per decider call, not per question. Off with config decider.enabled false; a
-# question matching decider.always_owner (jq regex, case-insensitive) goes through, as does one when the pattern is
-# invalid, node is missing or the guard errs.
+# decider's subagent transcript; kit-log.sh subagent-stop logs it). Otherwise the ask is blocked and the main
+# session runs the decider. Gap: the verdict is matched per decider call, not per question. Off with config
+# decider.enabled false; a question matching decider.always_owner (jq regex, case-insensitive) goes through, as does
+# one when the pattern is invalid, node is missing or the guard errs.
 set -euo pipefail
 command -v jq >/dev/null 2>&1 || exit 0
 command -v node >/dev/null 2>&1 || exit 0

@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/usage-flush.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/kit-log.sh\" session-end",
             "timeout": 10
           }
         ]
@@ -80,12 +80,12 @@
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/usage-log.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/kit-log.sh\" stop",
             "timeout": 10
           },
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/decider-log.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/kit-log.sh\" subagent-stop",
             "timeout": 10
           }
         ]
@@ -134,7 +134,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/decider-log.sh\"",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/kit-log.sh\" subagent-stop",
             "timeout": 10
           }
         ]

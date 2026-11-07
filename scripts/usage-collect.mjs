@@ -58,7 +58,7 @@ function textOf(content) {
 }
 
 // A prompt's own text: leading injected elements dropped (an unclosed one takes the rest), interrupt marks are no prompt.
-export function promptText(raw) {
+function promptText(raw) {
   let t = String(raw).trimStart();
   for (let m = INJECTED.exec(t); m; m = INJECTED.exec(t)) {
     const end = t.indexOf(`</${m[1]}>`, m[0].length);
