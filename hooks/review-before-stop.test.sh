@@ -192,7 +192,9 @@ for cmd in 'grep -rn "sed -i" hooks' 'grep -rn "sed -i" hooks | head' "echo 'per
   $'cat > /tmp/x <<EOF\npatch the thing\nEOF' "cat <(sed -n 1p src/a.ts)" "rg sed src" "yarn prettier-check" \
   "git restore --staged src/a.ts && git restore --staged src/b.ts" 'git -C "/my repo" restore --staged f' \
   "npm run lint" "npm run prefix" "yarn check-format" "pnpm run check_format" "sed -n 's/a;b/c/p' src/a.ts" \
-  $'cat <<EOF\nx\nEOF\npatch --version' "perl -ne 'print' src/a.ts"; do
+  $'cat <<EOF\nx\nEOF\npatch --version' "perl -ne 'print' src/a.ts" "sed -n 1,5p src/a.ts; grep -i foo src/a.ts" \
+  "sed -n 1p src/a.ts | grep -i foo" "sed -n 1p src/a.ts; lsof -iTCP:3000" "sed -n 1p src/a.ts; find . -print" \
+  "sed -n 1p src/a.ts; git grep -il foo"; do
   bashw "pass: $cmd" pass "$cmd"
 done
 reset

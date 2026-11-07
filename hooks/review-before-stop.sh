@@ -57,10 +57,12 @@ read -r -d '' events_jq <<'JQ' || true
     # write forms matched on the raw text: a quoted or odd-looking command still counts (a false hit costs one
     # reviewer, a miss skips the review)
     def gp: "\\bgit +(-[Cc] +(\"[^\"]*\"|'[^']*'|\\S+) +)*";
+    def inplace($re): test($re) or (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test($re));
     def raw_write:
-      # sed and perl: any -i on the line, quoted text included (sed -e 's/a;b/c/' -i f)
-      test("\\bg?sed\\b[^\n]*\\s(-[A-Za-z]*i|--in-place)\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
-      or test("\\bperl\\b[^\n]*\\s-(?!M)[A-Za-z0-9]*i\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
+      # sed and perl: -i within one command, read raw and with quoted text blanked (sed -e 's/a;b/c/' -i f): a later
+      # command's flag is not sed's (sed -n 1p f; grep -i x)
+      inplace("\\bg?sed\\b[^;&|\n]*\\s(-[A-Za-z]*i|--in-place)\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
+      or inplace("\\bperl\\b[^;&|\n]*\\s-(?!M)[A-Za-z0-9]*i\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or test("\\bprettier\\b[^;&|\n]* (-w|--write)\\b")
       or test("\\bruff +format\\b(?![^;&|\n]*--(check|diff))")
       # patch: not --version/--help/--dry-run; with a heredoc a body line starting "patch" is text, so only after a
