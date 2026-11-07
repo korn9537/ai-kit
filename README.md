@@ -110,10 +110,13 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   inspected (`init` sets `autoMemoryEnabled` false, which `kit.mjs check` verifies).
 - `bash-guard.sh` (PreToolUse on Bash) cuts the command into simple commands (`;`, `&&`, `||`, `|`, `&`, newline,
   parentheses; quoted text, comments and heredoc bodies are dropped, so a commit message that names a command
-  never blocks) and runs two checks:
+  does not block). When the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds
+  `$(`), it checks the raw text as well, cut on `;`, `&&`, `||`, `|`, `&`, parentheses, backtick and newline: a
+  heredoc body or message there that names `git add -A` can block. It runs two checks:
   - blocks `git add`/`git stage` of `-A`, `-u`, `.`, a directory or a glob, and `git commit -a` or with such a path
     (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, behind `env`/`command`/`sudo`,
-    after `cd` or `git -C` (the directory is resolved there); `git add -n` passes. Not seen: `xargs git add`,
+    after `cd` or `git -C` (the directory is resolved there, and a relative path is also tried in the starting
+    directory; a submodule pointer passes); `git add -n` passes. Not seen: `xargs git add`,
     `bash -c "..."`, `git add $(...)`.
   - blocks a build command while the dev port listens: `build_guard.build_re` when set, else `pnpm`/`npm`/`yarn`/`bun`
     running a `build` or `build:*` script (options such as `--filter`, `-C`, `--dir`, `-w`, `-r`, `-s`; `run`,

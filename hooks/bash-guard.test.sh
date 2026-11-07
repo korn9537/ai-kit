@@ -15,7 +15,10 @@ NO_LSOF="$(mktemp -d)"
 NO_PROBE="$(mktemp -d)"
 STUBS="$(mktemp -d)"
 REPO="$(mktemp -d)"
-mkdir -p "$REPO/ai/kit" "$REPO/lib" "$REPO/apps/web"
+mkdir -p "$REPO/ai/kit" "$REPO/lib" "$REPO/apps/web" "$REPO/src" "$REPO/a&b" "$REPO/gm-sale-visit" "$REPO/sm2"
+git -C "$REPO" init -q
+echo "gitdir: ../.git/modules/gm" >"$REPO/gm-sale-visit/.git"
+git -C "$REPO" update-index --add --cacheinfo 160000,0123456789012345678901234567890123456789,sm2
 trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE" "$STUBS" "$REPO"' EXIT
 for t in bash env jq grep sed tr cat dirname git uname awk; do
   ln -s "$(command -v "$t")" "$NO_LSOF/$t"
@@ -115,6 +118,56 @@ git_case "pass: git add -A in a comment" 0 "git status # git add -A"
 git_case "pass: web is no directory in lib/" 0 "cd lib && git add web"
 git_case "pass: git commit of a file by name" 0 "git commit -m x lib/a.ts"
 git_case "pass: git commit -m with a dot in the message" 0 "git commit -m ."
+# the scan cannot follow the text: the raw text is checked as well
+git_case "block: a quote inside a quoted \$( ), then git add -A" 2 'x="$(grep "it'"'"'s" f)" && git add -A'
+git_case "block: git add -A inside a quoted \$( )" 2 'out="$(cd lib; git add -A; git status)"'
+git_case "block: an escaped quote in a dollar-quote" 2 "echo \$'it\\'s' && git add -A"
+git_case "block: a heredoc word that never closes" 2 'cat <<E"O"F
+x
+EOF
+git add -A'
+git_case "block: a heredoc closed by EOF)" 2 'x=$(cat <<EOF
+hi
+EOF) && git add -A'
+git_case "block: a heredoc inside a quoted \$( ) naming git add -A (accepted false hit)" 2 'git commit -m "$(cat <<'"'EOF'"'
+git add -A was wrong
+EOF
+)"'
+git_case "pass: a quoted \$( ) with no git add" 0 'git commit -m "$(cat <<'"'EOF'"'
+fix the thing
+EOF
+)"'
+git_case "pass: a -m message with a quote and no \$(" 0 "git commit -m \"it's fine\" lib/a.ts"
+git_case "pass: a closed quoted heredoc naming git add -A" 0 "git commit -F - <<'EOF'
+git add -A was wrong
+EOF"
+git_case "block: git add -A after \$((1<<3))" 2 'echo $((1<<3))
+git add -A'
+git_case "pass: \$((1<<3)) then a file by name" 0 'echo $((1<<3)); git add lib/a.ts'
+# the directory a cd or -C could not follow is still the project's
+git_case "block: a cd in a subshell ends with it" 2 "(cd apps); git add src"
+git_case "pass: a subshell cd does not carry (web is not in the cwd)" 0 "(cd lib); git add web"
+git_case "block: a cd in a subshell reaches its own commands" 2 "(cd apps && git add web)"
+git_case "block: cd to a missing directory, then git add src" 2 "cd nonexistent || true; git add src"
+git_case "block: git -C ~/x add src" 2 "git -C ~/x add src"
+git_case "block: a quoted name holding & is a directory" 2 'git add "a&b"'
+git_case "block: command -p git add -A" 2 "command -p git add -A"
+git_case "pass: command -v git" 0 "command -v git"
+git_case "pass: a directory holding .git is a submodule pointer" 0 "git add gm-sale-visit"
+git_case "pass: a gitlink in the index is a submodule pointer" 0 "git add sm2"
+git_case "block: a quoted name holding a semicolon, then a dot" 2 'git add "a;b" .'
+# 500 quoted names with spaces: no fork per word
+big="git add"
+for i in $(seq 1 500); do big="$big \"lib/file $i.ts\""; done
+start=$SECONDS
+git_case "pass: a 10 KB git add of 500 quoted names" 0 "$big"
+if ((SECONDS - start < 2)); then
+  echo "ok   - a 10 KB git add of 500 quoted names takes under 2 s"
+  pass=$((pass + 1))
+else
+  echo "FAIL - a 10 KB git add of 500 quoted names took $((SECONDS - start)) s"
+  fail=$((fail + 1))
+fi
 rm -rf "$REPO/ai"
 git_case "pass: a project without ai/kit" 0 "git add -A"
 
@@ -151,6 +204,8 @@ for c in "(cd web && npm run build)" "npx turbo run build" "pnpm turbo build" "p
   "echo ok | pnpm build"; do
   run_case "block: $c while listening" 2 "$c"
 done
+run_case "allow: npm r build is an uninstall" 0 "npm r build"
+run_case "block: pnpm r build while listening" 2 "pnpm r build"
 run_case "allow: unrelated command while listening" 0 "pnpm lint"
 run_case "allow: escape hatch while listening" 0 "ALLOW_BUILD_WHILE_DEV=1 pnpm build"
 run_case "allow: project without ai/kit/ while listening" 0 "pnpm build" "CLAUDE_PROJECT_DIR=$NO_KIT"
@@ -178,6 +233,28 @@ if [[ "$out" == *"was not checked"* ]]; then
   pass=$((pass + 1))
 else
   echo "FAIL - warn: no probe tool says the port was not checked (got: $out)"
+  fail=$((fail + 1))
+fi
+
+# awk failing must not pass silently: the raw text is checked and a systemMessage says so
+AWK_FAIL="$(stub_path awkfail "awk=exit 2")"
+out="$(jq -n --arg d "$REPO" '{tool_name:"Bash", tool_input:{command:"echo hi"}, cwd:$d}' |
+  env -i PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" 2>/dev/null)"
+if [[ "$out" == *"splitter failed"* ]]; then
+  echo "ok   - warn: a failing awk says the command was checked raw"
+  pass=$((pass + 1))
+else
+  echo "FAIL - warn: a failing awk says the command was checked raw (got: $out)"
+  fail=$((fail + 1))
+fi
+rc=0
+jq -n --arg d "$REPO" '{tool_name:"Bash", tool_input:{command:"echo hi; git add -A"}, cwd:$d}' |
+  env -i PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" >/dev/null 2>&1 || rc=$?
+if [[ "$rc" == 2 ]]; then
+  echo "ok   - block: a failing awk still blocks git add -A on the raw text"
+  pass=$((pass + 1))
+else
+  echo "FAIL - block: a failing awk still blocks git add -A on the raw text (got exit $rc)"
   fail=$((fail + 1))
 fi
 

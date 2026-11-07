@@ -49,24 +49,30 @@ read -r -d '' events_jq <<'JQ' || true
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
   # $in: the command ran with its cwd in the repo, as a cd into the root does
   | def ro_stage: test("^\\s*(grep|rg|ag|cat|ls|head|tail|wc|echo|printf|git +(log|show|diff|status|grep))(\\s|$)");
-    # plainly read-only: one read-only command, or a pipe of them; no ; && || & newline, substitution or backtick
-    def readonly: (test(";|&&|\\|\\||\n|`|\\$\\(") | not) and (gsub("[0-9]*>&[0-9]*"; "") | test("&") | not)
+    # plainly read-only: one read-only command, or a pipe of them; no ; && || & newline, substitution, process
+    # substitution or backtick, and no rg --pre (it runs a command)
+    def readonly: (test(";|&&|\\|\\||\n|`|\\$\\(|<\\(|>\\(|--pre\\b") | not) and (gsub("[0-9]*>&[0-9]*"; "") | test("&") | not)
       and (split("|") | all(ro_stage));
     def has_heredoc: test("(?<!<)<<(?!<)");
     # write forms matched on the raw text: a quoted or odd-looking command still counts (a false hit costs one
     # reviewer, a miss skips the review)
+    def gp: "\\bgit +(-[Cc] +(\"[^\"]*\"|'[^']*'|\\S+) +)*";
     def raw_write:
-      test("\\bg?sed\\b[^;&|\n]* (-[A-Za-z]*i|--in-place)\\S*( |$)(?![^;&|]*/(private/)?tmp/)")
-      or test("\\bperl\\b[^;&|\n]* -(?!M)[A-Za-z0-9]*i\\S*( |$)(?![^;&|]*/(private/)?tmp/)")
+      # sed and perl: any -i on the line, quoted text included (sed -e 's/a;b/c/' -i f)
+      test("\\bg?sed\\b[^\n]*\\s(-[A-Za-z]*i|--in-place)\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
+      or test("\\bperl\\b[^\n]*\\s-(?!M)[A-Za-z0-9]*i\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or test("\\bprettier\\b[^;&|\n]* (-w|--write)\\b")
       or test("\\bruff +format\\b(?![^;&|\n]*--(check|diff))")
       # patch: not --version/--help/--dry-run; with a heredoc a body line starting "patch" is text, so only after a
-      # space or operator
+      # space or operator, or at a line start followed by an option or a redirect
       or (if has_heredoc then test("(\\A|[ \t;&|(/])patch(?![\\w-])(?![^;&|\n]*--(version|help|dry-run))")
+            or test("\npatch(?=[ \t]+[-<])(?![^;&|\n]*--(version|help|dry-run))")
           else test("(^|[\\s;&|(/])patch(?![\\w-])(?![^;&|\n]*--(version|help|dry-run))") end)
-      or test("\\bgit +(-C +\\S+ +)?checkout\\b[^;&|\n]* -- ")
-      or (test("\\bgit +(-C +\\S+ +)?restore\\b") and ((test("\\brestore\\b[^;&|\n]*--staged") | not) or test("--worktree|restore\\b[^;&|\n]* -W\\b")))
-      or test("\\b(npm|pnpm|yarn|bun) +(run +)?([\\w-]+:)?(fix|format)(:[\\w:-]+)?(?=[\\s;&|)\"']|$)");
+      or test(gp + "checkout\\b[^;&|\n]* -- ")
+      # restore: judged per command, a --staged-only restore beside a worktree one does not excuse it
+      or any(splits("[;&|\n]+"); test(gp + "restore\\b") and ((test("--staged") | not) or test("--worktree|\\s-W\\b")))
+      # package scripts: fix, lint-fix, lint_fix, autofix, prettier-format, format:all; not prefix or check-format
+      or test("\\b(npm|pnpm|yarn|bun) +(run +)?(?!prefix(?![\\w-])|[\\w:-]*check[-_:]?format)[\\w:-]*(fix|format)(:[\\w:-]+)?(?=[\\s;&|)\"']|$)");
   def writes_repo($in):
       test("git apply|apply_patch|write_text|writeFileSync")
       or (raw_write and (readonly | not))

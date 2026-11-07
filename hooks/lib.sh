@@ -58,14 +58,14 @@ kit_conf() {
 # summary naming a review.
 KIT_REVIEWER_JQ='def kit_is_reviewer: (.subagent_type // "") as $t | (.description // "") as $d
   | ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose" or $t == "claude")
-    and ($d | test("(?<!p)review"; "i")) and ($d | test("^\\s*commit:"; "i") | not));
-  def kit_review_text: test("(?<!p)review"; "i");
+    and ($d | test("(?<![Pp])(?<!un)review"; "i")) and ($d | test("^\\s*commit:"; "i") | not));
+  def kit_review_text: test("(?<![Pp])(?<!un)review"; "i");
 '
 
 # kit_code_lines <repo> <git diff args...>: the changed lines that are code: no blank, comment or *.md line (a tool
 # directive such as // @ts-ignore or //go:build is code), none in ai/usage, and none that moved to another file
-# (--color-moved marks moved lines "ul"; a line counts as moved only when its run, or its counterpart's, holds 3 or
-# more consecutive moved code lines (comment and blank lines do not count toward the run) and the counterpart, leading
+# (--color-moved marks moved lines "ul"; a line counts as moved only when its own run holds 3 or more consecutive
+# moved code lines (comment, blank and # lines do not count toward the run) and the counterpart, leading
 # whitespace aside, is in a different file, so a reorder or re-indent within a file still counts), plus a numstat row
 # per binary file.
 # A failing git diff prints a line too, so a caller never reads it as "no change". Byte-safe (LC_ALL=C): non-UTF-8
@@ -86,10 +86,11 @@ kit_code_lines() {
     diff --no-ext-diff -U0 --color=always --color-moved=plain --color-moved-ws=allow-indentation-change "$@" "${ex[@]}" \
     | LC_ALL=C awk '
       function strip(s) { gsub(/\033\[[0-9;]*m/, "", s); return s }
+      # run counting only: a directive is code; a comment opener, a * line, a closer and a # line are not
       function iscode(s) {
         sub(/^[+-][ \t]*/, "", s)
         return (s ~ /^\/\/[ \t]*(@ts-|eslint-|prettier-ignore|biome-ignore|deno-lint-ignore|go:|\+build|nolint)/) ||
-          !(s ~ /^$|^\/\/|^\/\*([^*]|\*+[^*\/])*\*+\/$|^\{\/\*([^*]|\*+[^*\/])*\*+\/\}$/)
+          !(s ~ /^$|^\/\/|^\/\*|^\*|^#|^\{\/\*([^*]|\*+[^*\/])*\*+\/\}$/)
       }
       { line = strip($0) }
       line ~ /^diff --git / { file = line; hunk = 0; next }
@@ -104,24 +105,21 @@ kit_code_lines() {
         prev = key
       }
       END {
-        # one moved code line is no move (requireAdmin(req); from a.ts to b.ts): a run needs 3 or more code lines, on
-        # either side of the move; comment and blank lines do not count
+        # one moved code line is no move (requireAdmin(req); from a.ts to b.ts): a line drops when its own run holds 3
+        # or more code lines (comment and blank lines do not count) and its counterpart is in another file. No other
+        # run excuses it: an unpaired line stays visible
         for (i = 1; i <= n; i++) if (m[i]) {
           k = l[i]; sub(/^[+-][ \t]*/, substr(l[i], 1, 1), k)
           at[k] = at[k] SUBSEP f[i]
-          if (len[run[i]] >= 3) atq[k] = atq[k] SUBSEP f[i]
         }
         for (i = 1; i <= n; i++) {
-          if (m[i]) {
+          if (m[i] && len[run[i]] >= 3) {
             other = l[i]; sub(/^[+-][ \t]*/, "", other)
             other = (substr(l[i], 1, 1) == "+" ? "-" : "+") other
             cnt = split(at[other], fs, SUBSEP)
             cross = 0
             for (k = 1; k <= cnt; k++) if (fs[k] != "" && fs[k] != f[i]) cross = 1
-            cnt = split(atq[other], fs, SUBSEP)
-            crossq = 0
-            for (k = 1; k <= cnt; k++) if (fs[k] != "" && fs[k] != f[i]) crossq = 1
-            if (cross && (len[run[i]] >= 3 || crossq)) continue
+            if (cross) continue
           }
           print l[i]
         }
@@ -159,14 +157,34 @@ kit_memory_dir() {
 }
 
 # kit_split_cmd: a Bash command on stdin as one simple command per line. Splits on ; && || | a single & (not >& or &>)
-# a newline, backtick and parentheses; drops heredoc bodies and # comments. Quote characters are removed and the text
-# inside a quote stays one word: its space becomes \001, ( \002, ) \003, ; & | backtick newline \004, an empty
-# quote \005. awk under LC_ALL=C: bash 3.2 replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s).
+# a newline, backtick and parentheses; drops heredoc bodies and # comments; skips << inside $(( )). Quote characters are
+# removed and the text inside a quote stays one word. A line is its words joined and ended by \037 (read it with
+# IFS=$'\037' read -r -a), placeholders already decoded; an empty quote is an empty word. A line of \006( or \006) marks
+# a parenthesis, so a caller can scope a cd. The last line is \006ok, or \006raw when the scan could not follow the
+# text (it ended inside a quote or heredoc, a double quote or an unquoted heredoc holds $( or a backtick, an open
+# $(( )): the caller then checks the raw text as well. No \006ok at all means awk failed. awk under LC_ALL=C: bash 3.2
+# replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s).
 kit_split_cmd() {
   LC_ALL=C awk '
-function flush() { sub(/^[ \t]+/, "", seg); if (seg != "") print seg; seg = "" }
+function word(w) {
+  if (w ~ PH) {
+    gsub("\001", " ", w); gsub("\002", "(", w); gsub("\003", ")", w); gsub("\004", " ", w); gsub("\005", "", w)
+    gsub("\016", ";", w); gsub("\017", "\\&", w); gsub("\020", "|", w); gsub("\021", "`", w)
+  }
+  return w
+}
+function flush(   n, a, k, out) {
+  sub(/^[ \t]+/, "", seg); sub(/[ \t]+$/, "", seg)
+  if (seg != "") {
+    n = split(seg, a, /[ \t]+/); out = ""
+    for (k = 1; k <= n; k++) out = out word(a[k]) US
+    print out
+  }
+  seg = ""
+}
 function enc(s) {
-  gsub("[ \t]", "\001", s); gsub("[(]", "\002", s); gsub("[)]", "\003", s); gsub("[;&|`]", "\004", s)
+  gsub("[ \t]", "\001", s); gsub("[(]", "\002", s); gsub("[)]", "\003", s); gsub(";", "\016", s)
+  gsub("&", "\017", s); gsub("[|]", "\020", s); gsub("`", "\021", s)
   return s
 }
 function dqend(s,   off, k, pos, b, j) {
@@ -179,10 +197,14 @@ function dqend(s,   off, k, pos, b, j) {
   }
   return 0
 }
-BEGIN { SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]" }
+BEGIN {
+  SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]"; US = "\037"; MK = "\006"
+  PH = "[\001-\005\016-\021]"
+}
 {
   if (hd) {
     t = $0
+    if (!hdq && (index(t, "$(") || index(t, "`"))) raw = 1
     if (hdtab) sub(/^\t+/, "", t)
     if (t == hdword) hd = 0
     next
@@ -192,6 +214,7 @@ BEGIN { SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]" }
     if (q != "") {
       p = (q == SQ) ? index(line, SQ) : dqend(line)
       if (p == 0) { chunk = line; line = "" } else { chunk = substr(line, 1, p - 1); line = substr(line, p + 1) }
+      if (q == DQ && (index(chunk, "$(") || index(chunk, "`"))) raw = 1
       seg = seg enc(chunk); qn += length(chunk)
       if (p) { if (qn == 0) seg = seg "\005"; q = "" }
       continue
@@ -201,20 +224,30 @@ BEGIN { SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]" }
     c = substr(line, RSTART, 1)
     line = substr(line, RSTART + 1)
     prev = substr(seg, length(seg), 1)
-    if (c == SQ || c == DQ) { q = c; qn = 0 }
+    if (ar > 0 && (c == "(" || c == ")" || c == "<" || c == ";" || c == "&" || c == "|" || c == "#")) {
+      if (c == "(") ar++
+      else if (c == ")") ar--
+      seg = seg c
+    }
+    else if (c == SQ || c == DQ) { q = c; qn = 0 }
     else if (c == BS) {
       if (line == "") cont = 1
       else { seg = seg enc(substr(line, 1, 1)); line = substr(line, 2) }
     }
     else if (c == "#") { if (seg == "" || prev == " " || prev == "\t") line = ""; else seg = seg c }
     else if (c == "&") { if (prev == ">" || prev == "<" || substr(line, 1, 1) == ">") seg = seg c; else flush() }
+    else if (c == "(") {
+      if (prev == "$" && substr(line, 1, 1) == "(") { ar = 2; seg = seg "(("; line = substr(line, 2) }
+      else { flush(); print MK "(" }
+    }
+    else if (c == ")") { flush(); print MK ")" }
     else if (c == "<") {
       if (substr(line, 1, 2) == "<<") { seg = seg "<<<"; line = substr(line, 3) }
       else if (substr(line, 1, 1) == "<") {
         r = substr(line, 2); hdtab = 0
         if (substr(r, 1, 1) == "-") { hdtab = 1; r = substr(r, 2) }
         sub(/^[ \t]+/, "", r)
-        d1 = substr(r, 1, 1)
+        d1 = substr(r, 1, 1); hdq = (d1 == SQ || d1 == DQ || d1 == BS)
         if (d1 == SQ || d1 == DQ) {
           r = substr(r, 2); p = index(r, d1)
           if (p) { w = substr(r, 1, p - 1); r = substr(r, p + 1) } else { w = r; r = "" }
@@ -232,5 +265,9 @@ BEGIN { SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]" }
   else flush()
   if (hdpend) { hd = 1; hdpend = 0 }
 }
-END { flush() }'
+END {
+  flush()
+  if (q != "" || hd || ar > 0) raw = 1
+  print MK (raw ? "raw" : "ok")
+}'
 }

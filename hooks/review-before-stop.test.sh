@@ -177,33 +177,38 @@ for cmd in "sed -E -i '' s/a/b/ src/a.ts" "sed -Ei s/a/b/ src/a.ts" "perl -i -pe
   "LC_ALL=C sed -i '' x src/a.ts" "xargs -n 1 sed -i s/a/b/" 'bash -c "sed -i s/a/b/ src/a.ts"' \
   $'# don\'t touch b\nsed -i s/a/b/ src/a.ts' "echo don\\'t && sed -i s/a/b/ src/a.ts" \
   "grep x; sed -i y src/a.ts" "grep x && patch -p1 < d" 'grep -rn "sed -i" hooks | xargs sed -i s/a/b/' \
-  $'grep x\nsed -i y src/a.ts' $'cat <<EOF\nx\nEOF\npatch -p1 < d.diff && patch -p0 < e'; do
+  $'grep x\nsed -i y src/a.ts' $'cat <<EOF\nx\nEOF\npatch -p1 < d.diff && patch -p0 < e' \
+  "cat <(sed -i s/a/b/ src/a.ts)" "cat >(sed -i s/a/b/ src/a.ts)" "rg --pre 'sed -i s/a/b/' x src" \
+  $'sed -i\ts/a/b/ src/a.ts' $'sed -i\nsrc/a.ts' "git restore --staged src/a.ts && git restore src/a.ts" \
+  "git restore --staged src/a.ts; git restore src/a.ts" $'cat <<EOF\nx\nEOF\npatch -p1 < d.diff' \
+  $'cat <<EOF\nx\nEOF\npatch < d.diff' "sed -e 's/a;b/c/' -i src/a.ts" "perl -pe 's/a|b/c/' -i src/a.ts" \
+  "npm run lint-fix" "pnpm autofix" "yarn prettier-format" "pnpm run lint_fix" "npm run fix:all" \
+  'git -C "/my repo" restore f' 'git -C "/my repo" checkout other -- f'; do
   bashw "block: $cmd" block "$cmd"
 done
 for cmd in 'grep -rn "sed -i" hooks' 'grep -rn "sed -i" hooks | head' "echo 'perl -pi -e x'" "ruff format --check src" \
   "sed -n 1,5p src/a.ts" "git restore --staged src/a.ts" "patch --version" "patch --help" "patch --dry-run -p1 < d" \
   "npm prefix" "npm run check-format" "pnpm run check-format" "git log --grep='sed -i' | head" \
-  $'cat > /tmp/x <<EOF\npatch the thing\nEOF'; do
+  $'cat > /tmp/x <<EOF\npatch the thing\nEOF' "cat <(sed -n 1p src/a.ts)" "rg sed src" "yarn prettier-check" \
+  "git restore --staged src/a.ts && git restore --staged src/b.ts" 'git -C "/my repo" restore --staged f' \
+  "npm run lint" "npm run prefix" "yarn check-format" "pnpm run check_format" "sed -n 's/a;b/c/p' src/a.ts" \
+  $'cat <<EOF\nx\nEOF\npatch --version' "perl -ne 'print' src/a.ts"; do
   bashw "pass: $cmd" pass "$cmd"
 done
 reset
 
-# kit_code_lines: a moved run counts code lines only, and either side of the move may form the run
+# kit_code_lines: a moved run counts code lines only, and the line's own run must hold 3
 M="$(mktemp -d)" && git -C "$M" init -q
 code5=$'const alpha = computeSomethingLong(1, "argument");\nconst beta = computeSomethingLong(2, "argument");\nconst gamma = computeSomethingLong(3, "argument");'
 printf '%s\n' "// only admins from here on" "requireAdmin(req, res, next, options);" "" "x1" >"$M/a.ts"
 printf '%s\n' "y1" >"$M/b.ts"
 printf '%s\n' "$code5" "z" >"$M/c.ts"
 printf '%s\n' "w" >"$M/d.ts"
-printf '%s\n' "$code5" "z" >"$M/e.ts"
-printf '%s\n' "const alpha = computeSomethingLong(1, \"argument\");" "w" >"$M/f.ts"
 git -C "$M" add -A && git -C "$M" -c user.name=t -c user.email=t@t commit -qm base
 printf '%s\n' "x1" >"$M/a.ts"
 printf '%s\n' "y1" "// only admins from here on" "requireAdmin(req, res, next, options);" "" >"$M/b.ts"
 printf '%s\n' "z" >"$M/c.ts"
 printf '%s\n' "w" "$code5" >"$M/d.ts"
-printf '%s\n' "z" >"$M/e.ts"
-printf '%s\n' "$code5" "w" >"$M/f.ts"
 moved="$(bash -c '. ./lib.sh; kit_code_lines "$1" HEAD --' _ "$M" 2>&1)"
 chk() { if [[ "$2" == "$3" ]]; then echo "ok   - $1"; pass=$((pass + 1)); else echo "FAIL - $1: $3"; fail=$((fail + 1)); fi; }
 chk "moved: one code line with its comment and blank lines is no move" "yes" \
@@ -211,6 +216,111 @@ chk "moved: one code line with its comment and blank lines is no move" "yes" \
 chk "moved: a run of 3 code lines to another file is no change" "yes" \
   "$(grep -qF 'const beta' <<<"$moved" && echo "no: $moved" || echo yes)"
 rm -rf "$M"
+
+# a deleted line is not excused by a block that moved elsewhere: requireAdmin(req); leaves a.ts alone while a block
+# holding it moves from c.ts to b.ts, and a JSDoc around a moved line does not make a run of 3
+M="$(mktemp -d)" && git -C "$M" init -q
+printf '%s\n' "x1" "requireAdmin(req);" "x2" >"$M/a.ts"
+printf '%s\n' "y1" >"$M/b.ts"
+printf '%s\n' "$code5" "requireAdmin(req);" "z" >"$M/c.ts"
+git -C "$M" add -A && git -C "$M" -c user.name=t -c user.email=t@t commit -qm base
+printf '%s\n' "x1" "x2" >"$M/a.ts"
+printf '%s\n' "y1" "$code5" "requireAdmin(req);" >"$M/b.ts"
+printf '%s\n' "z" >"$M/c.ts"
+moved="$(bash -c '. ./lib.sh; kit_code_lines "$1" HEAD --' _ "$M" 2>&1)"
+chk "moved: a line deleted beside a block that moves elsewhere stays visible" "yes" \
+  "$(grep -qF -- 'requireAdmin(req)' <<<"$moved" && echo yes || echo "no: $moved")"
+chk "moved: the block itself is still no change" "yes" \
+  "$(grep -qF 'const beta' <<<"$moved" && echo "no: $moved" || echo yes)"
+rm -rf "$M"
+M="$(mktemp -d)" && git -C "$M" init -q
+printf '%s\n' "q1" "/**" " * Guards the route." " * Throws 403." " */" "requireAdmin(req);" "q2" >"$M/e.ts"
+printf '%s\n' "r1" >"$M/f.ts"
+git -C "$M" add -A && git -C "$M" -c user.name=t -c user.email=t@t commit -qm base
+printf '%s\n' "q1" "q2" >"$M/e.ts"
+printf '%s\n' "r1" "/**" " * Guards the route." " * Throws 403." " */" "requireAdmin(req);" >"$M/f.ts"
+moved="$(bash -c '. ./lib.sh; kit_code_lines "$1" HEAD --' _ "$M" 2>&1)"
+chk "moved: one code line moved with a 4-line JSDoc is no run of 3" "yes" \
+  "$(grep -qF 'requireAdmin(req)' <<<"$moved" && echo yes || echo "no: $moved")"
+git -C "$M" -c user.name=t -c user.email=t@t commit -qam jsdoc
+printf '%s\n' "q1" "q2" "# a" "# b" "# c" "requireAdmin(req);" >"$M/e.ts"
+printf '%s\n' "r1" >"$M/f.ts"
+git -C "$M" -c user.name=t -c user.email=t@t commit -qam hashes
+printf '%s\n' "q1" "q2" >"$M/e.ts"
+printf '%s\n' "r1" "# a" "# b" "# c" "requireAdmin(req);" >"$M/f.ts"
+moved="$(bash -c '. ./lib.sh; kit_code_lines "$1" HEAD --' _ "$M" 2>&1)"
+chk "moved: one code line moved with 3 # lines is no run of 3" "yes" \
+  "$(grep -qF 'requireAdmin(req)' <<<"$moved" && echo yes || echo "no: $moved")"
+rm -rf "$M"
+
+# kit_review_skippable through scripts/review-needed.sh (the run-plan workflow reads it)
+NEEDED="$PWD/../scripts/review-needed.sh"
+S="$(mktemp -d)" && S="$(cd "$S" && pwd -P)"
+git -C "$S" init -q
+mkdir -p "$S/ai/kit" "$S/src/migrations"
+for i in $(seq 1 30); do echo "export function f$i(x: number) { return x * $i + somethingLongEnough; }"; done >"$S/src/a.ts"
+echo "// b" >"$S/src/b.ts"
+cp "$S/src/a.ts" "$S/src/migrations/m.ts"
+commit() { git -C "$S" add -A && git -C "$S" -c user.name=t -c user.email=t@t commit -qm "$1" && git -C "$S" log -1 --format=%h; }
+commit base >/dev/null
+# move f11..f30 into b.ts, re-indented
+sed -n '11,30p' "$S/src/a.ts" | sed 's/^/  /' >>"$S/src/b.ts"
+sed -i.bak '11,30d' "$S/src/a.ts" && rm "$S/src/a.ts.bak"
+smoved="$(commit moved)"
+echo "// a note" >>"$S/src/a.ts"
+scomment="$(commit comment)"
+echo "export const z = 1;" >>"$S/src/a.ts"
+scode="$(commit code)"
+sed -n '1,20p' "$S/src/migrations/m.ts" >"$S/src/migrations/n.ts"
+sed -i.bak '1,20d' "$S/src/migrations/m.ts" && rm "$S/src/migrations/m.ts.bak"
+smigration="$(commit migration)"
+# reorder within one file: line 10 of a copy moved to its top
+cp "$S/src/a.ts" "$S/src/r.ts"
+commit pre-reorder >/dev/null
+{ sed -n '10p' "$S/src/a.ts"; sed -n '1,9p' "$S/src/a.ts"; } >"$S/src/r.ts"
+sreorder="$(commit reorder)"
+chmod +x "$S/src/b.ts"
+smode="$(commit mode)"
+: >"$S/src/empty.ts"
+sempty="$(commit empty)"
+echo "// @ts-ignore" >>"$S/src/a.ts"
+sdirective="$(commit directive)"
+# a non-UTF-8 line beside a code line must not hide it (BSD sed stops on an illegal byte)
+printf 'caf\xe9\n' >"$S/src/l.txt"
+echo "export const y = 2;" >>"$S/src/z.ts"
+slatin="$(commit latin)"
+# one line moved between files is code
+printf 'a1\nrequireAdmin(req);\na2\n' >"$S/src/one.ts"
+printf 'b1\nb2\n' >"$S/src/two.ts"
+commit pre-single >/dev/null
+printf 'a1\na2\n' >"$S/src/one.ts"
+printf 'b1\nrequireAdmin(req);\nb2\n' >"$S/src/two.ts"
+ssingle="$(commit single)"
+needed() {
+  local got
+  got="$(cd "$S" && env -i PATH="$PATH" HOME="$HOME" bash "$NEEDED" "$3" 2>&1)"
+  chk "review-needed: $1" "$2" "$got"
+}
+needed "a move-only commit" skip "$smoved"
+needed "a comment-only commit" skip "$scomment"
+needed "a code commit" review "$scode"
+needed "one line moved between files" review "$ssingle"
+needed "a move under a review.always path" review "$smigration"
+needed "lines reordered within one file" review "$sreorder"
+needed "a mode change" review "$smode"
+needed "an empty new file" review "$sempty"
+needed "a // @ts-ignore directive is code" review "$sdirective"
+needed "a Latin-1 line next to a code line" review "$slatin"
+needed "no commit given" review ""
+needed "an unknown commit" review deadbeef12
+echo '{"review": {"always": "("}}' >"$S/ai/kit/config.json"
+needed "an invalid review.always pattern counts as a match" review "$smoved"
+echo '{"review": {"always": "^src/b\\.ts$"}}' >"$S/ai/kit/config.json"
+needed "a review.always path matched by name" review "$smoved"
+echo '{"review": {"always": "^nothing$"}}' >"$S/ai/kit/config.json"
+needed "a review.always pattern matching nothing" skip "$smoved"
+rm -rf "$S"
+unset -f commit
 
 # snapshot branch: the snapshot is the reviewed tree
 snap() { mkdir -p "$REPO/.git/claude-review" && ./review-snapshot.sh --tree "$REPO" >"$REPO/.git/claude-review/s1"; }

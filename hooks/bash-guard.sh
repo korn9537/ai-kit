@@ -5,6 +5,9 @@
 # 2. a build command (config build_guard.build_re, else a built-in list) while the dev port (build_guard.port)
 #    listens: a build writes to the directory the dev server serves.
 # Build escape hatch: prefix the command with ALLOW_BUILD_WHILE_DEV=1 when the port is unrelated.
+# Fail closed: when the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds $( ),
+# the raw text, cut on ; && || | & ( ) backtick and newline with the quotes blanked, is checked as well, so a
+# heredoc body or message naming `git add -A` there can block.
 # Known gaps (the text is not run, so these stay unseen): `xargs git add`, `bash -c "git add -A"`, `git add $(...)`.
 set -o pipefail
 
@@ -18,6 +21,7 @@ cmd="$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null || true)"
 [[ -n "$cmd" ]] || exit 0
 cwd="$(jq -r '.cwd // empty' <<<"$input" 2>/dev/null || true)"
 cd "${cwd:-${CLAUDE_PROJECT_DIR:-.}}" 2>/dev/null || true
+cwd0="$PWD"
 
 # the words of the segment being checked: t[0..n-1], i the one under the cursor
 t=()
@@ -34,7 +38,16 @@ strip_lead() {
       continue
     fi
     case "$w" in
-      then | do | else | if | elif | while | until | '!' | '{' | '}' | command | exec | nohup | builtin) ((++i)) ;;
+      then | do | else | if | elif | while | until | '!' | '{' | '}' | exec | nohup | builtin) ((++i)) ;;
+      command)
+        # command -p git runs git; command -v git only looks it up
+        ((++i))
+        while ((i < n)) && [[ "${t[i]}" == -p ]]; do ((++i)); done
+        if ((i < n)) && [[ "${t[i]}" == -v || "${t[i]}" == -V ]]; then
+          i=n
+          return
+        fi
+        ;;
       time | env | sudo | nice | timeout)
         case "$w" in
           env) vals=" -u -C -S " ;;
@@ -55,30 +68,35 @@ strip_lead() {
   done
 }
 
-# decode <word>: the splitter's placeholders back to text, in REPLY
-decode() {
-  REPLY="$1"
-  case "$1" in
-    *$'\001'* | *$'\002'* | *$'\003'* | *$'\005'*)
-      REPLY="$(printf '%s' "$1" | LC_ALL=C tr -d '\005' | LC_ALL=C tr '\001\002\003' ' ()')"
-      ;;
-  esac
-}
-
 # resolve <dir> <base>: base/dir, or dir when absolute, in REPLY
 resolve() {
-  decode "$1"
-  if [[ "$REPLY" == /* || "$REPLY" =~ ^[A-Za-z]:/ ]]; then :; else REPLY="$2/$REPLY"; fi
+  if [[ "$1" == /* || "$1" =~ ^[A-Za-z]:/ ]]; then REPLY="$1"; else REPLY="$2/$1"; fi
 }
 
-# path_sweeps <pathspec> <base dir>: more than a file by name: ., a directory, a trailing slash, a glob
+# dir_sweeps <path>: an existing directory that git add would walk: not a submodule (a .git inside, or a lone gitlink,
+# mode 160000, in the index: add stages the pointer)
+dir_sweeps() {
+  local m
+  [[ -d "$1" ]] || return 1
+  [[ -e "$1/.git" ]] && return 1
+  m="$(git -C "${1%/*}" ls-files -s -- "${1##*/}" 2>/dev/null || true)"
+  [[ "$m" == 160000* && "$m" != *$'\n'* ]] && return 1
+  return 0
+}
+
+# path_sweeps <pathspec> <base dir>: more than a file by name: ., a directory, a trailing slash, a glob. A relative
+# path is tried under the base and under the starting cwd: a cd or -C that failed, or a ~ the scan cannot follow,
+# must not hide a directory of the project
 path_sweeps() {
   case "$1" in
     . | ./ | :/ | */ | *\** | "") return 0 ;;
   esac
-  decode "$1"
-  [[ -n "$REPLY" ]] || return 1
-  if [[ "$REPLY" == /* ]]; then [[ -d "$REPLY" ]]; else [[ -d "$2/$REPLY" ]]; fi
+  if [[ "$1" == /* ]]; then
+    dir_sweeps "$1"
+    return
+  fi
+  dir_sweeps "$2/$1" && return 0
+  [[ "$2" != "$cwd0" ]] && dir_sweeps "$cwd0/$1"
 }
 
 # git_sweeps <dir>: t[i] is git; 0 when the command stages or commits more than named files
@@ -157,7 +175,13 @@ build_words() {
         ((++i))
         continue
         ;;
-      run | run-script | workspace | workspaces | foreach | exec | dlx | x | r)
+      r)
+        # npm r is uninstall; elsewhere r runs a script
+        [[ "$r" == npm ]] && return 1
+        ((++i))
+        continue
+        ;;
+      run | run-script | workspace | workspaces | foreach | exec | dlx | x)
         # `yarn workspace <name> <script>`: the name is a word, not a script
         [[ "$w" == workspace ]] && ((++i))
         ((++i))
@@ -181,46 +205,82 @@ build_words() {
 }
 
 build_re="$(kit_conf .build_guard.build_re "")"
-wd="$PWD"
 build=0
-while IFS= read -r seg; do
-  t=()
-  read -r -a t <<<"$seg"
-  n=${#t[@]}
-  i=0
-  strip_lead
-  ((i < n)) || continue
-  case "${t[i]##*/}" in
-    cd)
-      for ((j = i + 1; j < n; j++)); do
-        [[ "${t[j]}" == -* ]] && continue
-        [[ "${t[j]}" == "~"* || "${t[j]}" == *'$'* || "${t[j]}" == - ]] || {
-          resolve "${t[j]}" "$wd"
-          wd="$REPLY"
-        }
-        break
-      done
-      ;;
-    git)
-      if git_sweeps "$wd"; then
-        cat >&2 <<EOF
+
+# scan <split|raw>: check the lines on stdin; split = kit_split_cmd output, raw = the command cut without quote handling
+scan() {
+  local seg j rest idx
+  wd="$cwd0"
+  wd_stack=()
+  while IFS= read -r seg; do
+    if [[ "$seg" == $'\006'* ]]; then
+      case "${seg#?}" in
+        "(") wd_stack+=("$wd") ;;
+        ")")
+          if ((${#wd_stack[@]})); then
+            idx=$((${#wd_stack[@]} - 1))
+            wd="${wd_stack[idx]}"
+            unset "wd_stack[idx]"
+          fi
+          ;;
+      esac
+      continue
+    fi
+    t=()
+    if [[ "$1" == split ]]; then IFS=$'\037' read -r -a t <<<"$seg"; else read -r -a t <<<"$seg"; fi
+    n=${#t[@]}
+    i=0
+    strip_lead
+    ((i < n)) || continue
+    case "${t[i]##*/}" in
+      cd)
+        for ((j = i + 1; j < n; j++)); do
+          [[ "${t[j]}" == -* ]] && continue
+          if [[ "${t[j]}" != "~"* && "${t[j]}" != *'$'* && "${t[j]}" != - ]]; then
+            resolve "${t[j]}" "$wd"
+            [[ -d "$REPLY" ]] && wd="$REPLY"
+          fi
+          break
+        done
+        ;;
+      git)
+        if git_sweeps "$wd"; then
+          cat >&2 <<EOF
 Blocked: a sweeping stage (git add -A/-u/./a directory/a glob, git commit -a or with such a path). Other sessions
 share this working tree and index, so it would commit their work. Stage your files by name, read
 \`git diff --cached --stat\`, then commit ($(kit_conf .shared_checkout_doc "$kit_plugin/docs/shared-checkout.md")).
 EOF
-        exit 2
-      fi
-      ;;
-    *)
-      if [[ -n "$build_re" ]]; then
-        rest="${t[*]:i}"
-        [[ "$rest" =~ $build_re ]] && build=1
-      else
-        build_words && build=1
-      fi
-      ;;
-  esac
-done < <(printf '%s\n' "$cmd" | kit_split_cmd)
+          exit 2
+        fi
+        ;;
+      *)
+        if [[ -n "$build_re" ]]; then
+          rest="${t[*]:i}"
+          [[ "$rest" =~ $build_re ]] && build=1
+        else
+          build_words && build=1
+        fi
+        ;;
+    esac
+  done
+}
+
+# the splitter ends with a \006ok or \006raw line; without one awk failed, and the raw text is checked instead
+split_out="$(printf '%s\n' "$cmd" | kit_split_cmd)"
+raw=0
+case "$split_out" in
+  *$'\006ok') ;;
+  *$'\006raw') raw=1 ;;
+  *)
+    raw=1
+    jq -n '{systemMessage: "bash-guard: the command splitter failed, so the raw text of the command was checked"}'
+    ;;
+esac
+scan split <<<"$split_out"
+if ((raw)); then
+  # ; & | ( ) and backtick start a new line, both quote characters become spaces
+  scan raw <<<"$(printf '%s\n' "$cmd" | LC_ALL=C tr $';&|()`"\'' $'\n\n\n\n\n\n  ')"
+fi
 
 [[ "$build" == "1" ]] || exit 0
 [[ "$cmd" == *"ALLOW_BUILD_WHILE_DEV=1"* ]] && exit 0
