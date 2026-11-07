@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readRepo } from "./continuous.mjs";
-import { close, merge, ordered, parse, planWarnings, progress, render, resume, resumeArgs, status, write } from "./plan.mjs";
+import { close, merge, ordered, parse, planWarnings, progress, projectRoot, render, resume, resumeArgs, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -296,6 +296,30 @@ try {
   ok("cli: write --replace", JSON.parse(run("write", file, "--replace").stdout).committed === true && run("status", "--quick").stdout.includes("0 of 1"));
   ok("cli: --drop", JSON.parse(run("close", JOB, "--drop").stdout).dropped.length === 1);
   ok("cli: no arguments is usage", run().status === 2);
+
+  // a staged file outside the cwd still rides along with the commit, so it is refused
+  const nested = repoAt("sub");
+  mkdirSync(join(nested, "app"));
+  mkdirSync(join(nested, "other"));
+  writeFileSync(join(nested, "other", "wip.txt"), "wip\n");
+  git(nested, "add", "other/wip.txt");
+  const before = count(nested);
+  throws("write: a file staged outside the project directory is refused", () => write(join(nested, "app"), args()), /other\/wip\.txt/);
+  ok("write: that file did not ride into a commit", count(nested) === before);
+  git(nested, "reset", "-q");
+
+  // the cli from a subdirectory works on the git top
+  const top = repoAt("top");
+  mkdirSync(join(top, "src"));
+  const inSrc = (...a) => spawnSync("node", [SCRIPT, ...a], { cwd: join(top, "src"), encoding: "utf8" });
+  writeFileSync(file, JSON.stringify(args()));
+  ok("cli from a subdirectory: write lands at the top", JSON.parse(inSrc("write", file).stdout).committed === true
+    && existsSync(join(top, "ai", "plans", `${JOB}.md`)) && !existsSync(join(top, "src", "ai")));
+  ok("cli from a subdirectory: status sees the plan", inSrc("status").stdout.startsWith(JOB));
+  const kitDir = join(top, "pkg");
+  mkdirSync(join(kitDir, "ai", "kit"), { recursive: true });
+  ok("projectRoot: a directory holding ai/kit is its own root", projectRoot(kitDir) === kitDir);
+  ok("projectRoot: a subdirectory goes to the git top", projectRoot(join(top, "src")) === top);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

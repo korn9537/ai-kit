@@ -1,6 +1,6 @@
 // Tests for continuous.mjs: which batches a continuous run sends back to run-plan, and which it leaves open.
 // Usage: node scripts/continuous.test.mjs
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -75,6 +75,11 @@ ok("a try counts only once started", !tick.state.tries.b && started(tick.state, 
 ok("the skipped batch uses no try", !started(tick.state, "d2").tries.c, tick);
 const again = next(tick.state, none, clean, T + RETRY_GAP);
 ok("a turn lost around the launch never starts a second run", again.step.action === "stopped", again);
+
+const blind = next(live(), finished(committed("a"), failedAgent("b")), { ...clean, logFailed: true }, T);
+ok("a failed log stops the run, no batch is sent again", blind.step.action === "stopped" && !blind.step.args, blind);
+const blindDone = next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, { ...clean, logFailed: true }, T);
+ok("a failed log never reads as done or run", blindDone.step.action === "stopped", blindDone);
 
 const second = next(started(tick.state, "d2", "t", T + RETRY_GAP), finished(committed("b"), committed("c")), clean, T + RETRY_GAP + 1);
 ok("batches of earlier runs are kept", second.step.action === "done" && !second.step.open.length, second);
@@ -171,6 +176,10 @@ g("init", "-q");
 g("config", "user.email", "t@t");
 g("config", "user.name", "t");
 ok("repo: no commit yet", readRepo(repo, "2026-11-05-x").commits.size === 0);
+ok("repo: an unborn HEAD is not a failed log", readRepo(repo, "2026-11-05-x").logFailed === false);
+const nogit = join(tmp, "nogit");
+mkdirSync(nogit);
+ok("repo: no repo at all is a failed log", readRepo(nogit, "2026-11-05-x").logFailed === true);
 g("commit", "-q", "--allow-empty", "-m", "x\n\nBatch: m4\nJob: 2026-11-05-x");
 g("commit", "-q", "--allow-empty", "-m", "z\n\nBatch: longer\nJob: 2026-11-05-x-y");
 g("commit", "-q", "--allow-empty", "-m", "w\n\nJob: 2026-11-05-x");
@@ -193,8 +202,13 @@ cli("init", st, join(tmp, "args.json"));
 const step = JSON.parse(cli("next", st));
 ok("cli: run after init, args in a file", step.action === "run" && !step.args && existsSync(step.argsFile), step);
 
+rmSync(st, { force: true });
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4" }], repo: nogit }));
+const noInit = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "init", st, join(tmp, "args.json")], { encoding: "utf8" });
+ok("cli: init stops on a failed log", noInit.status === 1 && !existsSync(st) && noInit.stderr.includes("git log failed"), noInit);
+
 rmSync(join(repo, "f"));
-rmSync(st);
+rmSync(st, { force: true });
 writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1" }] }));
 cli("init", st, join(tmp, "args.json"));
 const failedState = JSON.parse(readFileSync(st, "utf8"));

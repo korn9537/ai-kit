@@ -198,11 +198,14 @@ export function planWarnings(root) {
 const gitIn = (root) => (...a) =>
   execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
+// the whole index, from the top of the repo: the commit takes all of it, wherever root sits; the excludes are root's
 // no paths on the commit (a path-limited one leaves the pre-commit's records behind), so anything else staged would
 // ride along: refused instead. The Plan-File trailer keeps it out of continuous.mjs's commits with no batch
 function commit(root, job, subject, kind, stage, undo) {
   const git = gitIn(root);
-  const others = git("diff", "--cached", "--name-only", "--", ".", ":(exclude)ai/usage", `:(exclude)${relPath(job)}`).trim();
+  const prefix = git("rev-parse", "--show-prefix").trim();
+  const top = (p) => `:(top,exclude)${prefix}${p}`;
+  const others = git("diff", "--cached", "--name-only", "--", ":/", top("ai/usage"), top(relPath(job))).trim();
   if (others) throw new Error(`the index holds other files, commit them first:\n${others}`);
   try {
     stage();
@@ -236,6 +239,18 @@ function refuseFile(text, plan, before) {
   // a line the file already holds passes: a job id cannot be renamed once commits carry it
   const over = text.split("\n").find((l) => l.length > COLUMNS && !before?.includes(l));
   if (over) throw new Error(`a plan line passes ${COLUMNS} columns, shorten its job, key or nesting: ${over.slice(0, 60)}`);
+}
+
+// as hooks/lib.sh kit_project_root: the directory holding ai/kit, else the top of its git repo
+export function projectRoot(dir) {
+  if (existsSync(join(dir, "ai", "kit"))) return dir;
+  try {
+    const prefix = gitIn(dir)("rev-parse", "--show-prefix").trim().replace(/\/$/, "");
+    // the given spelling, not the resolved one (/tmp is /private/tmp)
+    return prefix && dir.endsWith(`/${prefix}`) ? dir.slice(0, -prefix.length - 1) : dir;
+  } catch {
+    return dir;
+  }
 }
 
 export function write(root, args, replace = false) {
@@ -361,13 +376,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     if (cmd === "write" && arg) {
       const args = JSON.parse(readFileSync(arg, "utf8"));
-      console.log(JSON.stringify(write(args.repo || process.cwd(), args, flags.includes("--replace"))));
+      console.log(JSON.stringify(write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace"))));
     } else if (cmd === "status") {
-      status(process.cwd(), arg, flags.includes("--quick") ? 2000 : 0).forEach((l) => console.log(l));
+      status(projectRoot(process.cwd()), arg, flags.includes("--quick") ? 2000 : 0).forEach((l) => console.log(l));
     } else if (cmd === "resume") {
-      console.log(JSON.stringify(resume(process.cwd(), arg, plugin)));
+      console.log(JSON.stringify(resume(projectRoot(process.cwd()), arg, plugin)));
     } else if (cmd === "close" && arg) {
-      console.log(JSON.stringify(close(process.cwd(), arg, flags.includes("--drop"))));
+      console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
     } else {
       console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop]");
       process.exit(2);

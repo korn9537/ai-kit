@@ -169,6 +169,13 @@ async function reviewChain(b, r, need) {
     return
   }
   r.fix = pick(fx)
+  // like the first commit: an owner decision or blocker the fix agent left open holds the batch, not only r.fix
+  const open = (fx.owner || []).length + (fx.blockers || []).length
+  if (open) {
+    r.owner = [...(r.owner || []), ...fx.owner]
+    r.blockers.push(...fx.blockers)
+    r.status = 'partial'
+  }
   const fresh = confirmed.some((f) => f.dataRule)
   const rc = await agent(recheckPrompt(b, r.hash, fx.hash, confirmed, fresh), {
     label: `review: [${b.id} recheck] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:change-reviewer', schema: REVIEW,

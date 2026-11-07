@@ -61,6 +61,8 @@ export function next(state, run, repo, now = Date.now()) {
     s.running = false;
     s.lastEnd = now;
   }
+  // `commits` says nothing: a batch whose agent died after its commit would look unrun, and run again
+  if (repo.logFailed) return stopped();
   const done = (id) => s.batches[id]?.status === "committed";
   const retry = [];
   const again = new Set();
@@ -164,12 +166,20 @@ export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
       else loose.push(hash);
     }
   } catch (e) {
-    try {
-      git("rev-parse", "-q", "--verify", "HEAD");
-      logFailed = true;
-    } catch {
-      // a repo with no commit yet has none of this job; out of time says nothing about that
-      logFailed = e.code === "ETIMEDOUT";
+    // only a repo that answers and has no commit yet has none of this job; no repo, out of time, or any other
+    // failure says nothing about it
+    logFailed = true;
+    if (e.code !== "ETIMEDOUT") {
+      try {
+        git("rev-parse", "--git-dir");
+        try {
+          git("rev-parse", "-q", "--verify", "HEAD");
+        } catch {
+          logFailed = false;
+        }
+      } catch {
+        // not a repo
+      }
     }
   }
   if (!dirty) return { commits, loose, dirty: [], logFailed };
@@ -197,7 +207,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (cmd === "init" && path && arg) {
     try {
       const args = read(arg);
-      const { dirty, loose } = readRepo(args.repo || process.cwd(), args.job);
+      const { dirty, loose, logFailed } = readRepo(args.repo || process.cwd(), args.job);
+      if (logFailed) throw new Error(`git log failed, the commits of ${args.job} are not known`);
       write(path, init(args, existsSync(path) ? read(path) : undefined, dirty, loose));
     } catch (e) {
       console.error(e.message);
