@@ -97,8 +97,8 @@ who leaves: it tries failed committers again and writes the one report when noth
   runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and
   its findings and makes a fix commit (`feat(x): y` → `fix(x): y`, `T-12a: y` → `T-12a: fix y`, an untyped
   title → `fix: <batch>`); a fresh reviewer re-checks the fix commit only, or reviews both commits whole when a
-  finding was about data or rule correctness. CONFIRMED findings that re-check leaves get one more fix and a re-check
-  of that fix, unless an owner decision is open; what is left then goes under Open.
+  finding was about data or rule correctness. In the workflow, CONFIRMED findings that re-check leaves get one more
+  fix and re-check, unless an owner decision is open; what is left then goes under Open.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.

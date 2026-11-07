@@ -60,6 +60,17 @@ ok("it says no third pass nowhere", !/no third pass/.test(r.review) && r.blocker
 s = script([[finding("bug")], [finding("b2")]], (n) => (n === 1 ? commit("f1") : { ...commit(""), notes: ["stuck"] }));
 r = (await run(one, s)).batches[0];
 ok("a second fix that fails: partial, findings left", r.status === "partial" && /CONFIRMED finding/.test(r.review) && !r.fix2);
+ok("a failed second fix keeps its reason", r.notes.includes("stuck"));
+
+s = script([[finding("bug")], [finding("b2")]], (n) => (n === 1 ? commit("f1") : { ...commit("f2"), owner: ["price?"] }));
+const lost = (label) => (/recheck/.test(label) && fixes(s) === 2 ? null : s(label));
+r = (await run(one, lost)).batches[0];
+ok("a second re-check that fails keeps the fix's owner decision", r.status === "partial" && r.owner.includes("price?") && /not re-checked/.test(r.review));
+
+s = script([[finding("bug")], [finding("b2", true)], []]);
+const prompts = [];
+r = (await run(one, (l, p) => (prompts.push(p), s(l)))).batches[0];
+ok("a data finding left: the last re-check reads all three commits", /git show c1 f1 f2/.test(prompts.at(-1)));
 
 s = script([[finding("bug")], [finding("b2")]], (n) => commit(`f${n}`), { ...commit("c1"), owner: ["pick a price"] });
 r = (await run(one, s)).batches[0];

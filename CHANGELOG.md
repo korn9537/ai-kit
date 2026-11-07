@@ -5,8 +5,9 @@
 CONFIRMED findings no longer stop at the report: 70 of 78 fresh reviews left some, 209 in all. No project needs to edit
 anything.
 
-- A re-check that leaves CONFIRMED findings gets one more fix and a re-check of that fix, in `run-plan.js` and for a
-  coordinator. An open owner decision holds it. What is left then goes under Open.
+- In `run-plan.js`, a re-check that leaves CONFIRMED findings gets one more fix and a re-check of it. An open owner
+  decision holds it, and what is left then goes under Open. A first fix whose agent failed gets no second try, and a
+  coordinator keeps its one re-check: the Stop hook closes the review there.
 
 ## 2.31.1
 

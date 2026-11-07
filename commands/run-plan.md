@@ -37,7 +37,8 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
      re-checked once (plain text).
    - Git: every commit, fixes included.
    - Open: each `owner` decision, each `blockers` and `notes` item, each `blocked`, `partial` or `skipped` batch
-     with its reason, each commit `not reviewed` or `not re-checked`, re-check findings left, each PLAUSIBLE
+     with its reason, each commit `not reviewed` or `not re-checked`,
+     findings left by the last of `recheck` and `recheck2`, each PLAUSIBLE
      finding. `waitsFor` sees the commit, not its review: name each batch that ran on one its review left
      `partial`.
    - After the owner answers: run this command again with the batches left, each id with status `committed` out of

@@ -122,8 +122,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
      reviewer per commit (none for a commit of only moved blocks, comments or docs). No third pass: the report says,
      as plain text with no quotes or backticks, Review closed: re-checked once, no third pass.
      Exception: a CONFIRMED finding about data or rule correctness is fixed and then reviewed by a fresh
-     reviewer. CONFIRMED findings a re-check leaves get one more fix and a re-check of that fix, then go under
-     Open.
+     reviewer. In the run-plan workflow, CONFIRMED findings a re-check leaves get
+     one more fix and re-check.
      A user message starting
      with "skip review" or "ไม่ต้อง review" opts out. UI suggestions → Decided (applied) or Open. A finding seen a
      second time that a script could catch → say so in the proposal issue, or add the pre-commit check when it fails

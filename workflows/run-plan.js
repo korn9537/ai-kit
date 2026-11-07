@@ -1,11 +1,11 @@
 export const meta = {
   name: 'ai-kit-run-plan',
-  description: 'Run a multi-commit plan: one ai-kit:committer per batch, a change-reviewer per commit, CONFIRMED fixes and one re-check',
+  description: 'Run a multi-commit plan: one ai-kit:committer per batch, a change-reviewer per commit, CONFIRMED fixes, a re-check and one more round',
   whenToUse: 'Launched by /ai-kit:run-plan with the planned batches as args (commands/run-plan.md)',
   phases: [
     { title: 'Commit', detail: 'one ai-kit:committer per batch, one at a time' },
     { title: 'Review', detail: 'one change-reviewer per commit with a code line' },
-    { title: 'Fix', detail: 'CONFIRMED findings fixed, then one re-check' },
+    { title: 'Fix', detail: 'CONFIRMED findings fixed and re-checked, one more round for what is left' },
   ],
 }
 
@@ -198,35 +198,39 @@ async function reviewChain(b, r, need) {
         label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT,
       }),
     )
+    // what the fix agent left open counts before its re-check, which may fail
+    const owner2 = (fx2 && fx2.owner) || []
+    const blockers2 = (fx2 && fx2.blockers) || []
+    if (owner2.length + blockers2.length) {
+      r.owner = [...(r.owner || []), ...owner2]
+      r.blockers.push(...blockers2)
+      r.status = 'partial'
+    }
     if (fx2 && fx2.hash) {
       r.fix2 = pick(fx2)
-      const rc2 = await agent(recheckPrompt(b, r.hash, fx2.hash, left, false), {
+      const fresh2 = left.some((f) => f.dataRule)
+      const rc2 = await agent(recheckPrompt(b, `${r.hash} ${fx.hash}`, fx2.hash, left, fresh2), {
         label: `review: [${b.id} recheck] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:change-reviewer', schema: REVIEW,
       })
-      if (rc2 && rc2.reviewed) {
-        r.recheck2 = rc2.findings
-        left = (rc2.findings || []).filter((f) => f.verdict === 'CONFIRMED')
-        r.review = 'fixed; a second fix re-checked'
-      } else {
+      if (!(rc2 && rc2.reviewed)) {
         r.recheck2 = `not re-checked: ${rc2 ? rc2.checked : 'reviewer failed or was skipped'}`
         r.review = 'fixed; second fix not re-checked'
         r.status = 'partial'
         return
       }
-    }
-    const open = fx2 ? [...(fx2.owner || []), ...(fx2.blockers || [])] : []
-    if (open.length) {
-      r.owner = [...(r.owner || []), ...((fx2 && fx2.owner) || [])]
-      r.blockers.push(...((fx2 && fx2.blockers) || []))
-      r.status = 'partial'
+      r.recheck2 = rc2.findings
+      left = (rc2.findings || []).filter((f) => f.verdict === 'CONFIRMED')
+      r.review = 'fixed; a second fix re-checked'
+    } else {
+      r.notes.push(...((fx2 && fx2.notes) || []))
     }
   }
   if (left.length) {
     r.status = 'partial'
     r.review = `fixed; ${left.length} CONFIRMED finding(s) left`
-    r.blockers.push(`${left.length} CONFIRMED finding(s) left after the last re-check: see recheck`)
+    r.blockers.push(`${left.length} CONFIRMED finding(s) left after the last re-check: see ${r.fix2 ? 'recheck2' : 'recheck'}`)
   }
-  log(`${b.title}: fix ${fx.hash}, ${rc.findings.length} finding(s) left`)
+  log(`${b.title}: fix ${(r.fix2 || fx).hash}, ${left.length} CONFIRMED left`)
 }
 
 const reviews = []
