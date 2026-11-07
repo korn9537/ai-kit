@@ -126,6 +126,9 @@ try {
   ok("a plan with no shared file has no shared key", !("shared" in write(repo, args())));
   const spell = [{ id: "a", brief: "/r/src/a.ts [app/(auth)/p.tsx]" }, { id: "b", brief: "./src/a.ts files:app/(auth)/p.tsx" }];
   ok("sharedFiles: absolute, ./ and bracketed spellings pair", sharedFiles(spell, "/r").map((x) => x.file).join() === "src/a.ts,app/(auth)/p.tsx");
+  const link = [{ id: "a", brief: "(see src/a.ts)" }, { id: "b", brief: "[src/a.ts](src/a.ts), x" }];
+  ok("sharedFiles: a markdown link is one path", sharedFiles(link).map((x) => x.file).join() === "src/a.ts");
+  ok("sharedFiles: a root with a trailing slash", sharedFiles(spell, "/r/").map((x) => x.file).join() === "src/a.ts,app/(auth)/p.tsx");
   const sharedRepo = repoAt("shared");
   const one = (id) => ({ id, title: id, brief: "Edit src/z.ts" });
   ok("write: no share in a first batch", !("shared" in write(sharedRepo, args([one("s1")]))));

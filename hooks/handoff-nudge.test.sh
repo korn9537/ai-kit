@@ -82,14 +82,14 @@ check "a read after a cd is counted" "$(t counted 7)"
 read_tool Read "" sub1
 check "a subagent's read is not counted" "$(t counted 7)"
 n=7
-for cmd in "cat a.ts" "cat a.ts 2>/dev/null" "git show HEAD:a.ts" "git grep x" "git log -3" "ls -R src" "wc -l a" \
+for cmd in "cat a.ts" "cat a.ts 2>/dev/null" "cat a 2> /dev/null" "git show HEAD:a.ts" "git grep x" "git log -3" "ls -R src" "wc -l a" \
   'cd "/a b" && grep x y' "LC_ALL=C grep x y" "sed -En 1p a" "sed -ne 1p a"; do
   read_tool Bash "$cmd"
   n=$((n + 1))
   check "counted: $cmd" "$(t counted "$n")"
 done
 prompt2
-check "a new prompt starts the count again" "$(t test ! -f "$COUNT")"
+check "a new prompt starts the count again" "$(t test ! -e "$COUNT" -a ! -e "$COUNT.1")"
 ctx 60000
 for i in 1 2 3 4 5; do read_tool Read; done
 check "below reads_from: counted, no note" "$(t test -z "$OUT")" "$OUT"

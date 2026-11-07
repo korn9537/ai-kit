@@ -24,7 +24,7 @@ case "$(jq -r '.tool_name // empty' <<<"$input")" in
   Bash | Read | Grep | Glob)
     jq -e '.tool_name != "Bash" or ((.tool_input.command // "")
       | sub("^\\s*cd\\s+(\"[^\"]*\"|\u0027[^\u0027]*\u0027|\\S+)\\s*(&&|;)\\s*"; "") | sub("^\\s*(\\w+=\\S*\\s+)+"; "")
-      | gsub("\\s2>\\S+"; "")
+      | gsub("\\s2>\\s*\\S+"; "")
       | test("^\\s*(grep|rg|find|awk|nl|ls|wc|head|tail|sed\\s+-[A-Za-z]*n[A-Za-z]*|cat\\s+[^<>]*$"
           + "|git\\s+(grep|show|log|diff|blame))(\\s|$)"))' \
       <<<"$input" >/dev/null 2>&1 || exit 0
@@ -35,7 +35,7 @@ project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 [[ -n "$project" ]] && project="$(kit_project_root "$project")"
 gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0
 reads="$gitdir/claude-review/$session.reads"
-[[ "$event" == UserPromptSubmit ]] && rm -f "$reads"
+[[ "$event" == UserPromptSubmit ]] && rm -rf "$reads" "$reads".*
 
 # context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
 context_used() {
@@ -51,7 +51,10 @@ if [[ -n "$reading" ]]; then
   # one byte per read: an append stays whole when parallel reads run this hook at once
   printf . >>"$reads"
   count=$(($(wc -c <"$reads")))
-  ((count % limit == 0)) || exit 0
+  # a step is claimed, not tested by modulo: parallel hooks may all see one total, or skip a multiple
+  step=$((count / limit))
+  ((step > 0)) || exit 0
+  mkdir "$reads.$step" 2>/dev/null || exit 0
   used="$(context_used)"
   [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 100000))) || exit 0
   note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to a subagent (Explore, or general-purpose with model \"sonnet\") that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here."

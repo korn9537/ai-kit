@@ -333,10 +333,11 @@ export function projectRoot(dir) {
 // paths two or more briefs name (a slash and an extension): such batches read the same lines, so plan-batching.md
 // wants one batch unless a separate commit is called for. A hint only: a brief may name a file it does not touch
 export function sharedFiles(batches, root = "") {
-  const rel = (p) => (root && p.startsWith(`${root}/`) ? p.slice(root.length + 1) : p).replace(/^\.\//, "");
+  const top = `${root.replace(/\/+$/, "")}/`;
+  const rel = (p) => (root && p.startsWith(top) ? p.slice(top.length) : p).replace(/^\.\//, "");
   const by = new Map();
   for (const b of batches ?? []) {
-    const paths = String(b.brief ?? "").matchAll(/(?:^|[\s`'"([=:,])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.()[\]-]+)+\.[A-Za-z0-9]+)/g);
+    const paths = String(b.brief ?? "").matchAll(/(?:^|[\s`'"([=:,])((?:\.{0,2}\/)?[\w@.-]+(?:\/(?:[\w@.[\]-]|\([\w@.-]+\))+)+\.[A-Za-z0-9]+)/g);
     for (const f of new Set([...paths].map((m) => rel(m[1])))) by.set(f, [...(by.get(f) ?? []), b.id]);
   }
   return [...by].filter(([, ids]) => ids.length > 1).map(([file, batches]) => ({ file, batches }));
