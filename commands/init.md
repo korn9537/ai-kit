@@ -15,7 +15,6 @@ Set up ai-kit in the current project.
    (the repo's own checks), `review-checklist.md`, `analysis-sources.md`. Read the code and docs to propose values.
 4. Help write the project part of `CLAUDE.md`: layout, commands, stack rules, branch and deploy, verify commands.
    The working conventions come from the plugin at session start; do not import or copy them by hand. A project
-   with runs that do not load the plugin sets `"unattended": true` in `config.json` and runs
-   `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" sync` (`${CLAUDE_PLUGIN_ROOT}/docs/ai-layout.md` §Runs without the
-   plugin).
+   with runs that do not load the plugin runs `node "${CLAUDE_PLUGIN_ROOT}/scripts/kit.mjs" unattended`
+   (`${CLAUDE_PLUGIN_ROOT}/docs/ai-layout.md` §Runs without the plugin).
 5. Tell the user to restart the Claude Code session so the SessionStart hook injects the working conventions.

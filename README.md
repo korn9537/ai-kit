@@ -23,7 +23,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
-| `scripts/kit.mjs`             | `init` / `check` / `sync` / `inventory` (§Commands); `sync` and the `unattended` warnings are in it |
+| `scripts/kit.mjs`             | `init` / `check` / `sync` / `unattended` / `inventory` (§Commands); the `unattended` warnings are in it |
 | `scripts/kit-migrate.mjs`     | `kit.mjs migrate`: a clean 1.x repo to the plugin; test `scripts/kit-migrate.test.mjs`         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
@@ -134,6 +134,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 | `analysis-sources.md` | `ai-kit:business-analyst`                                                                                                                                                                                                                   |
 | `check.sh`            | a project gate, with `unattended`: generated, `docs/ai-layout.md` §Runs without the plugin                                                                                                                                                  |
 | `conventions/`        | runs without the plugin, with `unattended`: generated copies, same section                                                                                                                                                                  |
+| `checks/`             | `check.sh`, with `unattended`: generated copies of the kit's comment and doc checks, same section                                                                                                                                           |
+| `review-prompt.md`    | a pipeline's own review, with `unattended`: generated from `agents/change-reviewer.md`, same section                                                                                                                                        |
+| `requires.txt`        | `check.sh`, with `unattended`: commands `pre-commit.sh` needs, one per line; `sync` starts it, then it is hand-kept                                                                                                                         |
 
 `conventions` lists the language files in `conventions/` that apply to the project, without `.md` (e.g. `["go",
 "sql"]`; default `[]`). `general.md` always applies; `check` fails on a name with no file. An exception for one
@@ -189,8 +192,11 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   The pre-commit runner calls it when `ai/kit/config.json`, `.githooks/`, `.claude/settings.json`,
   `.claude/agents/` or `CLAUDE.md` are staged.
 - `node <plugin>/scripts/kit.mjs sync`, with `"unattended": true` in `ai/kit/config.json`, writes `ai/kit/conventions/`,
-  `ai/kit/check.sh` and the `CLAUDE.md` pointer (`docs/ai-layout.md` §Runs without the plugin); `init` runs it too,
-  and `check` warns of a stale, hand-edited or missing copy. Off, it writes nothing.
+  `ai/kit/checks/`, `ai/kit/review-prompt.md`, `ai/kit/check.sh` and the `CLAUDE.md` pointer (`docs/ai-layout.md` §Runs
+  without the plugin); `init` runs it too, and `check` warns of a stale, hand-edited, ignored or missing copy. Off, it
+  writes nothing.
+- `node <plugin>/scripts/kit.mjs unattended` turns a repo on: same section. `--dry-run` writes nothing and exits 1 when
+  the repo is not ready; `--force` passes a listed script or an empty `pre-commit.sh`, never a staged line.
 - `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside
   the layout, schema sources, screen files with a `ui.include` suggestion, API spec and route files, decision docs
   and other `.md` outside `ai/`, grouped by folder. `/ai-kit:retrofit` (`commands/retrofit.md`) uses it to plan,

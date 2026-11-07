@@ -65,6 +65,13 @@ PLAN="$PWD/../scripts/plan.mjs"
 bash "$HOOK" </dev/null >"$TMP/plan.out"
 check "an open plan is named with its status" "$(grep -q "$job: 0 of 1 batches committed; ready a" "$TMP/plan.out" && echo 0 || echo 1)"
 
+echo '{"unattended":true}' >"$REPO/ai/kit/config.json"
+bash "$HOOK" </dev/null >"$TMP/stale.out" 2>/dev/null
+check "unattended with no generated files says so" "$(grep -q 'out of date for unattended runs' "$TMP/stale.out" && echo 0 || echo 1)"
+echo '{}' >"$REPO/ai/kit/config.json"
+bash "$HOOK" </dev/null >"$TMP/off.out" 2>/dev/null
+check "unattended off says nothing" "$(grep -q 'out of date for unattended' "$TMP/off.out" && echo 1 || echo 0)"
+
 # each half fits under Claude Code's 10,000-character cap with room for a plugin path longer than this clone's and notes
 len() { jq -r '.hookSpecificOutput.additionalContext | length' "$1"; }
 bash "$PWD/session-context.sh" </dev/null >"$TMP/first.json"

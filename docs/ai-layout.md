@@ -31,9 +31,15 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 For a project with `claude -p` runs that do not load the plugin (a CI job, a queue worker), opted in with
 `"unattended": true` in `ai/kit/config.json`, default off. The plugin stays the source of the rules.
 
-- `kit.mjs sync` (and `init`) writes `ai/kit/conventions/` (`general.md`, the `conventions` files, what each adds to),
-  `ai/kit/check.sh`, and one line in `CLAUDE.md` that sends the run to `ai/kit/conventions/` before it writes code.
-  All generated, never edited; commit them. `sync` replaces a hand-edited copy still in the list; it leaves a file
+- `kit.mjs unattended` turns a repo on: it rewrites `git diff --cached` to `git diff $AI_KIT_RANGE` in
+  `ai/kit/pre-commit.sh`, writes `ai/kit/requires.txt` from the commands it finds, sets the key and runs `sync`. A
+  `--staged` flag, a script it runs or imports that reads the index, a script it cannot follow, or a `pre-commit.sh`
+  with no checks leaves the repo off and is listed: a gate acts on `check.sh` as soon as it exists, so a repo that
+  cannot pass stays without one. `--force` passes all of these but a `--staged` line. `--dry-run` shows the same.
+- `kit.mjs sync` (and `init`) writes `ai/kit/conventions/` (`general.md`, `unattended.md`, the `conventions` files,
+  what each adds to), `ai/kit/checks/`, `ai/kit/review-prompt.md`, `ai/kit/check.sh`, and one line in `CLAUDE.md` that
+  sends the run to `ai/kit/conventions/` before it writes code. All generated, never edited; commit them. `sync`
+  replaces a hand-edited copy still in the list; it leaves a file
   with no generated header, and a hand-edited copy no longer in the list, and says so.
 - `kit.mjs check` warns of a missing, stale or hand-edited copy; nothing refreshes them on its own, so the tree only
   changes when someone runs `sync`. Stale means the text differs, so a kit release that leaves a file alone is silent.
@@ -48,15 +54,21 @@ For a project with `claude -p` runs that do not load the plugin (a CI job, a que
   it the output of `changed`, or have it read `AI_KIT_RANGE` from the environment.
 - A check that writes the index (`git add`, a generator that stages its output) skips itself under `check.sh`:
   `[ -n "${AI_KIT_FILES+set}" ] ||` before it.
-- Moving a project over: `diff --cached` becomes `diff $AI_KIT_RANGE` in `pre-commit.sh` and in the scripts it calls,
-  a `--staged` flag goes, then `kit.mjs init`.
-- `check.sh` runs the project's checks only, on committed files, and prints how many it covered. The kit's own
-  (comments, docs, 40 KB) live in the plugin.
+- Moving a project over: `kit.mjs unattended`, then by hand what it lists: a `--staged` flag goes, a script reads
+  `AI_KIT_RANGE`. Setting the key and running `sync` alone writes a `check.sh` the repo may not pass.
+- `check.sh` first stops when `node` or a command in `ai/kit/requires.txt` is missing, and when that file is: a check
+  on `$(tool)` output otherwise passes without the tool. `sync` writes the file once, from the commands it knows in
+  `pre-commit.sh`; it is a start, so add the rest by hand (one per line, `#` for a comment).
+- `check.sh` runs the kit's comment and doc checks from `ai/kit/checks/`, then the project's, on committed files, and
+  prints how many it covered. The 40 KB rule stays out: a range cannot tell its move-only commit from the edit after it.
+- `ai/kit/review-prompt.md` is `agents/change-reviewer.md` with repo paths, for a pipeline's own review. The reply
+  format is the agent's; the pipeline's schema wins.
 - A path starting `ai-kit/` inside a copy is a plugin doc, not in the repo.
 - Turning `unattended` off stops the warnings only: delete the copies, `check.sh` and the `CLAUDE.md` line by hand.
-- Not carried over: plugin hooks, agents, the Job trailer, `CLAUDE.core.md`. Enabling the plugin at project level is
+- Not carried over: plugin hooks, agents other than the review prompt, the Job trailer, `CLAUDE.core.md` beyond
+  `conventions/unattended.md`. Enabling the plugin at project level is
   not the way to get them: such a run leaves `ai/usage/` records in the clone, and its conversational rules conflict
-  with a run that returns schema-bound output. A pipeline writes its own review prompt and reads
+  with a run that returns schema-bound output. A pipeline reads `ai/kit/review-prompt.md`,
   `ai/kit/review-checklist.md` and `ai/kit/conventions/` from the repo.
 
 ## Where a fact goes

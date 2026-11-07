@@ -1,5 +1,6 @@
 // Reports comments breaking docs/code-comments.md: blocks over 2 lines, history, dates, two C# <summary>s on a member.
 // Usage, cwd in the repo: node <plugin>/scripts/check-comments.mjs [--staged] [--strict: exit 1 on an issue] [files...]
+// --range=<a...b>: the files changed in that range, read from the index (ai/kit/check.sh, a clean clone: index = HEAD).
 // --size: instead, block a staged edit to a code file over 40 KB at HEAD unless it only moves lines out (general.md
 // item 12); escape ALLOW_LARGE_EDIT=1.
 import { execFileSync } from "node:child_process";
@@ -8,6 +9,7 @@ import { join, relative, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
+const range = args.find((a) => a.startsWith("--range="))?.slice("--range=".length);
 const MAX_BLOCK = 2;
 const git = (...a) =>
   execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
@@ -279,12 +281,13 @@ let files = args
   .filter((a) => !a.startsWith("--"))
   .map((f) => relative(root, resolve(cwd, f)));
 if (!files.length)
-  files = flag("staged")
-    ? gitz("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all")
+  files = flag("staged") || range
+    ? gitz("diff", range ?? "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all")
     : gitz("ls-files");
 // --staged reads the index, so a file deleted from the work tree is still checked
-const staged = flag("staged");
-files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && (staged || existsSync(f)));
+const staged = flag("staged") || !!range;
+// ai/kit/checks/ holds generated copies of the kit's scripts, outside any repo's comments.skip
+files = files.filter((f) => INCLUDE.test(f) && !SKIP.test(f) && !f.startsWith("ai/kit/checks/") && (staged || existsSync(f)));
 
 const report = [];
 for (const f of files) {
@@ -338,10 +341,13 @@ for (const f of files) {
 
 for (const r of report) r.issues.forEach((x) => console.log(x));
 
+// a generated copy in ai/kit/checks/ has no docs folder beside it
+const inKit = join(import.meta.dirname, "..", "docs", "code-comments.md");
+const ruleDoc = existsSync(inKit) ? inKit : "ai-kit/docs/code-comments.md";
 const n = report.reduce((s, r) => s + r.issues.length, 0);
 if (n) {
   console.log(
-    `\ncomments: ${n} issue(s) in ${report.length} file(s) — rule: ${join(import.meta.dirname, "..", "docs", "code-comments.md")}`,
+    `\ncomments: ${n} issue(s) in ${report.length} file(s) — rule: ${ruleDoc}`,
   );
   if (flag("strict")) process.exit(1);
 }

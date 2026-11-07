@@ -63,4 +63,11 @@ if [[ -n "$(find "$mem" -maxdepth 1 -name '*.md' ! -name MEMORY.md -print -quit 
   grep -qvE '^[[:space:]]*(#.*|[-*][[:space:]]+\[[^]]*\]\([^)]*\).*)?$' "$mem/MEMORY.md" 2>/dev/null; then
   core+=$'\n\n'"Local auto-memory files in $mem: run /ai-kit:memory-export to move them into the repo."
 fi
+# a note only: the tree changes when someone runs sync (docs/ai-layout.md §Runs without the plugin)
+if [[ "$(kit_conf .unattended false)" == true ]] && command -v node >/dev/null 2>&1; then
+  stale="$(cd "$kit_root" && node "$kit_plugin/scripts/kit.mjs" check 2>/dev/null | grep -cE 'is stale against|ai/kit/(conventions/|checks/|review-prompt).* is missing|check\.sh is missing or changed' || true)"
+  if [[ "${stale:-0}" -gt 0 ]]; then
+    core+=$'\n\n'"This repo's generated ai/kit files are out of date for unattended runs: run node $kit_plugin/scripts/kit.mjs sync and commit them."
+  fi
+fi
 kit_inject "$core"

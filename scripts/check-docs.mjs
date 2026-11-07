@@ -1,5 +1,6 @@
 // Reports added doc lines breaking docs/ai-docs.md: emoji, bold, filler, dates, Thai; skips and exemptions there.
 // Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs [--staged] [--strict: exit 1 on an issue] [files...]
+// --range=<a...b>: the lines and files of that range, read from the index (ai/kit/check.sh, a clean clone: index = HEAD).
 // --wrap [--staged]: instead, the kit clone's check: added prose lines over 120 characters in *.md and *.sh (tables,
 // frontmatter and shell code skipped), exit 1 on a hit; run by .githooks/pre-commit.
 import { execFileSync } from "node:child_process";
@@ -8,7 +9,8 @@ import { join, relative, resolve } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
-const staged = flag("staged");
+const rangeArg = args.find((a) => a.startsWith("--range="))?.slice("--range=".length);
+const staged = flag("staged") || !!rangeArg;
 const git = (...a) => {
   try {
     return execFileSync("git", ["-c", "core.quotePath=false", ...a], {
@@ -26,7 +28,7 @@ if (!root) {
   process.exit(flag("strict") ? 1 : 0);
 }
 // a merge, cherry-pick or revert brings in lines the committer did not write
-if (staged && !flag("wrap") && ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"].some((h) => git("rev-parse", "-q", "--verify", h)))
+if (flag("staged") && !flag("wrap") && ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"].some((h) => git("rev-parse", "-q", "--verify", h)))
   process.exit(0);
 const cwd = process.cwd();
 process.chdir(root);
@@ -147,7 +149,7 @@ const unquote = (s) =>
 // per file: new line number -> its hunk, and the HEAD path (renames paired with -M); a hunk holds its removed lines
 // no HEAD yet (unborn branch): diff against the empty tree
 const EMPTY_TREE = () => git("hash-object", "-t", "tree", "/dev/null")?.trim();
-const range = staged ? ["--cached"] : [git("rev-parse", "-q", "--verify", "HEAD") !== null ? "HEAD" : EMPTY_TREE()];
+const range = rangeArg ? [rangeArg] : staged ? ["--cached"] : [git("rev-parse", "-q", "--verify", "HEAD") !== null ? "HEAD" : EMPTY_TREE()];
 const added = new Map();
 const diffs = [];
 const byNew = new Map();
@@ -224,16 +226,24 @@ if (flag("wrap")) {
 }
 // keep only removed lines the rules saw in HEAD; their text marks a moved line
 // an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added
-// ai/kit/conventions/ is a generated copy of the kit's conventions, outside any repo's docs.skip
-const inScope = (f) => INCLUDE.test(f) && !SKIP.test(f) && !f.startsWith("ai/kit/conventions/");
-// HEAD text of each path, one git process for all; a missing blob reads as ""
+// generated copies of the kit's text, outside any repo's docs.skip
+const inScope = (f) =>
+  INCLUDE.test(f) && !SKIP.test(f) && !f.startsWith("ai/kit/conventions/") && f !== "ai/kit/review-prompt.md";
+// the diff's old side: HEAD, or a range's merge base, where HEAD is its new side
+const [rangeFrom, rangeTo] = rangeArg?.includes("...") ? rangeArg.split("...") : [];
+const oldRev = rangeArg ? (rangeFrom ? git("merge-base", rangeFrom, rangeTo)?.trim() : rangeArg.split("..")[0]) : "HEAD";
+if (!oldRev) {
+  console.log(`docs: no merge base for ${rangeArg}, the added lines are not known`);
+  process.exit(1);
+}
+// old text of each path, one git process for all; a missing blob reads as ""
 const heads = (paths) => {
   const out = new Map();
   if (!paths.length) return out;
   let buf;
   try {
     buf = execFileSync("git", ["cat-file", "--batch"], {
-      input: paths.map((p) => `HEAD:${p}\n`).join(""),
+      input: paths.map((p) => `${oldRev}:${p}\n`).join(""),
       stdio: ["pipe", "pipe", "ignore"],
       maxBuffer: 1 << 28,
     });
@@ -298,7 +308,7 @@ let files = args
   .map((f) => relative(root, resolve(cwd, f)));
 if (!files.length)
   files = staged
-    ? z(git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all", "-z"))
+    ? z(git("diff", rangeArg ?? "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all", "-z"))
     : [
         ...z(git("diff", "HEAD", "--name-only", "--diff-filter=ACMR", "-z")),
         ...z(git("ls-files", "--others", "--exclude-standard", "-z")),
@@ -356,9 +366,12 @@ for (const { f, n, l, moved } of todo) {
 }
 
 issues.forEach((x) => console.log(x));
+// a generated copy in ai/kit/checks/ has no docs folder beside it
+const inKit = join(import.meta.dirname, "..", "docs", "ai-docs.md");
+const ruleDoc = existsSync(inKit) ? inKit : "ai-kit/docs/ai-docs.md";
 if (issues.length) {
   console.log(
-    `\ndocs: ${issues.length} issue(s) — rule: ${join(import.meta.dirname, "..", "docs", "ai-docs.md")}`,
+    `\ndocs: ${issues.length} issue(s) — rule: ${ruleDoc}`,
   );
   if (flag("strict")) process.exit(1);
 }

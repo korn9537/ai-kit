@@ -216,6 +216,202 @@ try {
   eq("kill: HEAD, status and index are as they were", state(), held);
   copyFileSync(join(tmp, "pc"), at("ai", "kit", "pre-commit.sh"));
   eq("kill: the next run works", check(base).status, 1);
+
+  // the kit's generated files and ai/kit/check.sh's new steps
+  const prompt = readFileSync(at("ai", "kit", "review-prompt.md"), "utf8");
+  eq("sync: the review prompt points into the repo", prompt.includes("ai/kit/conventions/general.md") && !prompt.includes("CLAUDE_PLUGIN_ROOT"), true);
+  eq("sync: the review prompt has no frontmatter or Bash rule", [/^name: /m.test(prompt), prompt.includes("Run only read-only")], [false, false]);
+  eq("sync: unattended.md is in the snapshot", existsSync(at("ai", "kit", "conventions", "unattended.md")), true);
+  writeFileSync(at("ai", "kit", "review-prompt.md"), `${prompt}extra\n`);
+  eq("check: a hand edit of the prompt is named", kitCmd("check").includes("review-prompt.md was edited by hand"), true);
+  kitCmd("sync");
+  eq("sync: a hand-edited prompt is replaced", readFileSync(at("ai", "kit", "review-prompt.md"), "utf8"), prompt);
+  commit("synced");
+  const b2 = git("rev-parse", "HEAD");
+  const pass = (b) => check(b).status;
+
+  writeFileSync(at("ai", "kit", "requires.txt"), "# comment\n\nno-such-tool-here\r\nnode\n");
+  writeFileSync(at("ok.txt"), "x\n");
+  commit("needs a tool");
+  const noTool = check(b2);
+  eq("check.sh: a missing tool stops the run", noTool.status, 1);
+  eq("check.sh: the tool is named, CR dropped", noTool.stdout.includes("missing tool(s): no-such-tool-here (ai/kit"), true);
+  writeFileSync(at("ai", "kit", "requires.txt"), "# comment\nnode");
+  commit("has the tool");
+  eq("check.sh: tools present pass, no last newline needed", pass(b2), 0);
+
+  config({ conventions: ["nestjs"], unattended: true, comments: { include: "\\.ts$" } });
+  writeFileSync(at("a.ts"), "// one\n// two\n// three\nexport const a = 1;\n");
+  commit("long comment");
+  eq("check.sh: the kit's comment check runs on the range", pass(b2), 1);
+  writeFileSync(at("a.ts"), "export const a = 1;\n");
+  commit("comment gone");
+  eq("check.sh: a clean range passes", pass(b2), 0);
+  writeFileSync(at("big.ts"), `${"export const x = 1;\n".repeat(3000)}`);
+  commit("big file");
+  writeFileSync(at("big.ts"), `${"export const x = 1;\n".repeat(3000)}export const y = 2;\n`);
+  commit("edit to a big file");
+  eq("check.sh: the 40 KB rule stays out of a range", pass("HEAD~1"), 0);
+
+  // kit.mjs unattended, in a repo of its own
+  const on = join(tmp, "on");
+  execFileSync("git", ["init", "-q", on]);
+  mkdirSync(join(on, "ai", "kit"), { recursive: true });
+  mkdirSync(join(on, "scripts", "lib"), { recursive: true });
+  const conf = '{\n  "code_dirs": ["src"],\n  "conventions": []\n}\n';
+  writeFileSync(join(on, "ai", "kit", "config.json"), conf);
+  writeFileSync(join(on, "CLAUDE.md"), "# P\n");
+  mkdirSync(join(on, ".githooks"));
+  writeFileSync(join(on, ".githooks", "pre-commit"), "AI_KIT_RANGE=--cached\n");
+  const turn = (...a) => spawnSync("node", [SCRIPT, "unattended", ...a], { cwd: on, encoding: "utf8", env: { ...process.env, HOME: on, CLAUDE_CONFIG_DIR: "" } });
+  const pcOn = join(on, "ai", "kit", "pre-commit.sh");
+  const pcText = [
+    "# git diff --cached in a comment stays",
+    "if git diff --cached --name-only --diff-filter=ACMRD | grep -q x; then echo y; fi",
+    "git -c core.quotePath=false diff --staged -U0 | grep -q z && exit 1",
+    "node scripts/a.mjs --strict",
+    'echo "run pnpm docs, then stage"',
+    "",
+  ].join("\n");
+  writeFileSync(pcOn, pcText);
+  writeFileSync(join(on, "scripts", "a.mjs"), 'import "./lib/b.mjs";\n');
+  writeFileSync(join(on, "scripts", "lib", "b.mjs"), 'console.log(["diff", "--cached"]);\n');
+
+  const dry = turn("--dry-run");
+  eq("unattended --dry-run: reports the rewrite", dry.stdout.includes("would rewrite ai/kit/pre-commit.sh line(s) 2, 3"), true);
+  eq("unattended --dry-run: an imported script is named", dry.stdout.includes("! scripts/lib/b.mjs reads the index"), true);
+  eq("unattended --dry-run: exit 1 and nothing written", [dry.status, readFileSync(pcOn, "utf8") === pcText, existsSync(join(on, "ai", "kit", "requires.txt"))], [1, true, false]);
+  eq("unattended --dry-run: tools from code, not from echo", dry.stdout.includes("would write ai/kit/requires.txt: node;"), true);
+
+  const blocked = turn();
+  const after = readFileSync(pcOn, "utf8");
+  eq("unattended: lines are rewritten, the comment is not", [after.includes("diff $AI_KIT_RANGE --name-only"), after.includes("diff $AI_KIT_RANGE -U0"), after.includes("# git diff --cached")], [true, true, true]);
+  eq("unattended: a blocked repo stays off", [blocked.status, readFileSync(join(on, "ai", "kit", "config.json"), "utf8") === conf, existsSync(join(on, "ai", "kit", "check.sh"))], [1, true, false]);
+
+  writeFileSync(join(on, "scripts", "lib", "b.mjs"), 'console.log(["diff", process.env.AI_KIT_RANGE ?? "--cached"]);\n');
+  const done = turn();
+  eq("unattended: a script on AI_KIT_RANGE no longer blocks", done.status, 0);
+  eq("unattended: the config keeps its form", readFileSync(join(on, "ai", "kit", "config.json"), "utf8"), '{\n  "unattended": true,\n  "code_dirs": ["src"],\n  "conventions": []\n}\n');
+  eq("unattended: the files are written", ["ai/kit/check.sh", "ai/kit/review-prompt.md", "ai/kit/checks/check-docs.mjs", "ai/kit/conventions/unattended.md"].map((f) => existsSync(join(on, f))), [true, true, true, true]);
+  eq("unattended: requires.txt is started", readFileSync(join(on, "ai", "kit", "requires.txt"), "utf8").split("\n").slice(1), ["node", ""]);
+  eq("unattended: a second run changes nothing", [turn().status, readFileSync(pcOn, "utf8") === after], [0, true]);
+
+  writeFileSync(pcOn, "echo 'git diff --cached' | sh\n");
+  const quoted = turn();
+  eq("unattended: single quotes are left and listed", [quoted.status, quoted.stdout.includes("pre-commit.sh:1 still reads"), readFileSync(pcOn, "utf8").includes("--cached")], [1, true, true]);
+  writeFileSync(pcOn, after);
+  writeFileSync(join(on, "scripts", "lib", "b.mjs"), 'console.log("--staged");\n');
+  eq("unattended: --force passes a listed script", turn("--force").status, 0);
+
+  writeFileSync(join(on, ".gitignore"), "checks/\n");
+  eq("unattended: an ignored copy is named", turn("--force").stdout.includes("ai/kit/checks/check-docs.mjs is ignored by git"), true);
+  writeFileSync(join(on, ".gitignore"), "requires.txt\n");
+  eq("unattended: an ignored requires.txt is named", turn("--force").stdout.includes("ai/kit/requires.txt is ignored by git"), true);
+  rmSync(join(on, ".gitignore"));
+
+  // what a rewrite must leave for a person, so check.sh still refuses
+  const rw = (line) => {
+    writeFileSync(pcOn, `${line}\n`);
+    turn("--dry-run");
+    turn();
+    return readFileSync(pcOn, "utf8").trim();
+  };
+  eq("unattended: diff-index is left", rw("git diff-index --cached HEAD | grep -q x"), "git diff-index --cached HEAD | grep -q x");
+  eq("unattended: a revision after the flag is left", rw("git diff --cached HEAD --name-only | grep -q x"), "git diff --cached HEAD --name-only | grep -q x");
+  eq("unattended: a revision before the flag is left", rw("git diff HEAD --cached | grep -q x"), "git diff HEAD --cached | grep -q x");
+  eq("unattended: a path after -- is rewritten", rw("git diff --cached -U0 -- 'src/*.ts' | grep -q x"), "git diff $AI_KIT_RANGE -U0 -- 'src/*.ts' | grep -q x");
+  eq("unattended: inside $( ) is rewritten", rw('a="$(git diff --cached --name-only)"'), 'a="$(git diff $AI_KIT_RANGE --name-only)"');
+
+  // what indexReaders must not call ready
+  const reads = (line) => {
+    writeFileSync(pcOn, `${line}\n`);
+    return turn("--dry-run").stdout;
+  };
+  eq("unattended: a script behind a variable is named", reads('node "$ROOT/scripts/a.mjs"').includes("could not be followed"), true);
+  eq("unattended: a .json behind a variable is no script", reads('cat "$ws/tsconfig.json"').includes("could not be followed"), false);
+  eq("unattended: a script that is not there is named", reads("node scripts/gone.mjs").includes("scripts/gone.mjs could not be followed"), true);
+  writeFileSync(join(on, "scripts", "c.sh"), "node scripts/d.ts\n");
+  writeFileSync(join(on, "scripts", "d.ts"), 'const e = require("./lib/e");\n');
+  writeFileSync(join(on, "scripts", "lib", "e.js"), 'x("--cached");\n');
+  eq("unattended: shell, .ts, require and no extension are followed", reads("sh scripts/c.sh").includes("! scripts/lib/e.js reads the index"), true);
+  writeFileSync(join(on, "package.json"), JSON.stringify({ scripts: { "check:x": "sh scripts/c.sh" } }));
+  eq("unattended: a package script is followed", reads("pnpm check:x").includes("! scripts/lib/e.js reads the index"), true);
+  rmSync(join(on, "ai", "kit", "requires.txt"));
+  eq("unattended: a tool at the end of a pipe is found", reads("x=$(printf a | xargs -0 gofmt)").includes("requires.txt: gofmt;"), true);
+  writeFileSync(join(on, "package.json"), JSON.stringify({ scripts: { typecheck: "pnpm --filter web typecheck", loop: "pnpm loop" } }));
+  const selfCall = turn("--dry-run");
+  writeFileSync(pcOn, "pnpm loop\npnpm typecheck\n");
+  const loop = turn("--dry-run");
+  eq("unattended: a script calling its own name ends", [selfCall.stderr, loop.stderr], ["", ""]);
+  eq("unattended: a workspace call is named", loop.stdout.includes("pnpm --filter web typecheck could not be followed"), true);
+  eq("unattended: a script missing from the root is named", reads("pnpm nosuch").includes("pnpm nosuch could not be followed"), true);
+  eq("unattended: pnpm exec is no script", reads("pnpm exec eslint .").includes("could not be followed"), false);
+  eq("unattended: make and turbo are named", [reads("make check").includes("make check could not be followed"), reads("quiet turbo run lint").includes("turbo run lint could not be followed")], [true, true]);
+  eq("unattended: a glob of scripts is named", reads("for s in scripts/check-*.mjs; do node $s; done").includes("scripts/check-*.mjs could not be followed"), true);
+  writeFileSync(join(on, "ai", "kit", "own.mjs"), 'x("--cached");\n');
+  eq("unattended: a project script under ai/kit is read", reads("node ai/kit/own.mjs").includes("! ai/kit/own.mjs reads the index"), true);
+  rmSync(join(on, "ai", "kit", "own.mjs"));
+  eq("unattended: a revision after a continuation is left", rw("git diff --cached \\\n  HEAD | grep -q x").split("\n")[0], "git diff --cached \\");
+  eq("unattended: options after a continuation are rewritten", rw("x=$(git diff --cached -U0 \\\n  --no-color | grep -q y)").split("\n")[0], "x=$(git diff $AI_KIT_RANGE -U0 \\");
+  eq("unattended: a path that nothing runs is no script", reads("printf '%s' b/apps/a.controller.ts >x").includes("could not be followed"), false);
+  eq("unattended: a grep glob is no script", reads("grep -q '*.spec.ts' a.txt").includes("could not be followed"), false);
+  rmSync(join(on, "package.json"));
+
+  // a repo with no checks is no gate, and open items are not success
+  const empty = join(tmp, "empty");
+  execFileSync("git", ["init", "-q", empty]);
+  mkdirSync(join(empty, "ai", "kit"), { recursive: true });
+  writeFileSync(join(empty, "ai", "kit", "config.json"), "{}");
+  writeFileSync(join(empty, "ai", "kit", "pre-commit.sh"), "# nothing yet\n");
+  const inEmpty = (...a) => spawnSync("node", [SCRIPT, "unattended", ...a], { cwd: empty, encoding: "utf8", env: { ...process.env, HOME: empty, CLAUDE_CONFIG_DIR: "" } });
+  eq("unattended: a pre-commit.sh with no checks is not ready", inEmpty("--dry-run").status, 1);
+  eq("unattended: open items after turning on exit 1", inEmpty("--force").status, 1);
+
+  // the default comments.include covers .mjs: the generated checks must not fail the kit's own check
+  const dflt = join(tmp, "dflt");
+  execFileSync("git", ["init", "-q", dflt]);
+  mkdirSync(join(dflt, "ai", "kit"), { recursive: true });
+  writeFileSync(join(dflt, "ai", "kit", "config.json"), '{"unattended":true}');
+  writeFileSync(join(dflt, "ai", "kit", "pre-commit.sh"), "true\n");
+  spawnSync("node", [SCRIPT, "sync"], { cwd: dflt, env: { ...process.env, HOME: dflt, CLAUDE_CONFIG_DIR: "" } });
+  execFileSync("git", ["add", "-A"], { cwd: dflt });
+  const cc = join(import.meta.dirname, "check-comments.mjs");
+  eq("check-comments: the generated checks are out of scope", spawnSync("node", [cc, "--staged", "--strict"], { cwd: dflt }).status, 0);
+  eq("check.sh: no stray CR in the file", readFileSync(join(dflt, "ai", "kit", "check.sh"), "utf8").includes("\r"), false);
+  rmSync(join(dflt, "ai", "kit", "requires.txt"));
+  const noReq = spawnSync("sh", ["ai/kit/check.sh", "HEAD"], { cwd: dflt, encoding: "utf8" });
+  eq("check.sh: no requires.txt is refused", noReq.stdout.includes("requires.txt is missing"), true);
+
+  // --range: old text comes from the merge base, not from HEAD
+  const dr = join(tmp, "dr");
+  const gd = (...a) => execFileSync("git", a, { cwd: dr, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  execFileSync("git", ["init", "-q", dr]);
+  mkdirSync(join(dr, "ai", "kit"), { recursive: true });
+  writeFileSync(join(dr, "ai", "kit", "config.json"), "{}");
+  writeFileSync(join(dr, "ai", "old.md"), "# T\n\n**old bold** stays\n\nline two\n");
+  const ci = (m) => {
+    gd("add", "-A");
+    gd("-c", "core.hooksPath=/dev/null", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", m);
+  };
+  ci("base");
+  const rangeBase = gd("rev-parse", "HEAD");
+  gd("mv", "ai/old.md", "ai/new.md");
+  ci("rename");
+  const docsCheck = (...a) => spawnSync("node", [docs, `--range=${rangeBase}...HEAD`, "--strict", ...a], { cwd: dr, encoding: "utf8" });
+  eq("check-docs --range: a rename adds no lines", docsCheck().status, 0);
+  writeFileSync(join(dr, "ai", "new.md"), "# T\n\n**old bold** stays\n\n**added bold**\n");
+  ci("bold");
+  writeFileSync(join(dr, ".git", "MERGE_HEAD"), `${rangeBase}\n`);
+  eq("check-docs --range: a merge state does not skip the gate", docsCheck().status, 1);
+  rmSync(join(dr, ".git", "MERGE_HEAD"));
+
+  const off = join(tmp, "off");
+  execFileSync("git", ["init", "-q", off]);
+  mkdirSync(join(off, "ai", "kit"), { recursive: true });
+  writeFileSync(join(off, "ai", "kit", "config.json"), "{}");
+  writeFileSync(join(off, "ai", "kit", "pre-commit.sh"), "git diff --cached --name-only | grep -q x && exit 1\n");
+  const offOut = spawnSync("node", [SCRIPT, "check"], { cwd: off, encoding: "utf8", env: { ...process.env, HOME: off, CLAUDE_CONFIG_DIR: "" } }).stdout;
+  eq("check: unattended off still warns of a staged read", offOut.includes("kit.mjs unattended --dry-run"), true);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.29.0
+
+Runs without the plugin get the same rules, checks and review material as a session. A project edits nothing to keep
+working; a repo with `unattended` on runs `kit.mjs sync` and commits.
+
+- `kit.mjs unattended [--dry-run] [--force]` turns a repo on: rewrites `git diff --cached` to `git diff $AI_KIT_RANGE`
+  in `ai/kit/pre-commit.sh`, sets the key, runs `sync`. A `--staged` flag, a script that reads the index or cannot be
+  followed, or an empty `pre-commit.sh` leaves the repo off and is listed, since a gate acts on `check.sh` as soon as
+  it exists. `--force` passes all of these but a line it cannot rewrite.
+- `sync` starts `ai/kit/requires.txt` once. `ai/kit/check.sh` stops when it is missing or names a command this machine
+  lacks (a check on `$(tool)` output otherwise passes without the tool), and runs the kit's comment and doc checks
+  from generated copies in `ai/kit/checks/`.
+  The 40 KB rule stays out: a range cannot tell its move-only commit from the edit after it.
+- `check-comments.mjs` and `check-docs.mjs` take `--range=<a...b>`.
+- `sync` also writes `conventions/unattended.md` (session rules a run needs) and `ai/kit/review-prompt.md`, generated
+  from `agents/change-reviewer.md`, for a pipeline's own review.
+- `check` names a generated file that git ignores, a missing `requires.txt`, and, with `unattended` off, a
+  `pre-commit.sh` that reads the staged diff. `session-start.sh` adds a note when generated files are out of date.
+
 ## 2.28.0
 
 From a review of every hook and script. No project needs to edit anything.
