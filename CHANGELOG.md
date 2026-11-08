@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.33.1
+
+A plugin update that removed the version a repo recorded in `<git-common-dir>/ai-kit-root` left the shims on their
+fallback until Claude Code opened there: `pre-commit` ran only `ai/kit/pre-commit.sh`, and `commit-msg` passed every
+message silently. Both shims now take the newest `x.y.z` beside the recorded path, and `commit-msg` warns when it finds
+none. `kit.mjs check` names the older shim; `kit.mjs init` rewrites it.
+
 ## 2.33.0
 
 The result a change must reach is set before the work, and the committer reads the rules the reviewer grades against.

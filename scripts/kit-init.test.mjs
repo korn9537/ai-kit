@@ -43,6 +43,19 @@ try {
   run(fresh, "init");
   eq("init: writes the commit-msg shim", readFileSync(join(fresh, ".githooks", "commit-msg"), "utf8").includes("githooks/commit-msg"), true);
   eq("check: no warning once the shim is there", run(fresh, "check").includes(".githooks/commit-msg"), false);
+  // a plugin update removes the recorded version: the shims run the newest x.y.z beside it, numerically
+  const cache = join(tmp, "cache");
+  for (const v of ["2.9.0", "2.10.1"]) {
+    mkdirSync(join(cache, v, "githooks"), { recursive: true });
+    for (const h of ["pre-commit", "commit-msg"]) writeFileSync(join(cache, v, "githooks", h), `echo ran ${v}\n`);
+  }
+  const shim = (h) => spawnSync("sh", [join(".githooks", h), "m"], { cwd: fresh, encoding: "utf8" });
+  writeFileSync(join(fresh, ".git", "ai-kit-root"), join(cache, "2.3.0") + "\n");
+  eq("shims: a removed version falls to the newest", [shim("pre-commit").stdout, shim("commit-msg").stdout], ["ran 2.10.1\n", "ran 2.10.1\n"]);
+  writeFileSync(join(fresh, ".git", "ai-kit-root"), join(cache, "2.9.0") + "\n");
+  eq("shims: a recorded version that exists runs", shim("commit-msg").stdout, "ran 2.9.0\n");
+  rmSync(join(fresh, ".git", "ai-kit-root"));
+  eq("commit-msg shim: no path is warned, not silent", shim("commit-msg").stderr.includes("Job trailer not checked"), true);
   // a shim without the execute bit is skipped by git: check reports it, init repairs it
   const hook = join(fresh, ".githooks", "pre-commit");
   chmodSync(hook, 0o644);

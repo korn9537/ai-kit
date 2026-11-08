@@ -255,10 +255,18 @@ const IMPORT = "@ai-kit/CLAUDE.core.md";
 const MARK = "ai-kit-root";
 // what a 1.x shim ran; init replaces such a shim
 const OLD_SHIM = "ai-kit/githooks/pre-commit";
+// the recorded path, or when a plugin update removed that version, the newest x.y.z beside it
+const RESOLVE = (hook) => `kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
+if [ -n "$kit" ] && [ ! -f "$kit/githooks/${hook}" ]; then
+  base="$(dirname "$kit")"
+  kit="$(ls "$base" 2>/dev/null | grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+$' |
+    awk -F. '{ printf "%06d%06d%06d %s\\n", $1, $2, $3, $0 }' | sort | tail -n 1 | cut -d' ' -f2)"
+  [ -n "$kit" ] && kit="$base/$kit"
+fi
+`;
 const SHIM = `#!/usr/bin/env sh
 # ai-kit shim (core.hooksPath): runs the plugin's githooks/pre-commit; session-start.sh records its path.
-kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
-if [ -n "$kit" ] && [ -f "$kit/githooks/pre-commit" ]; then
+${RESOLVE("pre-commit")}if [ -n "$kit" ] && [ -f "$kit/githooks/pre-commit" ]; then
   exec sh "$kit/githooks/pre-commit" "$@"
 fi
 echo "warn: ai-kit plugin path unknown: open Claude Code in this repo once"
@@ -271,10 +279,10 @@ exit 0
 `;
 const MSG_SHIM = `#!/usr/bin/env sh
 # ai-kit shim (core.hooksPath): runs the plugin's githooks/commit-msg; session-start.sh records its path.
-kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
-if [ -n "$kit" ] && [ -f "$kit/githooks/commit-msg" ]; then
+${RESOLVE("commit-msg")}if [ -n "$kit" ] && [ -f "$kit/githooks/commit-msg" ]; then
   exec sh "$kit/githooks/commit-msg" "$@"
 fi
+echo "warn: ai-kit plugin path unknown, Job trailer not checked: open Claude Code in this repo once" >&2
 exit 0
 `;
 
