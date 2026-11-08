@@ -219,7 +219,7 @@ never an earlier commit's reviewer (opus, medium effort from its
 frontmatter; pass no model or effort). Agent type not loaded (plugin
 enabled mid-session): general-purpose with model \"opus\", effort \"medium\", description containing \"review\", told to follow
 $kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
-words, the changed files and their \`git diff -- . ':(exclude)ai/usage'\` (or this session's commits, read with
+words, the summary's Done when checks if one was shown, the changed files and their \`git diff -- . ':(exclude)ai/usage'\` (or this session's commits, read with
 \`git show <hash> -- . ':(exclude)ai/usage'\`). Fix every CONFIRMED finding, judge each
 PLAUSIBLE one. Until it reports, end the turn with one line saying the review is running; the final report comes
 after. Report the review under \"Checked\"."

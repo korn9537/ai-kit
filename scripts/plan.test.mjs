@@ -44,6 +44,10 @@ ok("a broken block parses to null", parse("```json\n{nope\n```\n") === null);
 ok("a brief holding a fence survives", parse(render(merge(null, args([{ id: "a", brief: "x\n```\ny" }])))).batches[0].brief === "x\n```\ny");
 
 const long = `Change "the handlers"  so that\n\tthe codes stay ${"word ".repeat(200)}${"ส่งออกใบแจ้งหนี้".repeat(40)} ${"\"".repeat(150)} ${"😀".repeat(150)} \u0001\ud83d\u2028 `;
+let thrown = "";
+try { merge(null, args([{ id: "a", accept: ["ok", 3] }])); } catch (e) { thrown = e.message; }
+ok("accept that is not a list of strings is refused", /accept is a list/.test(thrown));
+ok("accept survives the plan file", parse(render(merge(null, args([{ id: "a", accept: ["x shows y"] }])))).batches[0].accept[0] === "x shows y");
 const wide = merge(null, { ...args([{ id: "a", title: long, brief: long, verify: long, alsoInScope: [long, "short"] }]), request: long });
 const wideText = render(wide);
 ok("no line of a plan with long text passes 120 characters", wideText.split("\n").every((l) => l.length <= 120), wideText);

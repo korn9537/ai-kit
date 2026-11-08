@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.33.0
+
+The result a change must reach is set before the work, and the committer reads the rules the reviewer grades against.
+Of 745 CONFIRMED findings in 333 first reviews, about 34% cited the project checklist and 17% the kit conventions
+(keyword count, approximate), yet committers read the checklist in 15% of runs against 63% for reviewers. A repo with
+`unattended` on runs `kit.mjs sync` and commits; no other project needs to edit anything.
+
+- The BA report gains section 7, **Done when**: checks a reviewer can confirm, the gaps of section 4 answered, what
+  stays unchanged and what is out of scope. Owner decisions move to section 8. The summary gains item 6, Done when.
+- A batch takes `accept`, a list of checks (`plan.mjs write` refuses anything else). `run-plan.js` passes it as
+  `Done when:` to the committer, the reviewer and a fresh re-check; the coordinator and Stop-hook briefs say the same.
+- The committer reads `ai/kit/review-checklist.md` and the conventions before its first edit, and reports under Open a
+  check it could not meet.
+- The reviewer checks the Done when list first, and leaves out a preference, a refactor or wider scope that breaks no
+  request, check, rule, screen spec or correctness.
+
 ## 2.32.0
 
 CONFIRMED findings no longer stop at the report: 70 of 78 fresh reviews left some, 209 in all. No project needs to edit

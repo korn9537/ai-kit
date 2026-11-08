@@ -14,6 +14,12 @@ First read the "Working conventions" and "Delegation and report" sections of `${
 the project's `CLAUDE.md`; they apply to you as to the main session. `ai/usage/` holds kit-written token records: never
 edit, stage, revert or search them.
 
+Before the first edit, read what the reviewer checks your commit against, so its findings are not news to you:
+`ai/kit/review-checklist.md`, `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and
+`${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each name in `ai/kit/config.json` `conventions`. Each is read once;
+a missing file is skipped. The brief's `Done when` list is the result the commit must reach: meet every item, and
+report under Open an item you could not meet and why.
+
 Context is the cost. Every result you read stays in your context and is re-read on each later call:
 
 - Locate with `grep -n` (several patterns in one call), then read only the needed line range; send independent

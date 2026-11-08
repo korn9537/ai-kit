@@ -76,5 +76,14 @@ s = script([[finding("bug")], [finding("b2")]], (n) => commit(`f${n}`), { ...com
 r = (await run(one, s)).batches[0];
 ok("an owner decision open: no second fix", r.status === "partial" && fixes(s) === 1);
 
+const seen = [];
+s = script([[]]);
+await run([{ ...one[0], accept: ["the list shows the total"] }], (l, p) => (seen.push([l, p]), s(l)));
+ok("Done when reaches the committer and the reviewer", seen.every(([, p]) => /Done when:\n- the list shows the total/.test(p)));
+seen.length = 0;
+s = script([[]]);
+await run(one, (l, p) => (seen.push(p), s(l)));
+ok("no accept: no Done when line", seen.every((p) => !/Done when/.test(p)));
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

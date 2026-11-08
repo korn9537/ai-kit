@@ -9,7 +9,8 @@ export const meta = {
   ],
 }
 
-// args: { request, plugin, job, repo?, batches: [{ id, title, brief, verify?, waitsFor?: [id], alsoInScope?: [item] }] }
+// args: { request, plugin, job, repo?, batches: [{ id, title, brief, accept?: [check], verify?, waitsFor?: [id],
+//   alsoInScope?: [item] }] }
 // in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
 const batches = (args && args.batches) || []
 if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
@@ -80,8 +81,10 @@ const later = (b) => {
 }
 // the Batch trailer lets scripts/continuous.mjs find a commit whose agent died before it could report the hash
 const trailer = (b) => `Add the trailer line \`Batch: ${b.id}\` just above the Job trailer.`
+// the result the batch must reach, set before the work: the committer builds to it and the reviewer checks it first
+const done = (b) => ((b.accept || []).length ? ['Done when:', ...b.accept.map((a) => `- ${a}`)].join('\n') : '')
 const commitPrompt = (b) =>
-  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
+  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', done(b), b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
 
 const scope = (b) => (b.alsoInScope || []).map((s) => `also in scope: ${s} (coordinator)`).join('\n')
 const reviewPrompt = (b, hash) =>
@@ -90,6 +93,7 @@ const reviewPrompt = (b, hash) =>
     `This commit is batch ${b.id}: ${b.title}`,
     where,
     scope(b),
+    done(b),
     `Read \`git show ${hash} -- . ':(exclude)ai/usage'\`, not the work tree. Review that commit only.`,
   ].join('\n')
 
@@ -122,6 +126,7 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
         `Batch ${b.id}: ${b.title}`,
         where,
         scope(b),
+        done(b),
         `A data or rule finding was fixed, so this is a fresh review of the change as a whole: read`,
         `\`git show ${hash} ${fixHash} -- . ':(exclude)ai/usage'\`. The first review found:`,
         list(fs),

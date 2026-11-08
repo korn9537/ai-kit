@@ -77,7 +77,8 @@ who leaves: it tries failed committers again and writes the one report when noth
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
-- The brief: the batch (what to change, where, the decisions and requirements it follows), its verify commands (not
+- The brief: the batch (what to change, where, the decisions and requirements it follows), its Done when checks
+  (the summary's checks this batch must meet), its verify commands (not
   what CLAUDE.md says the pre-commit runs),
   the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id for its `Batch: <id>`
   trailer (§Plan file; a fix commit has none) and anything the coordinator already found (`path:start-end`), so
@@ -90,8 +91,8 @@ who leaves: it tries failed committers again and writes the one report when noth
   one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
   `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for it, as the run-plan
   workflow calls it). Reviewer brief: read
-  `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; name each item the main session added beyond the
-  user's request, `also in scope: <item> (coordinator)`.
+  `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; pass the batch's Done when checks; name each item
+  the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and

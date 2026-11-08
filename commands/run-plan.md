@@ -14,11 +14,12 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    - `plugin`: `${CLAUDE_PLUGIN_ROOT}`.
    - `job`: the request's job id, one for the whole plan (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
    - `repo`: only when the repo is not the session's working directory.
-   - `batches`, in plan order: `{id, title, brief, verify, waitsFor, alsoInScope}`. `brief` is the
+   - `batches`, in plan order: `{id, title, brief, accept, verify, waitsFor, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (`path:start-end` already found), the
-     decisions and requirements it follows. `verify` holds the project's verify commands for it, leaving out what
-     CLAUDE.md says the pre-commit runs. `waitsFor` lists
-     the ids it needs. `alsoInScope` lists each item the main session added beyond the request.
+     decisions and requirements it follows. `accept` lists the checks of the summary's Done when that this batch
+     must meet, one string each; the committer builds to them and the reviewer checks them first. `verify` holds the
+     project's verify commands for it, leaving out what CLAUDE.md says the pre-commit runs. `waitsFor` lists the ids
+     it needs. `alsoInScope` lists each item the main session added beyond the request.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
    project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
    two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath`

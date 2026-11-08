@@ -101,6 +101,9 @@ export function merge(old, args, commits = new Map(), replace = false) {
   for (const b of args.batches) {
     if (!b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b.id}`);
     if (!b.title || !b.brief) throw new Error(`batch ${b.id} needs a title and a brief`);
+    if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
+      throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
+    }
     if (seen.has(b.id)) throw new Error(`batch id appears twice: ${b.id}`);
     if (commits.has(b.id)) throw new Error(`batch ${b.id} already has commit ${commits.get(b.id)}, pick a new id`);
     for (const w of b.waitsFor || []) {
