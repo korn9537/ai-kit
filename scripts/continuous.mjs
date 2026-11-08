@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { isMain } from "./is-main.mjs";
-import { JOB, readRepo } from "./plan.mjs";
+import { JOB, checkBatch, readRepo } from "./plan.mjs";
 
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
@@ -25,7 +25,7 @@ export function init(args, old, base = [], baseLoose = []) {
   const kept = Object.fromEntries(Object.entries(old?.batches || {}).filter(([, r]) => r.hash));
   const ids = new Set(args.batches.map((b) => b.id));
   for (const b of args.batches) {
-    if (/\s/.test(b.id)) throw new Error(`batch id holds a space: ${b.id}`);
+    checkBatch(b);
     if (kept[b.id]) throw new Error(`batch id already has a commit in this job, pick a new one: ${b.id}`);
     // run-plan.js counts an id outside the run as not committed and would skip this batch, long after the user left;
     // plan.mjs write refuses a committed one too

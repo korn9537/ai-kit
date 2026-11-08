@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.34.0
+
+What each step hands the next is now one table, `docs/handoffs.md`, and `scripts/handoffs.test.mjs` checks the
+workflow prompts and the other routes' docs against it; this clone's pre-commit runs it when a route changes. An audit
+of 2.33.1 found five lost handoffs, a rule set re-read up to six times per batch, and the owner kinds written three
+times and drifting. A repo with `unattended` on runs `kit.mjs sync` and commits; no other project needs to edit
+anything.
+
+- The committer reports an unmet Done when check in `unmet`, which marks the batch partial and holds what waits on
+  it; before, it fell into `notes` and the batch counted as committed.
+- A fix committer gets the batch's brief and the later batches; a narrow re-check gets Done when. A resumed commit's
+  reviewer gets the request, scope, Done when and the `ai/usage` exclusion.
+- The run-plan report routes `choices` to Decided, notes to Done or Checked and PLAUSIBLE findings to Checked; Open
+  lists `unmet` and the findings of a fix agent that made no commit. One way on after an owner answers: resume.
+- Fewer reads: the committer reads only the core sections it needs; committer and reviewer read the conventions the
+  change touches, as CLAUDE.core.md says; a fix committer and a narrow re-check read only the rule a finding names.
+- `docs/owner-kinds.md` is the one list of owner kinds; CLAUDE.core.md, the BA, the decider, the committer and
+  `ask-guard.sh` point to it. The decider takes the BA's Owner decisions item and its sources as its research.
+- `continuous.mjs init` checks each batch with `plan.mjs`'s `checkBatch`, title, brief and `accept` included.
+
 ## 2.33.1
 
 A plugin update that removed the version a repo recorded in `<git-common-dir>/ai-kit-root` left the shims on their

@@ -90,7 +90,7 @@ ok("a data finding: the fix and the fresh re-check get Done when",
 seen.length = 0;
 s = script([[]]);
 await run(one, (l, p) => (seen.push(p), s(l)));
-ok("no accept: no Done when line", seen.every((p) => !/Done when/.test(p)));
+ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
 
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

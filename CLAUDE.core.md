@@ -27,21 +27,18 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
 
 ## Working conventions
 
-- **The agent decides; the owner holds only four kinds of decision:** 1. money (price, purchase, paid service, added
-  infra cost; any change to an amount a customer pays, a bug fix toward the evident intent included) · 2.
-  irreversible or outward action (delete real data, production deploy, contact people) · 3. legal, privacy,
-  consent · 4. changing a decision recorded as final (Confirmed, or the project's final status). Anything else
-  inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request
+- **The agent decides; the owner holds only four kinds of decision** (`ai-kit/docs/owner-kinds.md`, the one list):
+  money · irreversible or outward action · legal, privacy, consent · changing a decision recorded as final. Anything
+  else inside the request: decide, act, report it under Decided; the owner may overrule later. Work outside the request
   that needs no owner decision is done after the requested work, as its own commit(s) with its own review, and
   reported under Done as follow-up, never in the requested commit; only an owner decision or work blocked by
-  something you cannot remove stays Open. What you created for the task (worktrees, scratch or test databases, temp
-  branches, seeded test tenants) you clean up before the report; that is not kind 2 (real data). A repo-wide backlog
-  the task did not cause (lint baseline, spec warnings) is not Open; mention it only if the task raised the count. A
-  question you would put to the owner (AskUserQuestion, hook-guarded, or one in a reply, offers and suggestions such
-  as "could X if ...", "want me to ...?" included) goes to the
-  `ai-kit:decider` agent first, with its options, the user's words and what you know: DECIDED → act on it without
-  asking; OWNER → ask, its recommendation first. The kit logs each verdict (`ai/usage/decisions/`,
-  `/ai-kit:decisions`).
+  something you cannot remove stays Open. What the task created is cleaned up before the report (owner-kinds.md).
+  A repo-wide backlog the task did not cause (lint baseline, spec warnings) is not Open; mention it only if the task
+  raised the count. A question you would put to the owner (AskUserQuestion, hook-guarded, or one in a reply, offers and
+  suggestions such as "could X if ...", "want me to ...?" included) goes to the `ai-kit:decider` agent first, with its
+  options, the user's words and what you know (when BA ran, its Owner decisions item for the question, sources
+  included): DECIDED → act on it without asking; OWNER → ask, its recommendation first. The kit logs each verdict
+  (`ai/usage/decisions/`, `/ai-kit:decisions`).
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
   stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
   change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report; a UI-only
@@ -132,7 +129,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds below never y
      the cross-repo test (`ai-kit/docs/kit-proposals.md`).
      4. **Git** — commit hash or uncommitted; pushed or not. 5. **User sees** — what looks or behaves
      differently. 6. **Decided** — each choice the agent made that the owner might want otherwise: the choice,
-     one-line reason, where recorded. 7. **Open** — only an owner decision (the four kinds in Working conventions) or
+     one-line reason, where recorded. 7. **Open** — only an owner decision (`ai-kit/docs/owner-kinds.md`) or
      in-scope work that is blocked (with what blocks it), each with its proposed fix (file:line, cost)
      where one exists. In-scope and fixable → fix it before the report; a limit kept on purpose → note it in the
      code or doc. 8. **Next session** — only when the handoff hook asks; it says what to include.

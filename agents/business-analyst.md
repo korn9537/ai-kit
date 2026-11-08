@@ -40,8 +40,6 @@ Reply with exactly these sections, terse, every claim with its source (path:star
 7. **Done when** — the result the change must reach, as checks a reviewer can confirm from the diff or a test: one
    line per behavior, each gap of section 4 with the answer chosen, the data or roles it must leave unchanged, and
    what is out of scope. No check that only restates the ask.
-8. **Owner decisions** — only questions of the four owner kinds (money, irreversible or
-   outward action, legal/privacy/consent, changing a decision recorded as final, by its final status label in
-   `ai/kit/analysis-sources.md`, default `Confirmed`). A change to a price, fee, discount or any amount a customer
-   pays is money even as a bug fix toward the evident intent: list it with the recommendation, never as
-   "assumed". Any other unknown → the assumption you recommend, marked "assumed". None → say "None".
+8. **Owner decisions** — only questions of the kinds in `${CLAUDE_PLUGIN_ROOT}/docs/owner-kinds.md`, each with
+   the recommendation and its sources (the decider takes them as its research). Any other unknown → the assumption
+   you recommend, marked "assumed". None → say "None".

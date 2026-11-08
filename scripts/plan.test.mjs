@@ -144,7 +144,7 @@ try {
   write(longRepo, longArgs);
   ok("the same long plan again makes no commit", write(longRepo, longArgs).committed === false);
   throws("write refuses a field that would not come back", () => write(repoAt("shaped"), args([{ id: "a", notes: { lines: ["x", "y"] } }])), /shaped \{ lines \}/);
-  throws("write refuses a plan that would not parse back", () => write(repoAt("typed"), args([{ id: "a", waitsFor: null }, { id: 7 }])), /parse back/);
+  throws("write refuses a plan that would not parse back", () => write(repoAt("typed"), args([{ id: "a", waitsFor: null }, { id: 7 }])), /parse back|is a list/);
   throws("write refuses a job too long for the file", () => write(repoAt("wide-job"), { ...args(), job: slug(114) }), /passes 120 columns/);
   const oldRepo = repoAt("old-wide");
   const oldArgs = { ...args(), job: slug(114) };

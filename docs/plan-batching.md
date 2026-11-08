@@ -41,7 +41,7 @@ one updates a status and no two sessions edit it. All of it runs from the projec
   goes on only on their word.
 - **Resume**: `/ai-kit:run-plan resume [job]` (`commands/run-plan.md` §Resume).
 - **Close**: `plan.mjs close <job>` deletes the plan in its own commit, once every batch has a commit and the report
-  holds no batch under Open. Other Open items (notes, PLAUSIBLE findings) do not hold a plan open.
+  holds no batch under Open. An owner decision or a CONFIRMED finding left on a commit holds it through its batch.
 - **Left work**: a commit says the batch ran, not that it ended clean. What is left of a `partial` batch goes back in
   as a new batch id through `write`, with what waited for it now waiting for that id. An owner's answer goes into the
   brief of its `blocked` batch through `write`, same id. The owner giving up the rest: `close <job> --drop`.
@@ -69,11 +69,10 @@ kept small. The user naming a runner wins. `/ai-kit:continuous` runs the same wo
 who leaves: it tries failed committers again and writes the one report when nothing is left to run.
 
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
-  implements, verifies and commits it. It starts at about 9k tokens of context against about 32k for
-  `general-purpose`, and its own prompt carries the commit-subagent rules, read and verify-output discipline and
-  report shape, so the brief holds only the batch. When that type is not loaded (plugin enabled mid-session), launch
-  `general-purpose` (`model: "sonnet"`, `effort: "medium"`) with the same description, told first to read and
-  follow `<plugin root>/agents/committer.md`.
+  implements, verifies and commits it. Its own prompt carries the commit-subagent rules, read and verify-output
+  discipline and report shape, so the brief holds only the batch. When that type is not loaded (plugin enabled
+  mid-session), launch `general-purpose` (`model: "sonnet"`, `effort: "medium"`) with the same description, told first
+  to read and follow `<plugin root>/agents/committer.md`.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).

@@ -94,16 +94,23 @@ export function ordered(batches) {
 
 // args are what the workflow will run, so a mistake here would surface as a skipped batch long after the start;
 // replace: old batches with no commit that the args leave out are gone, for a plan fixed after a refusal
+// the fields of one batch that run-plan.js reads; continuous.mjs init checks args with it too
+export function checkBatch(b) {
+  if (typeof b?.id !== "string" || !b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b?.id}`);
+  if (!b.title || !b.brief) throw new Error(`batch ${b.id} needs a title and a brief`);
+  if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
+    throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
+  }
+  for (const k of ["waitsFor", "alsoInScope"])
+    if (b[k] !== undefined && !Array.isArray(b[k])) throw new Error(`batch ${b.id}: ${k} is a list`);
+}
+
 export function merge(old, args, commits = new Map(), replace = false) {
   if (!JOB.test(args.job || "")) throw new Error(`job is not <yyyy-mm-dd>-<slug>: ${args.job}`);
   if (!args.batches?.length) throw new Error("args need batches");
   const seen = new Set();
   for (const b of args.batches) {
-    if (!b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b.id}`);
-    if (!b.title || !b.brief) throw new Error(`batch ${b.id} needs a title and a brief`);
-    if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
-      throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
-    }
+    checkBatch(b);
     if (seen.has(b.id)) throw new Error(`batch id appears twice: ${b.id}`);
     if (commits.has(b.id)) throw new Error(`batch ${b.id} already has commit ${commits.get(b.id)}, pick a new id`);
     for (const w of b.waitsFor || []) {

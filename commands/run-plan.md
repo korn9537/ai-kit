@@ -32,19 +32,22 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
 4. **Report** from its result, one final report (CLAUDE.core.md). First, when every batch has a commit and none would
    go under Open, run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs close <job>` and list that commit under Git. A plan
    left open: Open says what §Plan file (Left work) needs, then `/ai-kit:run-plan resume <job>`.
+   Each field of the result has one place (CLAUDE.core.md report items; `docs/handoffs.md` §Report):
+   - Done: follow-ups among the `notes` (of the batch, `fix` and `fix2`).
    - Checked, per batch: a skipped review as `review skipped, move-only or comment-only`; the CONFIRMED findings
-     fixed and the re-check's findings, `fix2` and `recheck2` when a second fix ran;
+     fixed and the re-check's findings, `fix2` and `recheck2` when a second fix ran; each PLAUSIBLE finding with
+     your judgement (applied → Decided too); verify results among the `notes`;
      `Review closed: re-checked once, no third pass` only where `review` says
      re-checked once (plain text).
    - Git: every commit, fixes included.
-   - Open: each `owner` decision, each `blockers` and `notes` item, each `blocked`, `partial` or `skipped` batch
-     with its reason, each commit `not reviewed` or `not re-checked`,
-     findings left by the last of `recheck` and `recheck2`, each PLAUSIBLE
-     finding. `waitsFor` sees the commit, not its review: name each batch that ran on one its review left
-     `partial`.
-   - After the owner answers: run this command again with the batches left, each id with status `committed` out of
-     their `waitsFor` (the workflow counts an id outside this run as not committed); a `partial` one per
-     `plan-batching.md` §Plan file (Left work).
+   - Decided: each `choices` item (of the batch, `fix` and `fix2`).
+   - Open: each `owner` decision, each `blockers` and `unmet` item; each `blocked` or `skipped` batch with its
+     `reason`; each `partial` batch with what made it so (`review`, `owner`, `blockers`, `unmet`); each commit
+     `not reviewed` or `not re-checked`; the CONFIRMED findings left: those of the last of `recheck` and
+     `recheck2`, or `confirmed` where `review` is `CONFIRMED findings left unfixed`. `waitsFor` sees the commit,
+     not its review: name each batch that ran on one its review left `partial`.
+   - After the owner answers: §Resume, with the answer in the batch's brief per `plan-batching.md` §Plan file
+     (Left work).
 5. No Workflow tool, or the call is refused → run the plan as coordinator per §Coordinator pipeline instead.
 
 ## Resume
@@ -61,7 +64,9 @@ plan with batches left), then clear what it prints, in this order:
 3. `loose`: commits of the job with no `Batch` trailer. Review fixes are normal here; one that holds a batch's work
    means that batch would run twice, so read them against `left`.
 4. `committed`: no review is recorded. A batch whose review this session did not see gets one `ai-kit:change-reviewer`
-   on `git show <hash>`, findings as in **Report**.
+   with the brief the workflow's first review gets (`docs/handoffs.md`), from the plan file's batch: the request, the
+   batch id and title, its `alsoInScope` items and `accept` as `Done when`, and `git show <hash> -- .
+   ':(exclude)ai/usage'`. Findings as in **Report**.
 5. `heldBy`: a left batch and the commits it waits on, whose end is not known. A blocker or owner decision the lost
    run reported is gone with it and a review cannot see one, so a clean review is not enough: show the user these
    batches and go on with them only on their word. A commit that is not clean gets a new batch per

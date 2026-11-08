@@ -16,7 +16,8 @@ Check, in this order:
    they did not ask for (an item the brief lists as `also in scope` counts as asked).
 2. **Project rules** — every item in `ai/kit/review-checklist.md` that the diff touches, and the hard rules in
    `CLAUDE.md`; every rule the diff touches in `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and in
-   `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each name in `ai/kit/config.json` `conventions`; a doc under
+   `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each language or framework in `ai/kit/config.json` `conventions`
+   that the diff touches, with the files each of those says it adds to; a doc under
    `ai/` in the diff against `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`. The repo checklist wins on a conflict.
 3. **Screens** — only when `ai/kit/config.json` sets `ui.platforms`: a changed screen matches its
    `ai/screens/S-<n>` spec (reads, actions, fields, states), the spec changed with any behavior change, and the
@@ -27,6 +28,9 @@ Check, in this order:
 
 Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
 Find a symbol with `grep -n`, then read only its line range, never a whole large file.
+
+A re-check of a fix (the caller lists the findings and names one fix commit) checks only whether each finding is
+fixed, the `Done when` checks it passes, and what the fix breaks: no step 2 pass beyond the rules the findings name.
 
 A finding breaks one of the four: the request or a `Done when` check, a rule of step 2, a screen spec, or
 correctness. A preference, or a call for work beyond the request, is not a finding: leave it out. Code the diff adds

@@ -4,7 +4,11 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { abandon, HUNG_AFTER, init, MAX_TRIES, next, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
+import { abandon, HUNG_AFTER, init as initState, MAX_TRIES, next, readRun, RETRY_GAP, SLEPT_AFTER, started } from "./continuous.mjs";
+
+// init checks each batch as plan.mjs write does: the fixtures name only ids, so give each a title and brief
+const init = (args, ...rest) =>
+  initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", ...b })) }, ...rest);
 import { readRepo } from "./plan.mjs";
 
 let passed = 0;
@@ -36,6 +40,9 @@ const none = { status: "", idle: Infinity };
 const live = () => started(next(plan(), none, clean, 0).state, "dir", "t", T);
 
 const orphan = abandon({ ...plan(), running: true, launching: true, pending: ["a"] });
+let untitled = "";
+try { initState({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }); } catch (e) { untitled = e.message; }
+ok("init refuses a batch with no title or brief, as write does", /needs a title and a brief/.test(untitled));
 ok("abandon lets init take the job again", init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).args.batches.length === 1, orphan);
 ok("an abandoned run launches nothing on a late tick", next(orphan, none, clean, T).step.action === "stopped", orphan);
 ok("init clears the abandoned mark", !init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).abandoned);
@@ -230,23 +237,23 @@ ok("repo: dirty tree", readRepo(repo, "2026-11-05-x").dirty.join() === "f");
 
 const cli = (...a) => execFileSync("node", [join(import.meta.dirname, "continuous.mjs"), ...a], { cwd: repo, encoding: "utf8" });
 const st = join(tmp, "s.json");
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b" }] }));
 cli("init", st, join(tmp, "args.json"));
 ok("cli: a commit already in the repo is not sent again", JSON.parse(cli("next", st)).action === "done");
 rmSync(st);
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5", title: "t", brief: "b" }] }));
 cli("init", st, join(tmp, "args.json"));
 const step = JSON.parse(cli("next", st));
 ok("cli: run after init, args in a file", step.action === "run" && !step.args && existsSync(step.argsFile), step);
 
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4" }], repo: nogit }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b" }], repo: nogit }));
 const noInit = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "init", st, join(tmp, "args.json")], { encoding: "utf8" });
 ok("cli: init stops on a failed log", noInit.status === 1 && !existsSync(st) && noInit.stderr.includes("git log failed"), noInit);
 
 rmSync(join(repo, "f"));
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1", title: "t", brief: "b" }] }));
 cli("init", st, join(tmp, "args.json"));
 const failedState = JSON.parse(readFileSync(st, "utf8"));
 writeFileSync(st, JSON.stringify({ ...failedState, batches: { s1: failedAgent("s1") }, lastEnd: 1 }));
