@@ -12,7 +12,7 @@ once. You do not launch a reviewer and do not ask the user: an owner decision yo
 depends on it.
 
 First read the project's `CLAUDE.md` and, of `${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md`, the "Git" and "Language"
-sections and the "Working conventions" bullets from "Conventions" on; the rest of that file is the coordinator's.
+sections and the "Working conventions" bullets from "Screen specs" on; the rest of that file is the coordinator's.
 `ai/usage/` holds kit-written token records: never edit, stage, revert or search them.
 
 Before the first edit, read what the reviewer checks your commit against, so its findings are not news to you:

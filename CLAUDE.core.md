@@ -2,7 +2,7 @@
 
 Injected at session start by the ai-kit plugin in every project that has `ai/kit/`. Commands, stack rules, branch
 and deploy live in the project's CLAUDE.md, its settings in `ai/kit/`; on a conflict about commands, stack, branch or
-deploy the project's CLAUDE.md wins. The four owner decision kinds below never yield to it.
+deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs/owner-kinds.md`) never yield to it.
 
 ## Git
 

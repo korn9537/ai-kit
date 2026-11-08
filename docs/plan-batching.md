@@ -76,12 +76,12 @@ who leaves: it tries failed committers again and writes the one report when noth
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
-- The brief: the batch (what to change, where, the decisions and requirements it follows), its Done when checks
-  (the summary's checks this batch must meet), its verify commands (not
-  what CLAUDE.md says the pre-commit runs),
-  the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id for its `Batch: <id>`
-  trailer (§Plan file; a fix commit has none) and anything the coordinator already found (`path:start-end`), so
-  the subagent does not search for it again.
+- The brief (`docs/handoffs.md` §Per batch): the batch (what to change, where, the decisions and requirements it
+  follows), its Done when checks (the summary's checks this batch must meet), its verify commands (not what CLAUDE.md
+  says the pre-commit runs), the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id
+  for its `Batch: <id>` trailer (§Plan file; a fix commit has none), the later batches' ids and titles (planned work
+  is a note, not a blocker) and anything the coordinator already found (`path:start-end`), so the subagent does not
+  search for it again.
 - It returns only hash, files, choices it made and open items. An owner decision it hits comes back unanswered for
   the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
@@ -89,16 +89,18 @@ who leaves: it tries failed committers again and writes the one report when noth
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
   one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
   `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for it, as the run-plan
-  workflow calls it). Reviewer brief: read
+  workflow calls it). Reviewer brief: the user's request in their words, the batch id and title, read
   `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; pass the batch's Done when checks; name each item
   the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and
   its findings and makes a fix commit (`feat(x): y` → `fix(x): y`, `T-12a: y` → `T-12a: fix y`, an untyped
-  title → `fix: <batch>`); a fresh reviewer re-checks the fix commit only, or reviews both commits whole, with
-  the batch's Done when checks, when a finding was about data or rule correctness. The fix brief carries those checks
-  too. In the workflow, CONFIRMED findings that re-check leaves get one more
+  title → `fix: <batch>`). The re-check, by the same reviewer (SendMessage) or a fresh one in the workflow, reads the
+  fix commit only, with the findings and the batch's Done when checks; when a finding was about data or rule
+  correctness, a fresh reviewer reviews both commits whole with the first review's brief (request, `also in scope`,
+  Done when) and its findings. A fresh fix committer gets the findings, the batch's brief, Done when and the later
+  batches. In the workflow, CONFIRMED findings that re-check leaves get one more
   fix and re-check, unless an owner decision is open; what is left then goes under Open.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the

@@ -71,8 +71,8 @@ const report = [
   'Report in the structured output: hash ("" when nothing was committed), files, choices, owner (owner decisions',
   'left unanswered; stop before the code that depends on one), blockers (only what stops a later batch building on',
   'this commit; work a later batch below is planned to do is a note, never a blocker), unmet (each Done when check',
-  'not met, and why), notes (verify results, assumptions, follow-ups). Nothing committed: restore the files you edited, so the next batch starts on a clean',
-  'tree.',
+  'not met, and why), notes (verify results, assumptions, follow-ups). Nothing committed: restore the files you',
+  'edited, so the next batch starts on a clean tree.',
 ].join('\n')
 
 // the later batches' titles let the committer tell planned work (a note) from a blocker
