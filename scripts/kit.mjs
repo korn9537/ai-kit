@@ -491,11 +491,17 @@ function jobWarnings() {
     ];
   if (notExecutable(msgShimPath))
     return [".githooks/commit-msg is not executable, so git skips it (fix: node <plugin>/scripts/kit.mjs init)"];
-  // init rewrites a shim whose text differs; an older one passes silently once a plugin update removes its version
-  const pre = read(shimPath);
+  return [];
+}
+// init rewrites a kit shim whose text differs; an older one passes silently once a plugin update removes its version.
+// Line endings are eolWarnings' part; a pre-commit shim with no range is snapshotWarnings' when unattended is on
+function shimWarnings(conf) {
   const old = [];
-  if (pre !== null && isShim(pre) && pre !== SHIM) old.push("pre-commit");
-  if (shim !== MSG_SHIM) old.push("commit-msg");
+  const pre = readLF(shimPath);
+  const named = conf?.unattended === true && !pre?.includes("AI_KIT_RANGE=");
+  if (pre !== null && isShim(pre) && !pre.includes(OLD_SHIM) && pre !== SHIM && !named) old.push("pre-commit");
+  const msg = readLF(msgShimPath);
+  if (msg !== null && isShim(msg) && msg !== MSG_SHIM) old.push("commit-msg");
   return old.map((h) => `.githooks/${h} is an older ai-kit shim (fix: node <plugin>/scripts/kit.mjs init rewrites it)`);
 }
 // warnings, not problems: a UI project before 2.8.0 must keep committing (docs/screen-specs.md)
@@ -768,6 +774,7 @@ function allWarnings(c = readConf()) {
       ...memoryWarnings(),
       ...eolWarnings(),
       ...jobWarnings(),
+      ...shimWarnings(conf),
       ...uiWarnings(conf),
       ...docsWarnings(conf),
       ...layoutWarnings(conf),

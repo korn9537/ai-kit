@@ -64,6 +64,16 @@ try {
   eq("check: an older commit-msg shim is named", run(fresh, "check").includes(".githooks/commit-msg is an older ai-kit shim"), true);
   run(fresh, "init");
   eq("init: rewrites the older shim", run(fresh, "check").includes("older ai-kit shim"), false);
+  // a project's own commit-msg hook does not hide an older pre-commit shim; CRLF alone is not "older"
+  const prePath = join(fresh, ".githooks", "pre-commit");
+  const preText = readFileSync(prePath, "utf8");
+  writeFileSync(msgPath, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  writeFileSync(prePath, preText.replace(/^echo "warn.*\n/m, ""), { mode: 0o755 });
+  eq("check: an older pre-commit shim is named beside an own commit-msg", run(fresh, "check").includes(".githooks/pre-commit is an older ai-kit shim"), true);
+  writeFileSync(prePath, preText.replace(/\n/g, "\r\n"), { mode: 0o755 });
+  eq("check: a CRLF copy of the current shim is not older", run(fresh, "check").includes("older ai-kit shim"), false);
+  rmSync(msgPath);
+  run(fresh, "init");
   // a shim without the execute bit is skipped by git: check reports it, init repairs it
   const hook = join(fresh, ".githooks", "pre-commit");
   chmodSync(hook, 0o644);
