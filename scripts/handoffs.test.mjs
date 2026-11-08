@@ -2,7 +2,7 @@
 // fields, so a change to one route that misses another fails here. Usage: node scripts/handoffs.test.mjs
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { init } from "./continuous.mjs";
+import { init, next } from "./continuous.mjs";
 import { merge, parse, render, resumeArgs } from "./plan.mjs";
 
 const root = join(import.meta.dirname, "..");
@@ -68,6 +68,10 @@ ok("second-round fresh re-check: request, scope, Done when, all three commits",
 let { res } = await run([[]], { a: { unmet: ["CHECK-A not met"] } });
 ok("committer unmet: batch partial, the batch that waits on it skipped",
   res.batches[0].status === "partial" && res.batches[0].unmet[0] === "CHECK-A not met" && res.batches[1].status === "skipped");
+for (const k of ["owner", "blockers"]) {
+  ({ res } = await run([[]], { a: { [k]: ["LEFT"] } }));
+  ok(`committer ${k}: batch partial, the batch that waits on it skipped`, res.batches[0].status === "partial" && res.batches[1].status === "skipped");
+}
 ({ res } = await run([[finding("bug")], []], { fix: { unmet: ["CHECK-A broken by the fix"] } }));
 ok("fix committer unmet: batch partial", res.batches[0].status === "partial" && res.batches[0].unmet.includes("CHECK-A broken by the fix"));
 ({ res } = await run([[finding("bug")]], { fix: { hash: "" } }));
@@ -77,7 +81,10 @@ ok("a fix that made no commit keeps its findings in confirmed", res.batches[0].r
 const pb = read("docs/plan-batching.md");
 const para = (text, start, end) => {
   const i = text.indexOf(start);
-  return i < 0 ? "" : text.slice(i, end ? text.indexOf(end, i + start.length) : undefined);
+  if (i < 0) return "";
+  // a renamed end marker would let a field match a later paragraph: an empty slice fails the check instead
+  const j = end ? text.indexOf(end, i + start.length) : text.length;
+  return j < 0 ? "" : text.slice(i, j);
 };
 const has = (text, ...res) => text.length > 0 && res.every((r) => r.test(text));
 const brief = para(pb, "- The brief (", "- It returns only");
@@ -93,8 +100,8 @@ ok("coordinator narrow re-check: same reviewer, fix commit, findings, Done when"
 ok("coordinator fresh re-check: both commits, request, also in scope, Done when, findings",
   has(fixes2, /both commits whole with the first review's brief \(request, `also in scope`,\s+Done when\) and its findings/));
 ok("fresh fix committer: findings, brief, Done when, later batches", has(fixes2, /fresh fix committer gets the findings, the batch's brief, Done when and the later\s+batches/));
-const stop = para(read("hooks/review-before-stop.sh"), "Brief: the user's request", "Fix every CONFIRMED");
-ok("Stop-hook reviewer: request, Done when, the excluded diff or show", has(stop, /request/, /Done when checks/, /git diff -- \. ':\(exclude\)ai\/usage'/));
+const stop = para(read("hooks/review-before-stop.sh"), "Brief:", "Fix every CONFIRMED");
+ok("Stop-hook reviewer: request, Done when, the excluded diff or show", has(stop, /the user's request in their\s+words/, /Done when checks/, /git diff -- \. ':\(exclude\)ai\/usage'/));
 const rp = read("commands/run-plan.md");
 const resume = rp.slice(rp.indexOf("4. `committed`"), rp.indexOf("5. `heldBy`"));
 ok("resume reviewer: request, also in scope, accept as Done when, the excluded show",
@@ -118,6 +125,14 @@ ok("plan file: every batch field and the request come back", fields(back.batches
 const res2 = resumeArgs(back, new Map(), "/p");
 ok("resumeArgs: every batch field, request, plugin and job", fields(res2.batches[0]) && res2.request === "REQUEST" && res2.plugin === "/p" && res2.job === "2026-11-08-x");
 ok("continuous init: keeps the args as given", fields(init({ ...res2 }).args.batches[0]));
+const run1 = next(init({ ...res2 }), { status: "", idle: Infinity }, { commits: new Map(), loose: [], dirty: [] }, 0).step;
+ok("continuous next: the run's args keep every batch field", run1.action === "run" && fields(run1.args.batches[0]));
+ok("run-plan.md Args lists every batch field", /`\{id, title, brief, accept, verify, waitsFor, alsoInScope\}`/.test(read("commands/run-plan.md")));
+const ba = read("agents/business-analyst.md");
+ok("BA: 7 Done when, 8 Owner decisions with sources", /7\. \*\*Done when\*\*/.test(ba) && /8\. \*\*Owner decisions\*\*[^\n]*\n[^\n]*sources/.test(ba));
+ok("summary item 6 is Done when", /6\. Done when/.test(read("CLAUDE.core.md")));
+ok("committer reads core from Screen specs on, so no rule it needs drops out", /bullets from "Screen specs" on/.test(read("agents/committer.md")));
+ok("reviewer: a re-check reads only the findings' rules", /A re-check of a fix[\s\S]{0,250}no step 2 pass beyond the rules the findings name/.test(read("agents/change-reviewer.md")));
 ok("decider brief names the BA's Owner decisions item in CLAUDE.core.md and ask-guard.sh",
   /when BA ran, its Owner decisions item/.test(read("CLAUDE.core.md")) && /the BA's Owner decisions item and its sources/.test(read("hooks/ask-guard.sh")));
 
