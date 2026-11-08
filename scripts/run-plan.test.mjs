@@ -79,7 +79,14 @@ ok("an owner decision open: no second fix", r.status === "partial" && fixes(s) =
 const seen = [];
 s = script([[]]);
 await run([{ ...one[0], accept: ["the list shows the total"] }], (l, p) => (seen.push([l, p]), s(l)));
-ok("Done when reaches the committer and the reviewer", seen.every(([, p]) => /Done when:\n- the list shows the total/.test(p)));
+const has = (l, p) => /Done when:\n- the list shows the total/.test(p);
+ok("Done when reaches the committer and the reviewer",
+  seen.some(([l]) => /^commit/.test(l)) && seen.some(([l]) => /^review/.test(l)) && seen.every(([l, p]) => has(l, p)));
+seen.length = 0;
+s = script([[finding("bug", true)], []]);
+await run([{ ...one[0], accept: ["the list shows the total"] }], (l, p) => (seen.push([l, p]), s(l)));
+ok("a data finding: the fix and the fresh re-check get Done when",
+  seen.some(([l]) => / fix\]/.test(l)) && seen.some(([l]) => /recheck/.test(l)) && seen.every(([l, p]) => has(l, p)));
 seen.length = 0;
 s = script([[]]);
 await run(one, (l, p) => (seen.push(p), s(l)));

@@ -29,7 +29,8 @@ Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
 Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
 A finding breaks one of the four: the request or a `Done when` check, a rule of step 2, a screen spec, or
-correctness. A preference, a refactor or wider scope the request did not ask for is not a finding: leave it out.
+correctness. A preference, or a call for work beyond the request, is not a finding: leave it out. Code the diff adds
+beyond the request is one (step 1), and so is a bug anywhere in the diff (step 4).
 
 Reply with findings only, most severe first. Each: file:line · what is wrong · which rule or request it breaks ·
 the fix. Mark each CONFIRMED (you read the code that proves it) or PLAUSIBLE. No praise, no summary of the

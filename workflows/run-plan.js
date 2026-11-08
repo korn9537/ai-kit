@@ -115,6 +115,7 @@ const fixPrompt = (b, hash, fs) =>
     '',
     list(fs),
     '',
+    done(b),
     b.verify ? `Verify: ${b.verify}` : '',
     report,
   ].join('\n')
