@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.35.0
+
+New command, `kit.mjs uninstall` (`/ai-kit:uninstall`), reverses what `init` wrote: the `.githooks/` shims (only
+when still the ai-kit shim), `core.hooksPath` (only when nothing else is left in `.githooks/`), the `CLAUDE.md`
+pointer line, the `ai-kit-root` marker, and `ai-kit@korn9537` in the project's own `enabledPlugins` — never
+`~/.claude/settings.json`. `ai/kit/` stays unless `--purge`. Anything it could not safely touch is printed and
+left for the user.
+
 ## 2.34.0
 
 What each step hands the next is now one table, `docs/handoffs.md`, and `scripts/handoffs.test.mjs` checks the

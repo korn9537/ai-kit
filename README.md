@@ -23,7 +23,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
-| `scripts/kit.mjs`             | `init` / `check` / `sync` / `unattended` / `inventory` (§Commands); the `unattended` warnings are in it |
+| `scripts/kit.mjs`             | `init` / `check` / `sync` / `unattended` / `uninstall` / `inventory` (§Commands); the `unattended` warnings are in it |
 | `scripts/kit-migrate.mjs`     | `kit.mjs migrate`: a clean 1.x repo to the plugin; test `scripts/kit-migrate.test.mjs`         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
@@ -201,6 +201,13 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   writes nothing.
 - `node <plugin>/scripts/kit.mjs unattended` turns a repo on: same section. `--dry-run` writes nothing and exits 1 when
   the repo is not ready; `--force` passes a listed script or an empty `pre-commit.sh`, never a staged line.
+- `node <plugin>/scripts/kit.mjs uninstall` reverses what `init` wrote: the `.githooks/pre-commit` and
+  `.githooks/commit-msg` shims (only when still the ai-kit shim; a project's own hook there is left and named),
+  `core.hooksPath` (only when nothing else is left in `.githooks/`), the `CLAUDE.md` pointer line, the
+  `<git-common-dir>/ai-kit-root` marker, and `ai-kit@korn9537` in `.claude/settings.json`'s or
+  `.claude/settings.local.json`'s `enabledPlugins` (never `~/.claude/settings.json`, the user's own scope).
+  `ai/kit/` is left in place — it is the project's own filled-in content, not generated wiring — unless `--purge`
+  is given. What it could not safely touch is printed with `!` and exits 1 (§Uninstall).
 - `node <plugin>/scripts/kit.mjs inventory` (read-only) lists what a retrofit starts from: `ai/` entries outside
   the layout, schema sources, screen files with a `ui.include` suggestion, API spec and route files, decision docs
   and other `.md` outside `ai/`, grouped by folder. `/ai-kit:retrofit` (`commands/retrofit.md`) uses it to plan,
@@ -243,6 +250,17 @@ message through unchecked.
    verify commands).
    Then restart the Claude Code session so the SessionStart hook injects the working conventions.
 5. Commit `ai/kit/`, `.githooks/pre-commit`, `.claude/settings.json` and `CLAUDE.md`, staged by name.
+
+## Uninstall
+
+Run `/ai-kit:uninstall`, or `node <plugin>/scripts/kit.mjs uninstall` from the project root. It reverses step 3-5
+above: the `.githooks/pre-commit`/`commit-msg` shims, `core.hooksPath` when nothing else needs it, the `CLAUDE.md`
+pointer line, and `ai-kit@korn9537` in `.claude/settings.json`'s or `.claude/settings.local.json`'s
+`enabledPlugins` (never `~/.claude/settings.json`, which is the user's own scope — remove the plugin there by
+hand, or just stop enabling it per project). `ai/kit/` — the project's own filled-in config, checks and
+conventions — is left in place; add `--purge` to delete it too. Commit what changed, then remove the
+`extraKnownMarketplaces`/`enabledPlugins` block from `.claude/settings.json` if no other project in this
+checkout still needs the marketplace, and restart the Claude Code session.
 
 ## Updating
 
@@ -361,6 +379,17 @@ kit บันทึกการใช้ token ของทุก round (ค่�
    วิธี verify)
    จากนั้นปิดแล้วเปิด session ของ Claude Code ใหม่ เพื่อให้ SessionStart hook ใส่กฎการทำงานเข้ามา
 5. commit `ai/kit/`, `.githooks/pre-commit`, `.claude/settings.json`, `CLAUDE.md` โดย stage ทีละชื่อ
+
+### เลิกใช้
+
+สั่ง `/ai-kit:uninstall` หรือ `node <plugin>/scripts/kit.mjs uninstall` จาก root ของโปรเจกต์ — ย้อนข้อ 3-5 ข้างบน:
+ลบ shim `.githooks/pre-commit`/`commit-msg` (เฉพาะที่ยังเป็น shim ของ ai-kit เท่านั้น), เอา `core.hooksPath` ออก
+(เฉพาะเมื่อไม่มีอะไรเหลือใน `.githooks/`), ลบบรรทัด pointer ใน `CLAUDE.md`, และลบ `ai-kit@korn9537` ออกจาก
+`enabledPlugins` ใน `.claude/settings.json` หรือ `.claude/settings.local.json` (ไม่แตะ `~/.claude/settings.json`
+ซึ่งเป็น scope ของผู้ใช้เอง — ถ้าจะเลิกใช้ที่ scope นั้นต้องแก้เอง) ส่วน `ai/kit/` (config, checks, conventions ที่
+กรอกไว้) จะเก็บไว้ไม่ลบ ใส่ `--purge` ถ้าต้องการลบด้วย สิ่งที่ลบให้ไม่ได้ (hook ที่ไม่ใช่ของ ai-kit, `core.hooksPath`
+ที่ยังมี hook อื่นใช้อยู่) จะพิมพ์ด้วย `!` ให้ไปแก้เอง แล้ว commit สิ่งที่เปลี่ยน จากนั้นปิดแล้วเปิด session ของ
+Claude Code ใหม่
 
 ### อัปเดต
 
