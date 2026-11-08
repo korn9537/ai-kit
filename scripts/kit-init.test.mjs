@@ -54,8 +54,16 @@ try {
   eq("shims: a removed version falls to the newest", [shim("pre-commit").stdout, shim("commit-msg").stdout], ["ran 2.10.1\n", "ran 2.10.1\n"]);
   writeFileSync(join(fresh, ".git", "ai-kit-root"), join(cache, "2.9.0") + "\n");
   eq("shims: a recorded version that exists runs", shim("commit-msg").stdout, "ran 2.9.0\n");
+  writeFileSync(join(fresh, ".git", "ai-kit-root"), join(tmp, "nowhere", "2.3.0") + "\n");
+  eq("commit-msg shim: a removed version with none beside it is warned", shim("commit-msg").stderr.includes("Job trailer not checked"), true);
   rmSync(join(fresh, ".git", "ai-kit-root"));
   eq("commit-msg shim: no path is warned, not silent", shim("commit-msg").stderr.includes("Job trailer not checked"), true);
+  eq("check: current shims are not called older", run(fresh, "check").includes("older ai-kit shim"), false);
+  const msgPath = join(fresh, ".githooks", "commit-msg");
+  writeFileSync(msgPath, readFileSync(msgPath, "utf8").replace(/^echo "warn.*\n/m, ""), { mode: 0o755 });
+  eq("check: an older commit-msg shim is named", run(fresh, "check").includes(".githooks/commit-msg is an older ai-kit shim"), true);
+  run(fresh, "init");
+  eq("init: rewrites the older shim", run(fresh, "check").includes("older ai-kit shim"), false);
   // a shim without the execute bit is skipped by git: check reports it, init repairs it
   const hook = join(fresh, ".githooks", "pre-commit");
   chmodSync(hook, 0o644);

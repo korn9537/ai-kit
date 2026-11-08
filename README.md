@@ -215,7 +215,9 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   `record` is the Stop hook's entry point, not run by hand.
 
 The shim reads the plugin path from `<git-common-dir>/ai-kit-root`, written by `init` and at each session start.
-Until either has run on a machine, it prints a warning and runs only `ai/kit/pre-commit.sh`.
+Until either has run on a machine, it prints a warning and runs only `ai/kit/pre-commit.sh`. A recorded version that
+a plugin update removed falls to the newest `x.y.z` beside it. The `commit-msg` shim with no path warns and lets the
+message through unchecked.
 
 ## Install in a project
 

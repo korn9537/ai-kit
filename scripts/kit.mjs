@@ -491,7 +491,12 @@ function jobWarnings() {
     ];
   if (notExecutable(msgShimPath))
     return [".githooks/commit-msg is not executable, so git skips it (fix: node <plugin>/scripts/kit.mjs init)"];
-  return [];
+  // init rewrites a shim whose text differs; an older one passes silently once a plugin update removes its version
+  const pre = read(shimPath);
+  const old = [];
+  if (pre !== null && isShim(pre) && pre !== SHIM) old.push("pre-commit");
+  if (shim !== MSG_SHIM) old.push("commit-msg");
+  return old.map((h) => `.githooks/${h} is an older ai-kit shim (fix: node <plugin>/scripts/kit.mjs init rewrites it)`);
 }
 // warnings, not problems: a UI project before 2.8.0 must keep committing (docs/screen-specs.md)
 function uiWarnings(conf) {
