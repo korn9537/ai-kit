@@ -111,6 +111,17 @@ try {
   run(bare, "init");
   eq("init: a repo without .gitattributes gets one", readFileSync(join(bare, ".gitattributes"), "utf8"),
     ".githooks/* text eol=lf\nai/kit/*.sh text eol=lf\n");
+  // #48: an absolute core.hooksPath to the repo's own .githooks is wired; another directory names the fix
+  const abs = join(tmp, "abs");
+  execFileSync("git", ["init", "-q", abs]);
+  run(abs, "init");
+  execFileSync("git", ["config", "core.hooksPath", join(abs, ".githooks")], { cwd: abs });
+  eq("check: an absolute path to the repo's .githooks is wired", run(abs, "check").includes("core.hooksPath is"), false);
+  execFileSync("git", ["config", "core.hooksPath", join(abs, "other")], { cwd: abs });
+  eq("check: another directory is named with its fix", run(abs, "check").includes("not .githooks, so the kit pre-commit never runs (fix: git config core.hooksPath .githooks"), true);
+  // #49: the staged-diff warning names the file:line and the matched command
+  writeFileSync(join(abs, "ai", "kit", "pre-commit.sh"), '#!/usr/bin/env bash\nstaged="$(git diff --cached --name-only)"\n');
+  eq("check: the staged-diff warning names line and command", run(abs, "check").includes("ai/kit/pre-commit.sh:2 `staged=\"$(git diff --cached --name-only)\"` reads the staged diff"), true);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

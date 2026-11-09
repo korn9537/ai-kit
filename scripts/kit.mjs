@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -196,14 +197,21 @@ function syncSnapshot(root, kit, conf) {
 }
 
 const codeLines = (text) => text.split("\n").filter((l) => !/^\s*#/.test(l));
+// "pre-commit.sh:4 `git diff --cached --name-only`": the first code line that reads the staged diff, by its file line
+const stagedAt = (text) => {
+  const lines = text.split("\n");
+  const i = lines.findIndex((l) => !/^\s*#/.test(l) && new RegExp(STAGED).test(l));
+  return i < 0 ? null : `ai/kit/pre-commit.sh:${i + 1} \`${lines[i].trim().slice(0, 80)}\``;
+};
 
 function snapshotWarnings(root, kit, conf) {
   if (conf?.unattended !== undefined && typeof conf.unattended !== "boolean")
     return ["ai/kit/config.json unattended must be true or false (fix: write it as true, or remove it)"];
   if (conf?.unattended !== true) {
     const off = readLF(join(root, "ai", "kit", "pre-commit.sh"));
-    return off !== null && codeLines(off).some((l) => new RegExp(STAGED).test(l))
-      ? ["ai/kit/pre-commit.sh reads the staged diff, which no gate can run (fix: kit.mjs unattended --dry-run shows what to change)"]
+    const hit = off === null ? null : stagedAt(off);
+    return hit
+      ? [`${hit} reads the staged diff, and a run without the plugin has no index (fix: use changed and $AI_KIT_RANGE, or kit.mjs unattended --dry-run lists the rewrite; ignore it while unattended stays off)`]
       : [];
   }
   const out = [];
@@ -242,7 +250,7 @@ function snapshotWarnings(root, kit, conf) {
   const code = lines.join("\n");
   if (lines.some((l) => new RegExp(STAGED).test(l)))
     out.push(
-      "ai/kit/pre-commit.sh reads the staged diff, so ai/kit/check.sh refuses to run (fix: kit.mjs unattended rewrites what it can; else use changed and $AI_KIT_RANGE, as the plugin's templates/ai-kit-project/pre-commit.sh shows)",
+      `${stagedAt(pc)} reads the staged diff, so ai/kit/check.sh refuses to run (fix: kit.mjs unattended rewrites what it can; else use changed and $AI_KIT_RANGE, as the plugin's templates/ai-kit-project/pre-commit.sh shows)`,
     );
   else if (!code.trim()) out.push("ai/kit/pre-commit.sh has no checks, so ai/kit/check.sh passes whatever changed (fix: add the project's checks)");
   return out;
@@ -306,6 +314,19 @@ const tryGitIn = (cwd, a) => {
 // the git top: core.hooksPath resolves from there, and the shims and check.sh cd to it, so ai/kit must sit there
 const root = tryGitIn(process.cwd(), ["rev-parse", "--show-toplevel"]) ?? process.cwd();
 const tryGit = (...a) => tryGitIn(root, a);
+// core.hooksPath is relative to the repo top; an absolute path to the repo's own .githooks is the same directory
+const ownHooksPath = (hp) => {
+  if (hp === ".githooks") return true;
+  if (!hp) return false;
+  const real = (p) => {
+    try {
+      return realpathSync(p);
+    } catch {
+      return resolve(p);
+    }
+  };
+  return real(resolve(root, hp)) === real(join(root, ".githooks"));
+};
 const at = (...p) => join(root, ...p);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 // ai/kit/config.json read once per command, then handed to each check: its text (null when missing), the value (null
@@ -607,9 +628,9 @@ function problems({ text, conf, error }) {
   else if (notExecutable(shimPath))
     out.push(".githooks/pre-commit is not executable, so git skips it (fix: node <plugin>/scripts/kit.mjs init)");
   const hp = tryGit("config", "core.hooksPath") ?? "";
-  if (hp !== ".githooks")
+  if (!ownHooksPath(hp))
     out.push(
-      `core.hooksPath is ${hp || "unset"}, so the kit pre-commit never runs (fix: move other hooks into ai/kit/pre-commit.sh, then git config core.hooksPath .githooks)`,
+      `core.hooksPath is ${hp || "unset"}, not .githooks, so the kit pre-commit never runs (fix: git config core.hooksPath .githooks; if ${hp ? "that path holds other hooks" : "other hooks need it"}, move them into ai/kit/pre-commit.sh first)`,
     );
 
   // Claude Code applies the highest scope that sets the plugin: local, then project, then user
@@ -718,7 +739,7 @@ function initFiles(created = []) {
 
   // another hooks path (husky) would be switched off silently: leave it to the user
   const hp = tryGit("config", "core.hooksPath") ?? "";
-  if (hp && hp !== ".githooks")
+  if (hp && !ownHooksPath(hp))
     console.log(
       `! core.hooksPath is ${hp}: move those hooks into ai/kit/pre-commit.sh, then git config core.hooksPath .githooks`,
     );
@@ -819,7 +840,7 @@ function uninstall(args = []) {
   }
 
   const hp = tryGit("config", "core.hooksPath") ?? "";
-  if (hp === ".githooks") {
+  if (ownHooksPath(hp)) {
     if (!existsSync(hooksDir)) {
       tryGit("config", "--unset", "core.hooksPath");
       console.log("~ core.hooksPath (unset)");

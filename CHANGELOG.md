@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.36.2
+
+`kit.mjs check` treats an absolute `core.hooksPath` that resolves to the repo's own `.githooks` as wired (it
+compares real paths); another directory is named with `.githooks` and the one command that fixes it. The warning that
+`ai/kit/pre-commit.sh` reads the staged diff names the file, line and matched command, and says why it matters.
+Closes #48, #49.
+
 ## 2.36.1
 
 No context stop: past `handoff.max_context` a coordinator is no longer told to launch no new batch; the "Next session"
