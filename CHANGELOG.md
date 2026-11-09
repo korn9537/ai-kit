@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.36.1
+
+No context stop: past `handoff.max_context` a coordinator is no longer told to launch no new batch; the "Next session"
+note stays, on prompts only. `/ai-kit:run-plan` runs the plan as coordinator when the Workflow call fails to start
+as well as when it is refused.
+
 ## 2.36.0
 
 A plan is reviewed before its first commit. A review of the code kept finding what the plan could have known: a deploy

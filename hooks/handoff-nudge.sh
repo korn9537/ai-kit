@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# UserPromptSubmit, and PostToolUse on Agent|Task|SendMessage (a coordinator gets no new prompt between batches): once
-# the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a note asking for a "Next
-# session" prompt; a coordinator launches no new batch. Never blocks; repeats only every further 50k.
+# UserPromptSubmit: once the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a
+# note asking for a "Next session" prompt after the task. Never stops a plan; never blocks;
+# repeats only every further 50k.
 # PostToolUse on Bash|Read|Grep|Glob: every handoff.max_reads reads or searches since the last prompt, past
 # handoff.reads_from tokens, a note to send the search to a subagent (CLAUDE.core.md, heavy reads). max_reads 0: off.
 # A Read with no range or a plain cat of a code file of handoff.big_read lines or more: a note to read a range, once
@@ -93,13 +93,13 @@ if [[ -n "$reading" ]]; then
   exit 0
 fi
 
+# a coordinator is never stopped by context: only a prompt gets the note
+[[ "$event" == UserPromptSubmit ]] || exit 0
 max="$(kit_conf '.handoff.max_context' 150000)"
 used="$(context_used)"
 [[ -n "$used" ]] || exit 0
 
-# one mark per event: a prompt's note must not silence the coordinator's
 mark="$gitdir/claude-review/$session.handoff"
-[[ "$event" == PostToolUse ]] && mark+=".coord"
 # below the limit (again, after /compact): forget earlier nudges so the next crossing nudges
 ((used >= max)) || { rm -f "$mark"; exit 0; }
 step=$(((used - max) / 50000))
@@ -108,6 +108,4 @@ mkdir -p "$gitdir/claude-review"
 printf '%s\n' "$step" >"$mark"
 
 note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session: a paste-ready prompt in a code block holding the goal, the job id (docs/shared-checkout.md §Jobs), the steps left, decisions made here and not in the repo, files to read first and open items; nothing the repo or git log already holds."
-# a coordinator re-reads its whole context on each batch's notification: past the limit the plan goes on in a fresh one
-[[ "$event" == PostToolUse ]] && note="This coordinator's context is about $((used / 1000))k tokens (handoff.max_context $((max / 1000))k), and every further batch re-reads it on each notification. Launch no new commit batch (a running batch's review, fix and re-check still go ahead): let the running subagents and their reviews finish, then end with the final report and its \"Next session\" item (CLAUDE.core.md): a paste-ready prompt in a code block holding the goal, the job id (docs/shared-checkout.md §Jobs), the batches left in order with their briefs' essentials, decisions made here and not in the repo, files to read first and open items, so the plan continues in a fresh session."
 jq -n --arg n "$note" --arg e "$event" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $n}}'

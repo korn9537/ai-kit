@@ -76,10 +76,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   `claude` or none) or an `Explore` launched without a `model`, which would inherit the main session's opus; pass
   `sonnet`, except a fallback for a kit agent, which passes that agent's frontmatter model and effort (`opus` medium
   for the reviewer, business-analyst and decider, `sonnet` medium for the committer).
-- `handoff-nudge.sh` (UserPromptSubmit, and PostToolUse on Agent, Task and SendMessage for a coordinator) adds a
-  note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends; a
-  coordinator launches no new batch. It never blocks. A plan run by `/ai-kit:run-plan` never reaches it: the
-  workflow's batches stay out of the main session's context. PostToolUse on Bash, Read, Grep and Glob: every
+- `handoff-nudge.sh` (UserPromptSubmit) adds a
+  note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends. It never
+  blocks and never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every
   `handoff.max_reads` (5; 0 is off) reads or searches since the last prompt, past `handoff.reads_from` (100k) tokens of
   context, a note to send the search to a subagent. A subagent's reads and Bash lines that do not start as a read do not
   count. A `Read` with no range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a

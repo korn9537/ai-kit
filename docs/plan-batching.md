@@ -88,9 +88,10 @@ A plan of two batches or more runs as the run-plan workflow (`/ai-kit:run-plan`,
 script applies the rules below, so no batch report enters the main session's context, no agent's end wakes it (each
 wake re-reads that context) and the plan runs to its end in one go, with no context limit to hand over at. The main
 session plans, passes the batches as args, answers the user while it runs and writes the one report. One batch, no
-Workflow tool, or the call refused: the main session is the coordinator and applies these rules itself, its context
-kept small. The user naming a runner wins. `/ai-kit:continuous` runs the same workflow at any batch count for a user
-who leaves: it tries failed committers again and writes the one report when nothing is left to run.
+Workflow tool, or the call refused or failing to start: the main session is the coordinator and applies these rules
+itself, its context kept small. The user naming a runner wins. `/ai-kit:continuous` runs the same workflow at any
+batch count for a user who leaves: it tries failed committers again and writes the one report when nothing is
+left to run.
 
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
   implements, verifies and commits it. Its own prompt carries the commit-subagent rules, read and verify-output
@@ -133,15 +134,9 @@ who leaves: it tries failed committers again and writes the one report when noth
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
   A browser check or a broad search goes to a subagent, as in any session (CLAUDE.core.md, heavy reads).
-- Main session as coordinator only: past `handoff.max_context` (default 150k) it launches no new batch;
-  `handoff-nudge.sh` notes it on the next Agent or SendMessage call. The running batches finish, with their
-  reviews, fixes and re-checks, and the final report's "Next session" item holds the batches left so the plan
-  continues in a fresh session. This is the one stop the next bullet allows besides an owner decision or a blocker.
-  The limit stops new plan batches; the one item the user just asked for still goes to one committer. The prompt
-  names the job: the plan file holds the batches left.
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every
   planned commit then runs to the end in one run with one report: never stop between commits to ask whether to
-  continue; stop early only for an owner decision, a blocker or the context limit above.
+  continue; stop early only for an owner decision or a blocker.
 - After the last batch, before the final report: close the plan per §Plan file and name that commit under Git.
 - Exception: commits that share too much context to hand over (one large refactor) → say so and run in the main
   session.

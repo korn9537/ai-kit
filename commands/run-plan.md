@@ -52,7 +52,8 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
      not its review: name each batch that ran on one its review left `partial`.
    - After the owner answers: §Resume, with the answer in the batch's brief per `plan-batching.md` §Plan file
      (Left work).
-5. No Workflow tool, or the call is refused → run the plan as coordinator per §Coordinator pipeline instead.
+5. No Workflow tool, the call is refused, or it fails to start (for example the script cannot be read) → run the plan as
+   coordinator per §Coordinator pipeline instead, with no stop to ask: the plan file already holds the batches.
 
 ## Resume
 

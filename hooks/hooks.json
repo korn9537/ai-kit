@@ -119,11 +119,6 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-snapshot.sh\"",
             "timeout": 15
-          },
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/handoff-nudge.sh\"",
-            "timeout": 10
           }
         ]
       }

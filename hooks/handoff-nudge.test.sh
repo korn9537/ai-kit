@@ -41,10 +41,7 @@ check "a subagent's own Agent call: nothing" "$(t test -z "$OUT")" "$OUT"
 run UserPromptSubmit
 check "a prompt past the limit: the finish-the-task note" "$(t jq -e '.hookSpecificOutput.additionalContext | test("Do not stop")' <<<"$OUT")" "$OUT"
 run PostToolUse
-check "coordinator past the limit: PostToolUse note says launch no new batch" \
-  "$(t jq -e '.hookSpecificOutput.hookEventName == "PostToolUse" and (.hookSpecificOutput.additionalContext | test("Launch no new commit batch"))' <<<"$OUT")" "$OUT"
-run PostToolUse
-check "same step: no repeat" "$(t test -z "$OUT")" "$OUT"
+check "a coordinator past the limit: no stop note" "$(t test -z "$OUT")" "$OUT"
 ctx 215000
 run UserPromptSubmit
 check "50k further, on a prompt: the note again under UserPromptSubmit" \
