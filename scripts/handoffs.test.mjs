@@ -11,6 +11,7 @@ const source = read("workflows/run-plan.js").replace("export const meta", "const
 const AsyncFunction = (async () => {}).constructor;
 let pass = 0;
 let fail = 0;
+const has0 = (text, ...res) => res.every((r) => r.test(text));
 const ok = (name, cond) => {
   console.log(`${cond ? "ok  " : "FAIL"} - ${name}`);
   cond ? pass++ : fail++;
@@ -20,8 +21,8 @@ const commit = (hash, extra = {}) => ({ hash, files: ["a"], choices: [], owner: 
 const finding = (what, dataRule) => ({ where: "a.ts:1", what, rule: "r", fix: "f", verdict: "CONFIRMED", dataRule });
 const review = (findings) => ({ findings, reviewed: true, checked: "all" });
 const batches = [
-  { id: "a", title: "feat(x): y", brief: "BRIEF-A", accept: ["CHECK-A"], verify: "make test", alsoInScope: ["SCOPE-A"] },
-  { id: "b", title: "feat(x): z", brief: "BRIEF-B", waitsFor: ["a"] },
+  { id: "a", title: "feat(x): y", brief: "BRIEF-A", accept: ["CHECK-A"], risks: ["RISK-A"], tests: ["TEST-A"], verify: "make test", alsoInScope: ["SCOPE-A"] },
+  { id: "b", title: "feat(x): z", brief: "BRIEF-B", risks: ["RISK-B"], tests: ["TEST-B"], waitsFor: ["a"] },
 ];
 // every prompt by role, for a plan whose batch a gets a data finding, a fix, a narrow finding, a second fix
 async function run(reviews, commits = {}) {
@@ -77,6 +78,33 @@ ok("fix committer unmet: batch partial", res.batches[0].status === "partial" && 
 ({ res } = await run([[finding("bug")]], { fix: { hash: "" } }));
 ok("a fix that made no commit keeps its findings in confirmed", res.batches[0].review === "CONFIRMED findings left unfixed" && res.batches[0].confirmed.length === 1);
 
+const pr = seen.find((x) => x.label === "review: plan")?.prompt ?? "";
+ok("plan reviewer: request, per batch brief, Done when, risks, tests, also in scope, waits for",
+  all([pr], /REQUEST/, /Batch a: feat\(x\): y/, /BRIEF-A/, DONE, /- RISK-A/, /- TEST-A/, /also in scope: SCOPE-A/, /Batch b: feat\(x\): z \(waits for a\)/, /BRIEF-B/));
+const okPlan = { findings: [{ batches: ["a"], kind: "claim", what: "CLAIM-X", fix: "FIX-X", verdict: "CONFIRMED" }, { batches: ["a", "b"], kind: "conflict", what: "BOTH", fix: "f", verdict: "PLAUSIBLE" }, { batches: ["zz"], kind: "test", what: "LOST", fix: "f", verdict: "CONFIRMED" }], reviewed: true, checked: "c" };
+{
+  const seen2 = [];
+  let f = 0;
+  await new AsyncFunction("args", "agent", "log", source)({ plugin: "/p", job: "2026-11-08-x", request: "REQUEST", batches }, async (prompt, o) => {
+    seen2.push({ label: o.label, prompt });
+    if (o.label === "review: plan") return okPlan;
+    if (/^review/.test(o.label)) return review([finding("bug", false)]);
+    return / fix\]/.test(o.label) ? commit(`f${++f}`) : commit(o.label.includes("[a]") ? "c1" : "c2");
+  }, () => {});
+  const ca = role(seen2, /^commit: \[a\]/)[0], cb = role(seen2, /^commit: \[b\]/)[0];
+  ok("plan findings reach each batch they name; one naming no batch reaches all", /CLAIM-X/.test(ca) && !/CLAIM-X/.test(cb) && /BOTH/.test(ca) && /BOTH/.test(cb) && /LOST/.test(ca) && /LOST/.test(cb));
+  ok("the committer is told to report an unmet CONFIRMED finding in unmet", /goes in `unmet`/.test(ca));
+  ok("first reviewer and re-checks get the tests and CONFIRMED findings owed",
+    all(role(seen2, /^review: \[a/), /Also owed by this batch/, /test: TEST-A/, /plan review: CLAIM-X/));
+  ok("fix committer gets risks, tests and the plan findings", all(role(seen2, /^commit: \[a fix\]/), /- RISK-A/, /- TEST-A/, /CLAIM-X/));
+}
+ok("committer: the plan's risks and tests", all(commitA, /- RISK-A/, /- TEST-A/));
+ok("plan-batching names the plan review: risks, tests, claims, findings into the briefs",
+  has0(read("docs/plan-batching.md"), /## Plan review/, /`risks`/, /`tests`/, /against the code when written/, /findings go into the brief of the batch they name/, /`planReview`/));
+ok("reviewer: a plan review checks failure modes, tests, claims and conflicts",
+  has0(read("agents/change-reviewer.md"), /A plan review/, /failure mode `risks` leaves out/, /no test in `tests`/, /the code does not make true/, /`conflict`/));
+ok("run-plan.md reports the plan review", /Plan review: each `planReview` finding/.test(read("commands/run-plan.md")));
+
 // the other routes, from their docs: each paragraph is sliced out, then every field of its row looked for in it
 const pb = read("docs/plan-batching.md");
 const para = (text, start, end) => {
@@ -89,7 +117,7 @@ const para = (text, start, end) => {
 const has = (text, ...res) => text.length > 0 && res.every((r) => r.test(text));
 const brief = para(pb, "- The brief (", "- It returns only");
 ok("coordinator committer brief: batch, Done when, verify, job, Batch trailer, later batches, path:start-end",
-  has(brief, /what to change/, /Done when/, /verify commands/, /job id/, /`Batch: <id>`/, /later batches/, /path:start-end/));
+  has(brief, /what to change/, /Done when/, /`risks` and `tests`/, /plan\s+review's findings/, /verify commands/, /job id/, /`Batch: <id>`/, /later batches/, /path:start-end/));
 const rev = para(pb, "Reviewer brief:", "- CONFIRMED fixes");
 ok("coordinator first reviewer: request, batch id and title, excluded show, Done when, also in scope",
   has(rev, /request/, /batch id and title/, /:\(exclude\)ai\/usage'`/, /Done when/, /also in scope/));
@@ -118,8 +146,8 @@ ok("committer and reviewer read the conventions the change touches",
 ok("decider takes the BA's sources as research", /business-analyst report's Owner decisions item/.test(read("agents/decider.md")));
 
 // the plan file and both resume routes keep every batch field the workflow reads
-const full = { id: "a", title: "t", brief: "BRIEF", accept: ["CHECK"], verify: "make test", waitsFor: [], alsoInScope: ["S"] };
-const fields = (b) => ["title", "brief", "accept", "verify", "alsoInScope"].every((k) => JSON.stringify(b[k]) === JSON.stringify(full[k]));
+const full = { id: "a", title: "t", brief: "BRIEF", accept: ["CHECK"], risks: ["R"], tests: ["T"], verify: "make test", waitsFor: [], alsoInScope: ["S"] };
+const fields = (b) => ["title", "brief", "accept", "risks", "tests", "verify", "alsoInScope"].every((k) => JSON.stringify(b[k]) === JSON.stringify(full[k]));
 const back = parse(render(merge(null, { job: "2026-11-08-x", request: "REQUEST", batches: [full] })));
 ok("plan file: every batch field and the request come back", fields(back.batches[0]) && back.request === "REQUEST");
 const res2 = resumeArgs(back, new Map(), "/p");
@@ -127,7 +155,7 @@ ok("resumeArgs: every batch field, request, plugin and job", fields(res2.batches
 ok("continuous init: keeps the args as given", fields(init({ ...res2 }).args.batches[0]));
 const run1 = next(init({ ...res2 }), { status: "", idle: Infinity }, { commits: new Map(), loose: [], dirty: [] }, 0).step;
 ok("continuous next: the run's args keep every batch field", run1.action === "run" && fields(run1.args.batches[0]));
-ok("run-plan.md Args lists every batch field", /`\{id, title, brief, accept, verify, waitsFor, alsoInScope\}`/.test(read("commands/run-plan.md")));
+ok("run-plan.md Args lists every batch field", /`\{id, title, brief, accept, risks, tests, verify, waitsFor, alsoInScope\}`/.test(read("commands/run-plan.md")));
 const ba = read("agents/business-analyst.md");
 ok("BA: 7 Done when, 8 Owner decisions with sources", /7\. \*\*Done when\*\*/.test(ba) && /8\. \*\*Owner decisions\*\*[^\n]*\n[^\n]*sources/.test(ba));
 ok("summary item 6 is Done when", /6\. Done when/.test(read("CLAUDE.core.md")));

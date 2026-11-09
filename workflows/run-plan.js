@@ -3,6 +3,7 @@ export const meta = {
   description: 'Run a multi-commit plan: one ai-kit:committer per batch, a change-reviewer per commit, CONFIRMED fixes, a re-check and one more round',
   whenToUse: 'Launched by /ai-kit:run-plan with the planned batches as args (commands/run-plan.md)',
   phases: [
+    { title: 'Plan review', detail: 'one change-reviewer reads the plan before the first commit: failure modes, tests, claims' },
     { title: 'Commit', detail: 'one ai-kit:committer per batch, one at a time' },
     { title: 'Review', detail: 'one change-reviewer per commit with a code line' },
     { title: 'Fix', detail: 'CONFIRMED findings fixed and re-checked, one more round for what is left' },
@@ -10,7 +11,7 @@ export const meta = {
 }
 
 // args: { request, plugin, job, repo?, batches: [{ id, title, brief, accept?: [check], verify?, waitsFor?: [id],
-//   alsoInScope?: [item] }] }
+//   alsoInScope?: [item], risks: [failure mode], tests: [test the batch adds] }] }
 // in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
 const batches = (args && args.batches) || []
 if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
@@ -55,6 +56,29 @@ const REVIEW = {
   required: ['findings', 'reviewed', 'checked'],
 }
 
+const PLAN_REVIEW = {
+  type: 'object',
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          batches: { type: 'array', items: { type: 'string' }, description: 'the ids of every batch it concerns (a conflict names two)' },
+          kind: { type: 'string', enum: ['failure-mode', 'test', 'claim', 'conflict'] },
+          what: { type: 'string', description: 'what the plan misses, with file:line when read in code' },
+          fix: { type: 'string', description: 'what the batch must also do, or its risks or tests must also hold' },
+          verdict: { type: 'string', enum: ['CONFIRMED', 'PLAUSIBLE'] },
+        },
+        required: ['batches', 'kind', 'what', 'fix', 'verdict'],
+      },
+    },
+    reviewed: { type: 'boolean' },
+    checked: { type: 'string', description: 'what was checked, one line; when not reviewed, why' },
+  },
+  required: ['findings', 'reviewed', 'checked'],
+}
+
 // one agent edits the repo at a time: commits and fixes queue here, reviews run beside them
 let editor = Promise.resolve()
 const exclusive = (fn) => {
@@ -84,8 +108,35 @@ const later = (b) => {
 const trailer = (b) => `Add the trailer line \`Batch: ${b.id}\` just above the Job trailer.`
 // the result the batch must reach, set before the work: the committer builds to it and the reviewer checks it first
 const done = (b) => ((b.accept || []).length ? ['Done when:', ...b.accept.map((a) => `- ${a}`)].join('\n') : '')
+// what the plan expects to go wrong and the tests that answer it, set before the work like Done when
+const plan = (b) =>
+  (b.risks || []).length || (b.tests || []).length
+    ? ['Risks (each handled in this batch, or said not to be):', ...(b.risks || []).map((a) => `- ${a}`),
+        'Tests this batch adds:', ...(b.tests || []).map((a) => `- ${a}`)].join('\n')
+    : ''
+// the plan review's findings for one batch: a CONFIRMED one is part of the work, a PLAUSIBLE one is judged
+// a finding naming no batch of this plan goes to every batch: it is not lost to a mistyped id
+const known = new Set(batches.map((b) => b.id))
+const mine = (f, b) => {
+  const ids = (f.batches || []).filter((id) => known.has(id))
+  return ids.length ? ids.includes(b.id) : true
+}
+const planFindings = (b) => ((review && review.findings) || []).filter((f) => mine(f, b))
+const found = (b) => {
+  const fs = planFindings(b)
+  return fs.length
+    ? ['Plan review found (a CONFIRMED finding is part of this batch and, when not met, goes in `unmet`; judge a PLAUSIBLE one and report the call in choices):',
+        ...fs.map((f) => `- ${f.verdict} · ${f.kind} · ${f.what} · ${f.fix}`)].join('\n')
+    : ''
+}
+// what the batch owes beyond Done when, which its reviewer and re-checks check like Done when
+const owed = (b) => {
+  const items = [...(b.tests || []).filter((t) => !/^none\b/i.test(t)).map((t) => `test: ${t}`),
+    ...planFindings(b).filter((f) => f.verdict === 'CONFIRMED').map((f) => `plan review: ${f.what} → ${f.fix}`)]
+  return items.length ? ['Also owed by this batch (plan review and its tests):', ...items.map((i) => `- ${i}`)].join('\n') : ''
+}
 const commitPrompt = (b) =>
-  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', done(b), b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
+  [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', done(b), plan(b), found(b), b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
 
 const scope = (b) => (b.alsoInScope || []).map((s) => `also in scope: ${s} (coordinator)`).join('\n')
 const reviewPrompt = (b, hash) =>
@@ -95,6 +146,7 @@ const reviewPrompt = (b, hash) =>
     where,
     scope(b),
     done(b),
+    owed(b),
     `Read \`git show ${hash} -- . ':(exclude)ai/usage'\`, not the work tree. Review that commit only.`,
   ].join('\n')
 
@@ -121,6 +173,8 @@ const fixPrompt = (b, hash, fs) =>
     b.brief,
     '',
     done(b),
+    plan(b),
+    found(b),
     later(b),
     b.verify ? `Verify: ${b.verify}` : '',
     report,
@@ -134,6 +188,7 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
         where,
         scope(b),
         done(b),
+        owed(b),
         `A data or rule finding was fixed, so this is a fresh review of the change as a whole: read`,
         `\`git show ${hash} ${fixHash} -- . ':(exclude)ai/usage'\`. The first review found:`,
         list(fs),
@@ -144,6 +199,7 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
         'fixed? Report one still not fixed as CONFIRMED with what is left, and anything new the fix breaks.',
         list(fs),
         done(b),
+        owed(b),
       ].join('\n')
 
 const results = {}
@@ -246,6 +302,28 @@ async function reviewChain(b, r, need) {
   log(`${b.title}: fix ${(r.fix2 || fx).hash}, ${left.length} CONFIRMED left`)
 }
 
+// the plan is read before any code: what can fail, what tests answer it, what the briefs and docs claim that the code
+// does not do (docs/plan-batching.md §Plan review). Its findings go into the briefs of the batches they name; a
+// failed review is noted and the plan runs
+const planPrompt = [
+  `The user's request: ${args.request || batches[0].title}`,
+  where,
+  'Plan review: no code is written yet. Read this plan, not a commit, and read the code each batch touches.',
+  ...batches.flatMap((b) => [
+    '', `Batch ${b.id}: ${b.title}${(b.waitsFor || []).length ? ` (waits for ${b.waitsFor.join(', ')})` : ''}`,
+    b.brief, done(b), plan(b), scope(b),
+  ]),
+].join('\n')
+let review = null
+try {
+  if (batches.length > 1) review = await agent(planPrompt, { label: 'review: plan', phase: 'Plan review', agentType: 'ai-kit:change-reviewer', schema: PLAN_REVIEW })
+} catch (e) {
+  log(`plan review failed: ${e && e.message}`)
+}
+const planReview = review && review.reviewed ? review : null
+if (!planReview) review = null
+log(`plan review: ${planReview ? `${planReview.findings.length} finding(s)` : 'not done'}`)
+
 const reviews = []
 for (const [i, b] of batches.entries()) {
   const head = { id: b.id, title: b.title }
@@ -282,4 +360,7 @@ for (const [i, b] of batches.entries()) {
   )
 }
 await Promise.all(reviews)
-return { batches: batches.map((b) => results[b.id]) }
+return {
+  planReview: batches.length < 2 ? 'skipped: one batch' : planReview ? { findings: planReview.findings, checked: planReview.checked } : 'not reviewed',
+  batches: batches.map((b) => results[b.id]),
+}

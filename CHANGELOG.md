@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.36.0
+
+A plan is reviewed before its first commit. A review of the code kept finding what the plan could have known: a deploy
+landing under a running test, a doc claim the code does not make true, a test no batch owned. Each batch now carries
+`risks` (how it can fail) and `tests` (what answers each risk); `plan.mjs write` and `continuous.mjs init` refuse a
+batch without them. The run-plan workflow starts with a plan review (one `change-reviewer`, reading the plan and the
+code the batches touch) and puts its findings into the briefs of the batches they name; the report lists them. A plan
+written for the workflow before 2.36.0 needs `risks` and `tests` added to its batches (`plan.mjs write` names them).
+
 ## 2.35.0
 
 New command, `kit.mjs uninstall` (`/ai-kit:uninstall`), reverses what `init` wrote: the `.githooks/` shims (only

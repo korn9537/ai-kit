@@ -84,6 +84,8 @@ export function next(state, run, repo, now = Date.now()) {
       return { state: s, step: { action: "running" } };
     }
     for (const r of run.result.batches) s.batches[r.id] = r;
+    // each run reviews the batches it has left: the report reads every run's findings
+    if (run.result.planReview !== undefined) (s.planReviews ||= []).push(run.result.planReview);
     s.running = false;
     s.lastEnd = now;
   }

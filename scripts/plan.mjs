@@ -101,6 +101,16 @@ export function checkBatch(b) {
   if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
     throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
   }
+  // set before the work: the plan review reads them, and the committer builds to them (plan-batching.md §Plan review)
+  for (const k of ["risks", "tests"]) {
+    if (!(Array.isArray(b[k]) && b[k].length && b[k].every((a) => typeof a === "string" && a.trim()))) {
+      throw new Error(`batch ${b.id}: ${k} is a list of strings, not empty (a batch with none says "none: <why>")`);
+    }
+    // a bare "none", "n/a" or "-" is the boilerplate the gate exists to stop: the why is the content
+    if (b[k].some((a) => /^\s*(none|n\/?a|nil|-+)\s*[.:]?\s*$/i.test(a))) {
+      throw new Error(`batch ${b.id}: a ${k} entry of "none" says why: "none: <why>"`);
+    }
+  }
   for (const k of ["waitsFor", "alsoInScope"])
     if (b[k] !== undefined && !Array.isArray(b[k])) throw new Error(`batch ${b.id}: ${k} is a list`);
 }

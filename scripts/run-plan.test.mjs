@@ -26,14 +26,46 @@ const script = (reviews, fix = (n) => commit(`f${n}`), first = commit("c1")) => 
   let n = 0, f = 0;
   const fn = (label) => {
     log.push(label.split(" ")[0] + (/ fix\]/.test(label) ? " fix" : ""));
+    if (label === "review: plan") return review([]);
     if (/^review/.test(label)) return review(reviews[n++] ?? []);
     return / fix\]/.test(label) ? fix(++f) : first;
   };
   fn.log = log;
   return fn;
 };
-const one = [{ id: "a", title: "feat(x): y", brief: "b", verify: "make test" }];
+const one = [{ id: "a", title: "feat(x): y", brief: "b", verify: "make test", risks: ["R"], tests: ["T"] }];
+const two = [...one, { id: "b", title: "feat(x): z", brief: "b2", risks: ["R2"], tests: ["T2"] }];
 const fixes = (s) => s.log.filter((l) => /fix$/.test(l)).length;
+
+// the plan review: read before the first commit, its findings reach the batch they name, a failed one does not stop the run
+{
+  const planFinding = { batches: ["a"], kind: "failure-mode", what: "UAT deploy lands mid-run", fix: "compare the version after the run", verdict: "CONFIRMED" };
+  const seen = [];
+  const res = await run(two, (label, prompt) => {
+    seen.push({ label, prompt });
+    if (label === "review: plan") return { findings: [planFinding], reviewed: true, checked: "plan" };
+    if (/^review/.test(label)) return review([]);
+    return commit(/\[b\]/.test(label) ? "c2" : "c1");
+  });
+  ok("plan review runs first and reads the plan, not a commit", seen[0].label === "review: plan" && /Plan review: no code is written yet/.test(seen[0].prompt) && !/git show/.test(seen[0].prompt));
+  ok("plan review prompt carries the risks and tests", /- R\b/.test(seen[0].prompt) && /- T\b/.test(seen[0].prompt));
+  const c = seen.find((x) => /^commit: \[a\]/.test(x.label)).prompt;
+  ok("the committer gets the risks, the tests and the plan review finding", /- R\b/.test(c) && /- T\b/.test(c) && /CONFIRMED · failure-mode · UAT deploy lands mid-run/.test(c));
+  ok("the result holds the plan review findings", res.planReview.findings.length === 1 && res.batches.every((b) => b.status === "committed"));
+  let asked = false;
+  const solo = await run(one, (l) => {
+    if (l === "review: plan") asked = true;
+    return /^review/.test(l) ? review([]) : commit("c1");
+  });
+  ok("a one-batch plan gets no plan review", !asked && solo.planReview === "skipped: one batch");
+  const down = await run(two, (label) => {
+    if (label === "review: plan") throw new Error("boom");
+    return /^review/.test(label) ? review([]) : commit("c1");
+  });
+  ok("a plan review that fails: the plan runs, the result says not reviewed", down.planReview === "not reviewed" && down.batches[0].status === "committed");
+  const unread = await run(two, (label) => (label === "review: plan" ? { findings: [], reviewed: false, checked: "no repo" } : /^review/.test(label) ? review([]) : commit("c1")));
+  ok("a plan review that could not read: not reviewed", unread.planReview === "not reviewed");
+}
 
 let s = script([[]]);
 let r = (await run(one, s)).batches[0];

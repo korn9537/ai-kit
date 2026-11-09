@@ -8,7 +8,7 @@ import { abandon, HUNG_AFTER, init as initState, MAX_TRIES, next, readRun, RETRY
 
 // init checks each batch as plan.mjs write does: the fixtures name only ids, so give each a title and brief
 const init = (args, ...rest) =>
-  initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", ...b })) }, ...rest);
+  initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", risks: ["r"], tests: ["t"], ...b })) }, ...rest);
 import { readRepo } from "./plan.mjs";
 
 let passed = 0;
@@ -67,6 +67,8 @@ r = next(live(), { status: "", idle: HUNG_AFTER }, clean, T + SLEPT_AFTER + 1);
 ok("after the Mac slept: still running, idle counts anew", r.step.action === "running" && r.state.startedAt > T, r);
 r = next(live(), { status: "completed", result: {}, idle: HUNG_AFTER }, clean, T + 1);
 ok("a result without batches merges nothing", r.step.action === "stopped" && !Object.keys(r.state.batches).length, r);
+r = next(live(), { status: "completed", result: { planReview: { findings: [{ what: "PR" }], checked: "c" }, batches: [{ id: "a", status: "committed" }] }, idle: 0 }, clean, T + 1);
+ok("a run's plan review findings are kept in the state for the report", r.state.planReviews?.length === 1 && r.state.planReviews[0].findings[0].what === "PR", r);
 
 r = next(live(), finished(...["a", "b", "c", "d"].map(committed)), clean, T);
 ok("all committed: done, nothing open", r.step.action === "done" && !r.step.open.length, r);
@@ -237,23 +239,23 @@ ok("repo: dirty tree", readRepo(repo, "2026-11-05-x").dirty.join() === "f");
 
 const cli = (...a) => execFileSync("node", [join(import.meta.dirname, "continuous.mjs"), ...a], { cwd: repo, encoding: "utf8" });
 const st = join(tmp, "s.json");
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
 cli("init", st, join(tmp, "args.json"));
 ok("cli: a commit already in the repo is not sent again", JSON.parse(cli("next", st)).action === "done");
 rmSync(st);
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5", title: "t", brief: "b" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
 cli("init", st, join(tmp, "args.json"));
 const step = JSON.parse(cli("next", st));
 ok("cli: run after init, args in a file", step.action === "run" && !step.args && existsSync(step.argsFile), step);
 
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b" }], repo: nogit }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"], tests: ["t"] }], repo: nogit }));
 const noInit = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "init", st, join(tmp, "args.json")], { encoding: "utf8" });
 ok("cli: init stops on a failed log", noInit.status === 1 && !existsSync(st) && noInit.stderr.includes("git log failed"), noInit);
 
 rmSync(join(repo, "f"));
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1", title: "t", brief: "b" }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
 cli("init", st, join(tmp, "args.json"));
 const failedState = JSON.parse(readFileSync(st, "utf8"));
 writeFileSync(st, JSON.stringify({ ...failedState, batches: { s1: failedAgent("s1") }, lastEnd: 1 }));

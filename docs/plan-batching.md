@@ -20,6 +20,30 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 6. **Hot files** most items would touch (plan and state docs, decision log, roadmap, changelog, lockfile, generated
    clients): update once per batch, or once at the end of the plan, not once per item.
 
+## Plan review
+
+Before the first batch a fresh `ai-kit:change-reviewer` reads the plan, so what a review of the code would find
+anyway is found before the code exists. Each batch carries, set when the plan is written:
+
+- `risks`: how the batch can fail, one line each: state that changes while it runs (a deploy, another session), a
+  partial failure, a call that hangs or repeats, an empty or huge input. Each is handled in the batch or said not to
+  be; a batch with none says `none: <why>`.
+- `tests`: each test the batch adds, one per risk and per Done when check that code can show; `none: <why>` for a
+  doc-only batch.
+- A statement a doc or brief makes about behavior is checked against the code when written, not after.
+
+The reviewer reads the plan and the code the batches touch, and reports per batch: a failure mode missing from
+`risks`, a risk or Done when check with no test, a statement the code does not make true, two batches that conflict.
+In the workflow its findings go into the brief of the batch they name (a CONFIRMED one is part of the batch, a
+PLAUSIBLE one is judged and reported in `choices`) and into the result's `planReview`; the run does not stop for them.
+A finding names every batch it concerns (a conflict names two); one naming none goes to every batch. The committer
+reports a CONFIRMED finding it did not meet in `unmet`, and the commit's reviewer and re-checks check it and the batch's
+`tests` like Done when. A plan of one batch gets no review. A resume or a continuous retry reviews only the batches
+left, again: the findings of an earlier run live in its result (`/ai-kit:continuous` keeps each run's in its state),
+not in the plan file.
+Run as coordinator: launch the reviewer once, after showing the plan, and put its findings in the briefs the same way.
+`plan.mjs write` and `continuous.mjs init` refuse a batch with no `risks` or no `tests`, or a bare `none`.
+
 ## Plan file
 
 A plan lives in `ai/plans/<job>.md`, so a lost session loses no batch. `scripts/plan.mjs` owns the file: the batches
@@ -77,7 +101,8 @@ who leaves: it tries failed committers again and writes the one report when noth
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
 - The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
 - The brief (`docs/handoffs.md` §Per batch): the batch (what to change, where, the decisions and requirements it
-  follows), its Done when checks (the summary's checks this batch must meet), its verify commands (not what CLAUDE.md
+  follows), its Done when checks (the summary's checks this batch must meet), its `risks` and `tests` and the plan
+  review's findings for it (§Plan review), its verify commands (not what CLAUDE.md
   says the pre-commit runs), the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id
   for its `Batch: <id>` trailer (§Plan file; a fix commit has none), the later batches' ids and titles (planned work
   is a note, not a blocker) and anything the coordinator already found (`path:start-end`), so the subagent does not
@@ -89,7 +114,9 @@ who leaves: it tries failed committers again and writes the one report when noth
 - When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
   one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
   `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for it, as the run-plan
-  workflow calls it). Reviewer brief: the user's request in their words, the batch id and title, read
+  workflow calls it). Reviewer brief: the user's request in their words, the batch id and title, the batch's `tests`
+  and CONFIRMED plan
+  review findings as items it owes beyond Done when, read
   `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; pass the batch's Done when checks; name each item
   the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
 - CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;

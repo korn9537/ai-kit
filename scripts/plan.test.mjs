@@ -33,7 +33,7 @@ const args = (batches = [{ id: "a", title: "A" }, { id: "b", title: "B", waitsFo
   request: "ส่งออกใบแจ้งหนี้ **ด่วน** 2026-11-05",
   plugin: "/plugin",
   job: JOB,
-  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, ...b })),
+  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, risks: ["r"], tests: ["t"], ...b })),
 });
 
 const plan = merge(null, args());
@@ -74,6 +74,12 @@ throws("a repeated id is refused", () => merge(null, args([{ id: "a" }, { id: "a
 throws("an unknown wait is refused", () => merge(null, args([{ id: "a", waitsFor: ["z"] }])), /not in this run/);
 throws("a wait on a planned batch outside the run is refused: the workflow would skip it", () =>
   merge(merge(null, args()), args([{ id: "d", waitsFor: ["a"] }])), /not in this run/);
+throws("a batch with no risks is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", tests: ["t"] }] }), /risks is a list/);
+throws("a batch with an empty tests list is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: ["r"], tests: [] }] }), /tests is a list/);
+throws("a blank risk is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [" "], tests: ["t"] }] }), /risks is a list/);
+for (const bare of ["none", "None.", "n/a", "-"])
+  throws(`a bare ${bare} is refused`, () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [bare], tests: ["t"] }] }), /says why/);
+ok("none: <why> passes", merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: ["none: doc only"], tests: ["none: doc only"] }] }).batches.length === 1);
 throws("a batch with no brief is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A" }] }), /title and a brief/);
 throws("a batch with no title is refused", () => merge(null, { job: JOB, batches: [{ id: "a", brief: "B" }] }), /title and a brief/);
 throws("a wait on a later batch is refused", () => merge(null, args([{ id: "a", waitsFor: ["b"] }, { id: "b" }])), /planned after/);
@@ -153,10 +159,10 @@ try {
   git(oldRepo, "add", "ai");
   git(oldRepo, "commit", "-q", "-m", "older plan");
   ok("a plan already in the repo stays writable, however wide", write(oldRepo, oldArgs).committed === false);
-  ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d" }] }).committed === true);
+  ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d", risks: ["r"], tests: ["t"] }] }).committed === true);
   const narrow = repoAt("narrow");
   write(narrow, args());
-  throws("a plan already in the repo refuses a new wide line", () => write(narrow, { ...args(), batches: [{ id: "e", title: "E", brief: "do e", ["k".repeat(130)]: 1 }] }), /passes 120 columns/);
+  throws("a plan already in the repo refuses a new wide line", () => write(narrow, { ...args(), batches: [{ id: "e", title: "E", brief: "do e", risks: ["r"], tests: ["t"], ["k".repeat(130)]: 1 }] }), /passes 120 columns/);
   throws("write refuses a key too long for the file", () => write(repoAt("wide-key"), args([{ id: "a", ["k".repeat(130)]: 1 }])), /passes 120 columns/);
   ok("the refused plan leaves no file", !existsSync(join(tmp, "shaped", "ai", "plans", `${JOB}.md`)));
   const rel = `ai/plans/${JOB}.md`;
