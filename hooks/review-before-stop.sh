@@ -229,10 +229,14 @@ if command -v node >/dev/null 2>&1 && compgen -G "$project/ai/plans/*.md" >/dev/
     [[ -n "$(jq -R --arg job "$job" "fromjson? // empty | $named_jq" "$transcript" 2>/dev/null | head -n 1 || true)" ]]; then
     left="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" status "$job" --quick 2>/dev/null || true)"
     if [[ "$left" == *"; ready "* || "$left" == *"; waiting "* ]]; then
-      if outside="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" scope "$job" --outside <<<"$paths" 2>&1)"; then
+      # stderr apart from the path list: a node warning must not read as a path outside the plan
+      scope_err="$(mktemp 2>/dev/null || true)"
+      if outside="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" scope "$job" --outside <<<"$paths" 2>"${scope_err:-/dev/null}")"; then
+        [[ -n "$scope_err" ]] && rm -f "$scope_err"
         [[ -z "$outside" ]] && exit 0
       else
-        echo "ai-kit: plan.mjs scope failed, mid-plan stop passes: $(head -n 1 <<<"$outside")" >&2
+        echo "ai-kit: plan.mjs scope failed, mid-plan stop passes: $(head -n 1 "${scope_err:-/dev/null}")" >&2
+        [[ -n "$scope_err" ]] && rm -f "$scope_err"
         exit 0
       fi
     fi

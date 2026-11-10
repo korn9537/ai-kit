@@ -437,6 +437,8 @@ printf 'if (process.argv[2] === "scope") { console.error("boom"); process.exit(1
 REAL_HOOK="$HOOK" HOOK="$FAKE/hooks/review-before-stop.sh"
 sed -i.bak '1,20s/$/x/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
 run_case "pass: mid-job, plan.mjs scope fails: today's pass" pass - "$(edit src/c.ts)" "$named"
+printf 'if (process.argv[2] === "scope") { console.error("ExperimentalWarning: x"); process.exit(0); }\nconsole.log("x: 1 done; ready b");\n' >"$FAKE/scripts/plan.mjs"
+run_case "pass: mid-job, scope succeeds with a warning on stderr and no outside path" pass - "$(edit src/c.ts)" "$named"
 HOOK="$REAL_HOOK"
 git -C "$REPO" checkout -q -- src/c.ts
 git -C "$REPO" commit -qam "a" -m "Batch: a" -m "Job: $J"
