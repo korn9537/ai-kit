@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.38.0
+
+New `docs/spec.md`: what each kit file does (hooks, git hooks, agents, commands, scripts, workflow, docs,
+conventions, templates, files the kit creates in a project) and eight processes (session start, one task, a plan of
+several items, commit, usage records, decisions, install, editing the kit), each step naming its file.
+`scripts/spec.test.mjs` fails when a kit file is not named there or the spec names a path that does not exist.
+`docs/why.md` and `scripts/why.test.mjs` are removed: a table of why each rule exists did not say what a file does,
+and 62 of its 153 rows had no recorded reason. Its text stays in git (2.37.1). README §Editing the kit step 3 now
+asks for the spec instead of a why row. No project needs to edit anything.
+
 ## 2.37.1
 
 `docs/why.md`: the 1.x history in asw-sales-flow and solo-training was searched for the reasons git here lacks

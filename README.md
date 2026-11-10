@@ -38,7 +38,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record): `node scripts/<name>.test.mjs`                   |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite in parallel: `node scripts/test-all.mjs` |
-| `docs/why.md`                 | why each hook, rule of `CLAUDE.core.md` and agent exists, from history; read before removing one; test `scripts/why.test.mjs` |
+| `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from; test `scripts/spec.test.mjs` |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
 | `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit; `--wrap`: kit clone only, added prose lines over 120 characters, run by `.githooks/pre-commit` |
@@ -275,8 +275,8 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
    `git config core.hooksPath .githooks` once for the clone's pre-commit (line wrap check).
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
    and `node scripts/test-all.mjs`, the one command for every test suite and the line wrap check.
-3. A new or changed hook, rule or agent gets its row in `docs/why.md`: the problem it answers and, where one
-   exists, the digest figure that would show it is no longer needed.
+3. A new, renamed or removed file of the kit is named in `docs/spec.md` in the same commit, and a changed process is
+   changed there; `scripts/spec.test.mjs` fails on a file the spec does not name.
 4. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
    hook, command, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
    settings to keep working.
