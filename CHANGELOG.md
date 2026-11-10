@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.45.1
+
+`githooks/commit-msg` reads the `Job:` line from any paragraph made only of `Key: value` lines, as `scripts/jobs.mjs`
+does, not from `git interpret-trailers`. A blank line between `Job:` and `Co-Authored-By` hid the job from git's
+trailer block, and the hook refused the commit: in 5 days that was 89 committer retries in brieflane and 77 in
+asw-sales-flow, each a fresh commit attempt. Comment lines and CRLF are handled; a `Job:` line in prose still is none.
+Projects with the shim get it on the next commit; a repo with its own copy of the hook (not the shim) keeps the old
+check until it is replaced.
+
 ## 2.45.0
 
 The Stop hook no longer asks for a review mid-job: when the last commit's job has a `plan.mjs` plan with batches left

@@ -5,7 +5,13 @@ msg="$1"
 [ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
 head -n 1 "$msg" | grep -qE '^(fixup|squash|amend)! ' && exit 0
 
-jobs=$(git interpret-trailers --parse "$msg" | grep -E '^Job: ' | sed 's/^Job: //')
+# any paragraph made only of `Key: value` lines, as scripts/jobs.mjs reads it: a blank line between Job and
+# Co-Authored-By hid Job from `git interpret-trailers` (most committer retries); a Job line in prose still is none
+jobs=$(git stripspace --strip-comments <"$msg" | tr -d '\r' | awk 'BEGIN { RS = "" } {
+  n = split($0, l, "\n"); ok = 1
+  for (i = 1; i <= n; i++) if (l[i] !~ /^[A-Za-z][-A-Za-z0-9_]*: [^ \t]/) ok = 0
+  if (ok) for (i = 1; i <= n; i++) if (l[i] ~ /^Job: /) { v = substr(l[i], 6); sub(/[ \t]+$/, "", v); print v }
+}')
 n=$(printf '%s' "$jobs" | grep -c .)
 if [ "$n" -ne 1 ] || ! printf '%s\n' "$jobs" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$'; then
   echo "commit-msg: the message needs exactly one trailer 'Job: <yyyy-mm-dd>-<slug>' (e.g. Job: 2026-01-05-invoice-export)."

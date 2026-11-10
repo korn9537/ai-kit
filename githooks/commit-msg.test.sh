@@ -38,6 +38,11 @@ check "no trailer → blocked" "$(msg 'feat: x\n\nbody\n')" 1
 check "valid Job → passes" "$(msg 'feat: x\n\nJob: 2026-01-05-invoice-export\n')" 0
 check "Job before Co-Authored-By in one block → passes" \
   "$(msg 'feat: x\n\nJob: 2026-01-05-a\nCo-Authored-By: A <a@b>\n')" 0
+check "Job and Co-Authored-By in their own paragraphs → passes" \
+  "$(msg 'feat: x\n\nbody\n\nJob: 2026-01-05-a\n\nCo-Authored-By: A <a@b>\n')" 0
+check "Job in its own paragraph twice → blocked" "$(msg 'feat: x\n\nJob: 2026-01-05-a\n\nJob: 2026-01-05-b\n')" 1
+check "CRLF message → passes" "$(msg 'feat: x\r\n\r\nJob: 2026-01-05-a\r\n')" 0
+check "a commented Job line → blocked" "$(msg 'feat: x\n\n# Job: 2026-01-05-a\n')" 1
 check "free-text job → blocked" "$(msg 'feat: x\n\nJob: Invoice Export\n')" 1
 check "two jobs → blocked" "$(msg 'feat: x\n\nJob: 2026-01-05-a\nJob: 2026-01-05-b\n')" 1
 check "lowercase job: → blocked" "$(msg 'feat: x\n\njob: 2026-01-05-a\n')" 1
