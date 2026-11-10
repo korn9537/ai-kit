@@ -184,8 +184,8 @@ Each step names the file that does it.
 
 ### P2 One task
 
-1. Summary before a UI, DB or business-rule change. A DB or business-rule change runs `business-analyst` first; a
-   small job skips both.
+1. Summary before a UI, DB or business-rule change. A DB or business-rule change, or a check of how one works
+   today, runs `business-analyst` first; a small job skips both.
 2. A question for the owner goes to `decider` first. `ask-guard.sh` blocks AskUserQuestion until it returned OWNER;
    `decider.mjs guard` reads the verdict from the decider's own transcript.
 3. A change over `review.skip_lines` code lines, or a new file, or a `review.always` path goes to `committer` batches;

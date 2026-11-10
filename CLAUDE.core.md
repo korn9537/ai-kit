@@ -41,9 +41,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   (`ai/usage/decisions/`, `/ai-kit:decisions`).
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
   stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
-  change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report; a UI-only
-  change (layout, copy, style: no change in what a user can do or what is decided for them, no rule or data) is
-  summarized by the main session without it: 1. Problem · 2.
+  change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report. A request to
+  check, verify or explain how a business rule or data behaves today runs the BA too, change or not: its answer
+  decides the change that follows. A UI-only change (layout, copy, style: no change in what a user can do or what is
+  decided for them, no rule or data) is summarized by the main session without it: 1. Problem · 2.
   Recommendation (one, with rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data,
   other modules) · 5. Standard it sets or follows · 6. Done when (checks a reviewer can confirm; the BA's section, if
   run). Touches an owner decision → show the summary and wait for a go.
@@ -99,8 +100,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   through a flow) or a search likely to need more than about three reads or greps. Finding what a summary, plan or
   brief needs (where the code is, what it does today, which files a change touches) is such a search: one Explore
   subagent per question, sent together when independent, returns the `path:start-end` ranges and facts the brief
-  carries; the main session coordinates, it does not explore. For a DB or business-rule change the BA is that
-  subagent. Reads while debugging with the user watching each step stay in the main session. The brief names what to
+  carries; the main session coordinates, it does not explore. For a DB or business-rule change, or a check of how one
+  works today, the BA is that subagent. A brief asking how something works asks for the path traced from the entry
+  point (route, handler, screen) to the line that decides it, each step as `file:line`: a matching line says where
+  code is, not that the flow reaches it. The main session checks that path, not only that the line exists. Reads
+  while debugging with the user watching each step stay in the main session. The brief names what to
   check or find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads
   that report, never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one
   `grep -n` the next edit needs stays. A general-purpose or Explore subagent gets `model: "sonnet"` (hook-guarded; a

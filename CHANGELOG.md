@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.46.2
+
+A request to check, verify or explain how a business rule or data behaves today runs `ai-kit:business-analyst`, not
+an Explore subagent: its answer decides the change that follows (`CLAUDE.core.md`, summary rule and heavy reads).
+A brief asking how something works asks for the path from the entry point to the deciding line, each step as
+`file:line`, and the main session checks that path, not only that the line exists. In asw-sales-flow a check of the
+booth questionnaire went to Explore, which found a lock on `question.id === ownerKey` and reported that the sales QR
+locks through it; the sales QR never reaches that line, and the plan built on it proposed a column that already
+existed. No project needs to edit anything.
+
 ## 2.46.1
 
 The committer edits code with the Edit tool, and runs `check-comments.mjs --strict` and `check-docs.mjs --strict` on

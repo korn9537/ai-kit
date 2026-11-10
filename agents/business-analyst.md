@@ -1,6 +1,6 @@
 ---
 name: business-analyst
-description: "Business analysis before a DB or business-rule change: what is really asked, which requirements and decisions apply, what the code does today, what outside sources say, where they conflict, one recommendation. Launched before the summarize-before-editing step, or when the user asks for BA. Read-only."
+description: "Business analysis before a DB or business-rule change: what is really asked, which requirements and decisions apply, what the code does today, what outside sources say, where they conflict, one recommendation. Launched before the summarize-before-editing step, for a check of how a business rule or data behaves today, or when the user asks for BA. Read-only."
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch
 model: opus
 effort: medium
