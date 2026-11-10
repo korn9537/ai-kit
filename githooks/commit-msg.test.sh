@@ -48,7 +48,7 @@ check "a message of only Job → blocked" "$(msg 'Job: 2026-01-05-a\n')" 1
 check "commit -v: Job right above the scissors and diff → passes" \
   "$(msg 'feat: x\n\nJob: 2026-01-05-a\n# Please enter\n# ------------------------ >8 ------------------------\n# Do not modify\ndiff --git a/a b/a\n+x\n')" 0
 git -C "$REPO" config core.commentChar ';'
-check "core.commentChar ; : a commented Job line → blocked" "$(msg 'feat: x\n\n; Job: 2026-01-05-a\n')" 1
+check "core.commentChar ; : a ; line under Job is stripped → passes" "$(msg 'feat: x\n\nJob: 2026-01-05-a\n; note\n')" 0
 git -C "$REPO" config --unset core.commentChar
 check "free-text job → blocked" "$(msg 'feat: x\n\nJob: Invoice Export\n')" 1
 check "two jobs → blocked" "$(msg 'feat: x\n\nJob: 2026-01-05-a\nJob: 2026-01-05-b\n')" 1

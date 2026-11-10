@@ -35,11 +35,11 @@ until a session or `init` has recorded the plugin path (a fresh clone, an old pl
   the request (`2026-01-05-invoice-export`). It names the job in every committer brief (run-plan: the `job` arg). A
   fix brief that names the commit it fixes takes that commit's job; a committer whose brief names neither a job nor a
   commit it fixes stops and reports it, and never invents one. A session continuing a handed-off request reuses the id
-  from the handoff prompt, or from the request's last commit (`git log -1 --format=%b <hash> | grep '^Job: '`, the
-  body: git's trailer parser misses a Job line set off by a blank line); the "Next session" prompt names it.
-- Same job: every batch of the request, its review-fix commits (copy the job of the commit being fixed:
-  `git log -1 --format=%b <hash> | grep '^Job: '`, the body: git's trailer parser misses a Job line set off by a
-  blank line), and output it regenerates. New job: a follow-up outside the request, and a later request on the
+  from the handoff prompt, or from the request's last commit (its body's last `Job:` line,
+  `git log -1 --format=%b <hash> | grep '^Job: ' | tail -n 1`: git's trailer parser misses a Job line set off by a
+  blank line); the "Next session" prompt names it.
+- Same job: every batch of the request, its review-fix commits (copy the job of the commit being fixed, read the
+  same way), and output it regenerates. New job: a follow-up outside the request, and a later request on the
   same feature.
 - Trailers go last, in one block with no blank line inside: `Job: ...` on its own line, before `Co-Authored-By`.
 - Find: `/ai-kit:jobs` lists jobs; `/ai-kit:jobs <id or part of it>` prints the job's commits, files, migrations
