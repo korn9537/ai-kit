@@ -88,7 +88,7 @@ if [[ -n "$reading" ]]; then
   mkdir "$reads.$step" 2>/dev/null || exit 0
   used="$(context_used)"
   [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 0))) || exit 0
-  note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to a subagent (Explore or general-purpose, with model \"sonnet\") that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here."
+  note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to a subagent (Explore or general-purpose, with model \"sonnet\") that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here, and so do reads while debugging with the user watching each step."
   jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $n}}'
   exit 0
 fi
