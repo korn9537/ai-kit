@@ -13,8 +13,8 @@
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
 # Escape hatch: a user message starting with "ไม่ต้อง review" or "skip review" after the last edit.
-# Mid-job: the last commit's job has a plan.mjs plan with batches left and this transcript names that job → no review
-# until its last batch (the job's one review).
+# Mid-job: the last commit's job has a plan.mjs plan with batches left and this session's own commit, committer brief
+# or Workflow run names that job → no review until its last batch (the job's one review).
 # Comment-only: nothing but //, one-line /* */ or blank lines changed since the snapshot (review-snapshot.sh: the
 # last review's tree, else the one session-start.sh took), or since the commit before the session began without one → no
 # review. A Bash write is judged by those changed lines, not by the files its command names. Small: at most config
@@ -205,12 +205,24 @@ else
     paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
   fi
 fi
-# mid-job: the job of the last commit has a plan.mjs plan with batches left, and this session named that job (a commit
-# or a committer brief carries its trailer) → the job's one review comes after its last batch, not at this stop.
-# Another session's plan does not count: this transcript never names its job
+# mid-job: the job of the last commit has a plan.mjs plan with batches left, and this session itself named that job
+# → the job's one review comes after its last batch, not at this stop. Named = one of its own tool calls: a Bash
+# `git commit` carrying the trailer, a committer brief carrying it, or a Workflow run of that job; the exact id, so
+# `git log` output in a tool result or a job sharing its prefix does not count, and another session's plan never does.
+# Gap: until that plan is finished or closed, every stop with that job at HEAD passes, unrelated edits included
+read -r -d '' named_jq <<'JQ' || true
+  ("(^|[\\n\\t \"'`])Job: " + $job + "($|[\\n\\t \"'`])") as $re
+  | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | (.input // {}) as $i
+  | select((.name == "Bash" and (($i.command // "") | test("git( +-[Cc] +\\S+)* +commit") and test($re)))
+      or ((.name == "Agent" or .name == "Task") and ((($i.subagent_type // "") | test("committer"))
+        or (($i.description // "") | test("^\\s*commit:"; "i"))) and (($i.prompt // "") | test($re)))
+      or (.name == "Workflow" and (($i.args // "") | tostring | test("\"job\": *\"" + $job + "\""))))
+  | "named"
+JQ
 if command -v node >/dev/null 2>&1 && compgen -G "$project/ai/plans/*.md" >/dev/null; then
   job="$(git -C "$project" log -1 --format=%B 2>/dev/null | sed -n 's/^Job: \([0-9a-z-]*\)$/\1/p' | tail -n 1 || true)"
-  if [[ -n "$job" && -f "$project/ai/plans/$job.md" ]] && grep -qF "Job: $job" "$transcript"; then
+  if [[ -n "$job" && -f "$project/ai/plans/$job.md" ]] &&
+    [[ -n "$(jq -R --arg job "$job" "fromjson? // empty | $named_jq" "$transcript" 2>/dev/null | head -n 1 || true)" ]]; then
     left="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" status "$job" --quick 2>/dev/null || true)"
     [[ "$left" == *"; ready "* || "$left" == *"; waiting "* ]] && exit 0
   fi

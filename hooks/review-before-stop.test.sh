@@ -405,6 +405,15 @@ named="$(line Bash "$(jq -cn --arg c "git commit -m x -m 'Batch: a' -m 'Job: $J'
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "pass: mid-job, batches left in this session's plan" pass - "$(edit src/a.ts)" "$named"
 run_case "block: another session's plan (its job never named here)" block "no review yet" "$(edit src/a.ts)"
+logged="$(jq -cn --arg t "commit 1234\n\n    a\n\n    Job: $J" '{type: "user", timestamp: "2030-01-01T00:00:59Z",
+  message: {content: [{type: "tool_result", tool_use_id: "x", content: $t}]}}')"
+run_case "block: the job only seen in git log output" block "no review yet" "$(edit src/a.ts)" "$logged"
+run_case "block: a job sharing the prefix is not this one" block "no review yet" "$(edit src/a.ts)" \
+  "$(line Bash "$(jq -cn --arg c "git commit -m x -m 'Job: $J-login'" '{command: $c}')")"
+run_case "pass: a Workflow run of the job names it" pass - "$(edit src/a.ts)" \
+  "$(line Workflow "$(jq -cn --arg j "$J" '{scriptPath: "w.js", args: {job: $j, batches: []}}')")"
+run_case "pass: a committer brief carrying the trailer names it" pass - "$(edit src/a.ts)" \
+  "$(line Agent "$(jq -cn --arg p "End with the trailer line \`Job: $J\` please" '{subagent_type: "ai-kit:committer", description: "commit: a", prompt: $p}')")"
 git -C "$REPO" commit -qam "a" -m "Batch: a" -m "Job: $J"
 seq 1 40 | sed 's/$/z/' >"$REPO/src/b.ts"
 git -C "$REPO" commit -qam "b" -m "Batch: b" -m "Job: $J"
