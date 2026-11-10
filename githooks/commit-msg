@@ -5,9 +5,10 @@ msg="$1"
 [ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
 head -n 1 "$msg" | grep -qE '^(fixup|squash|amend)! ' && exit 0
 
-# any paragraph made only of `Key: value` lines, as scripts/jobs.mjs reads it: a blank line between Job and
-# Co-Authored-By hid Job from `git interpret-trailers` (most committer retries); a Job line in prose still is none
-jobs=$(git stripspace --strip-comments <"$msg" | tr -d '\r' | awk 'BEGIN { RS = "" } {
+# any body paragraph made only of `Key: value` lines, as scripts/jobs.mjs reads %b (the subject paragraph is not
+# body): a blank line between Job and Co-Authored-By hid Job from `git interpret-trailers` (most committer retries);
+# a Job line in prose still is none. The scissors line of `git commit -v` and the diff below it are cut first
+jobs=$(sed '/^. -\{24\} >8 -\{24\}$/,$d' "$msg" | git stripspace --strip-comments | tr -d '\r' | awk 'BEGIN { RS = "" } NR > 1 {
   n = split($0, l, "\n"); ok = 1
   for (i = 1; i <= n; i++) if (l[i] !~ /^[A-Za-z][-A-Za-z0-9_]*: [^ \t]/) ok = 0
   if (ok) for (i = 1; i <= n; i++) if (l[i] ~ /^Job: /) { v = substr(l[i], 6); sub(/[ \t]+$/, "", v); print v }

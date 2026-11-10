@@ -43,6 +43,13 @@ check "Job and Co-Authored-By in their own paragraphs → passes" \
 check "Job in its own paragraph twice → blocked" "$(msg 'feat: x\n\nJob: 2026-01-05-a\n\nJob: 2026-01-05-b\n')" 1
 check "CRLF message → passes" "$(msg 'feat: x\r\n\r\nJob: 2026-01-05-a\r\n')" 0
 check "a commented Job line → blocked" "$(msg 'feat: x\n\n# Job: 2026-01-05-a\n')" 1
+check "Job in the subject paragraph → blocked" "$(msg 'feat: x\nJob: 2026-01-05-a\n')" 1
+check "a message of only Job → blocked" "$(msg 'Job: 2026-01-05-a\n')" 1
+check "commit -v: Job right above the scissors and diff → passes" \
+  "$(msg 'feat: x\n\nJob: 2026-01-05-a\n# Please enter\n# ------------------------ >8 ------------------------\n# Do not modify\ndiff --git a/a b/a\n+x\n')" 0
+git -C "$REPO" config core.commentChar ';'
+check "core.commentChar ; : a commented Job line → blocked" "$(msg 'feat: x\n\n; Job: 2026-01-05-a\n')" 1
+git -C "$REPO" config --unset core.commentChar
 check "free-text job → blocked" "$(msg 'feat: x\n\nJob: Invoice Export\n')" 1
 check "two jobs → blocked" "$(msg 'feat: x\n\nJob: 2026-01-05-a\nJob: 2026-01-05-b\n')" 1
 check "lowercase job: → blocked" "$(msg 'feat: x\n\njob: 2026-01-05-a\n')" 1
