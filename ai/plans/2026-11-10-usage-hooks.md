@@ -23,11 +23,12 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
           "Why: `usage.mjs digest` prints `all cost / commits` (scripts/lib/usage-digest.mjs:374-378) and a per-kit ",
           "`cost/commits` (:392-412). Both divide ALL cost, including rounds where no commit hash was seen, by the ",
           "commits seen in this project's records. In asw-sales-flow (2026-10-26..11-09) that read $0.85 (2.22.0) to ",
-          "$2.60 (2.36.0) while cost per commit over rounds that HAD commits went $0.67 (kit <=2.27) to $0.26 ",
-          "(>=2.34): 86% of the newer kits' cost sat in rounds with no seen commit (86 of 137 Job commits of ",
-          "11-08..09 live in the sibling clone's records, 27 in none). So the figure cannot say whether the ",
-          "per-commit pipeline got dearer. Change, in scripts/lib/usage-digest.mjs digest(): (1) after the `## per ",
-          "commit` block add `## by commits per round`, skipped in baseline mode (1 record = 1 session), fixed size: ",
+          "$2.60 (2.36.0) while cost per commit over rounds that HAD commits went $0.83 (2.22.0) to $0.70 (2.36.0) ",
+          "and $0.30 (2.34.0): 73-84% of the newer kits' cost sat in rounds with no seen commit (86 of 137 Job ",
+          "commits of 11-08..09 live in the sibling clone's records, 27 in none). So the figure cannot say ",
+          "whether the per-commit pipeline got dearer. Change, in scripts/lib/usage-digest.mjs digest(): ",
+          "(1) after the `## per commit` block add `## by commits per round`, skipped in baseline mode ",
+          "(1 record = 1 session), fixed size: ",
           "one line per bucket `0`, `1`, `2-3`, `4-7`, `8+` commits in the round (a round = the records sharing ",
           "session#round, commits counted with uniqueCommits :63, cost = sum of weight(agent) like the existing ",
           "rows): `<bucket> commits: <rounds> rounds · <cost> · <commits> commits · cost/commit <x> · reviewer a% · ",
@@ -62,8 +63,8 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
         {
           "lines": [
             "running `node scripts/usage.mjs digest --since 2026-10-26` in /Users/palakorn/Work/asw-sales-flow shows ",
-            "the 1-commit bucket at about $0.83 per commit (305 rounds) and the 0 bucket at about 60% of cost (all ",
-            "kits together; the per-kit lines show the split)"
+            "the 1-commit bucket at $2.81 per commit (71 rounds) and the 0 bucket at 40% of cost (all ",
+            "kits together; the per-kit lines show the split: commit rounds $0.83 for 2.22.0, $0.70 for 2.36.0)"
           ]
         },
         "commands/usage.md tells the analyst to use the new section, and node scripts/test-all.mjs passes"
