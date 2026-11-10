@@ -94,6 +94,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
+| `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders; twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
 | `scripts/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
 | `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
 | `scripts/*.test.mjs` | fixture tests, one per module (`handoffs.test.mjs` checks `docs/handoffs.md` against prompts, `spec.test.mjs` this file) |
@@ -131,6 +132,9 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `templates/ai/` | one template per `ai/` doc type, never copied by `init`: `api.md`, `data.md`, `decisions.md`, `feature.md`, `notes.md`, `plan.md`, `requirement.md`, `screen.md` |
 
 ### Files the kit creates or edits in a project
+
+The `claude-review`, `claude-usage` and `claude-decider` folders below are resolved by `kit_state_dir` (`hooks/lib.sh`)
+and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 
 | File | Written by | Read by |
 |---|---|---|

@@ -27,6 +27,24 @@ kit_root="$(kit_project_root "${CLAUDE_PROJECT_DIR:-$PWD}")"
 kit_config="$kit_root/ai/kit/config.json"
 kit_plugin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# kit_state_dir <review|usage-cache|usage|decider> <dir>: the kit's state folder, git run from <dir>; prints nothing
+# and fails when git does (callers: `|| exit 0`). review and usage-cache sit in the work tree's own git dir, usage and
+# decider in the common git dir shared by all work trees. Twin of scripts/lib/state-dirs.mjs. Runs git only when called.
+kit_state_dir() {
+  local base
+  case "$1" in
+    review | usage-cache) base="$(git -C "$2" rev-parse --absolute-git-dir 2>/dev/null)" || return 1 ;;
+    usage | decider) base="$(git -C "$2" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1 ;;
+    *) return 1 ;;
+  esac
+  [[ -n "$base" ]] || return 1
+  case "$1" in
+    review) printf '%s\n' "$base/claude-review" ;;
+    usage-cache | usage) printf '%s\n' "$base/claude-usage" ;;
+    decider) printf '%s\n' "$base/claude-decider" ;;
+  esac
+}
+
 kit_enabled() { [[ -d "$kit_root/ai/kit" ]]; }
 
 # kit_core 1|2: CLAUDE.core.md before or from its "Delegation and report" heading, ai-kit/ paths made absolute. Two

@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, wri
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./is-main.mjs";
+import { reviewDir as reviewDirOf } from "./lib/state-dirs.mjs";
 
 export const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 const relPath = (job) => `ai/plans/${job}.md`;
@@ -429,7 +430,11 @@ function pickPlan(root, job) {
   throw new Error(`name one job: ${(left.length ? left : plans).map((p) => p.job).join(", ") || "no plan here"}`);
 }
 
-const reviewDir = (root) => join(gitIn(root)("rev-parse", "--absolute-git-dir").trim(), "claude-review");
+const reviewDir = (root) => {
+  const dir = reviewDirOf(root);
+  if (!dir) throw new Error("not a git repository");
+  return dir;
+};
 
 // the state of a /ai-kit:continuous run of this job, the one record of how a batch ended that outlives its session
 function continuousState(root, job) {

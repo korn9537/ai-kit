@@ -177,9 +177,9 @@ code_since() {  # $1 $2 = trees/commits to diff ($2 empty → the work tree); pr
 }
 
 session="$(jq -r '.session_id // empty' <<<"$input")"
-gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null || true)"
+rdir="$(kit_state_dir review "$project" || true)"
 snapshot=""
-[[ -n "$session" && -n "$gitdir" && -f "$gitdir/claude-review/$session" ]] && snapshot="$(cat "$gitdir/claude-review/$session")"
+[[ -n "$session" && -n "$rdir" && -f "$rdir/$session" ]] && snapshot="$(cat "$rdir/$session")"
 # the tree is unreferenced, so gc may have pruned it: then judge as without a snapshot
 [[ -n "$snapshot" ]] && ! git -C "$project" cat-file -e "$snapshot^{tree}" 2>/dev/null && snapshot=""
 changed="" new_files="" paths=""

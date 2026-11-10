@@ -21,10 +21,10 @@ if [[ ! -t 0 ]] && command -v jq >/dev/null 2>&1; then
   sid="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)"
   # review baseline until the first review (review-before-stop.sh): a resumed session keeps its own or none
   src="$(printf '%s' "$input" | jq -r '.source // empty' 2>/dev/null || true)"
-  gitdir="$(git -C "$kit_root" rev-parse --absolute-git-dir 2>/dev/null || true)"
-  if [[ -n "$sid" && -n "$gitdir" && "$src" =~ ^(startup|clear)$ && ! -f "$gitdir/claude-review/$sid" ]]; then
+  rdir="$(kit_state_dir review "$kit_root" || true)"
+  if [[ -n "$sid" && -n "$rdir" && "$src" =~ ^(startup|clear)$ && ! -f "$rdir/$sid" ]]; then
     # at most 4 s, so a large tree never delays the injection; killed before the write = no snapshot (the fallback)
-    snap="$gitdir/claude-review/$sid"
+    snap="$rdir/$sid"
     (tree="$("$(dirname "$0")/review-snapshot.sh" --tree "$kit_root")" && mkdir -p "${snap%/*}" &&
       printf '%s\n' "$tree" >"$snap.$$" && mv "$snap.$$" "$snap") >/dev/null 2>&1 &
     pid=$!

@@ -37,8 +37,8 @@ agent=""
 
 project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 [[ -n "$project" ]] && project="$(kit_project_root "$project")"
-gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0
-reads="$gitdir/claude-review/$session.reads"
+rdir="$(kit_state_dir review "$project")" || exit 0
+reads="$rdir/$session.reads"
 [[ "$event" == UserPromptSubmit ]] && rm -rf "$reads" "$reads".*
 
 # context = what the last main-session reply read: fresh input + cache reads + cache writes; the tail is enough
@@ -49,7 +49,7 @@ context_used() {
 }
 
 if [[ -n "$reading" ]]; then
-  mkdir -p "$gitdir/claude-review"
+  mkdir -p "$rdir"
   # one byte per read: an append stays whole when parallel reads run this hook at once
   [[ -n "$agent" ]] || printf . >>"$reads"
 
@@ -99,12 +99,12 @@ max="$(kit_conf '.handoff.max_context' 150000)"
 used="$(context_used)"
 [[ -n "$used" ]] || exit 0
 
-mark="$gitdir/claude-review/$session.handoff"
+mark="$rdir/$session.handoff"
 # below the limit (again, after /compact): forget earlier nudges so the next crossing nudges
 ((used >= max)) || { rm -f "$mark"; exit 0; }
 step=$(((used - max) / 50000))
 [[ -f "$mark" && "$(cat "$mark")" -ge "$step" ]] && exit 0
-mkdir -p "$gitdir/claude-review"
+mkdir -p "$rdir"
 printf '%s\n' "$step" >"$mark"
 
 note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session: a paste-ready prompt in a code block holding the goal, the job id (docs/shared-checkout.md §Jobs), the steps left, decisions made here and not in the repo, files to read first and open items; nothing the repo or git log already holds."

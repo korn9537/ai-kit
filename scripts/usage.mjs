@@ -11,6 +11,7 @@ import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./is-main.mjs";
+import { usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
 import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./usage-digest.mjs";
 
@@ -260,15 +261,14 @@ function record(input, quiet = false, lockWait = {}) {
   if (conf.enabled === false) return;
   if (!statSync(transcript, { throwIfNoEntry: false })?.isFile()) throw new Error(`cannot read transcript ${transcript}`);
 
-  const gitDir = git(root, "rev-parse", "--absolute-git-dir");
-  const common = git(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
-  if (!gitDir || !common) throw new Error("not a git repository, usage not recorded");
-  const cachePath = join(gitDir, "claude-usage", `${session}.json`);
+  const cacheDir = usageCacheDir(root);
+  const bufDir = usageBufDir(root);
+  if (!cacheDir || !bufDir) throw new Error("not a git repository, usage not recorded");
+  const cachePath = join(cacheDir, `${session}.json`);
   const cache = loadCache(cachePath);
   const sess = collectSession(transcript, cache);
   saveCache(cachePath, cache);
 
-  const bufDir = join(common, "claude-usage");
   const buffer = join(bufDir, `${session}.jsonl`);
   const user = git(root, "config", "user.name");
   const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
@@ -300,9 +300,8 @@ function record(input, quiet = false, lockWait = {}) {
 function flushCmd(args, deadline) {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
-  const common = git(root, "rev-parse", "--path-format=absolute", "--git-common-dir");
-  if (!common) return;
-  const bufDir = join(common, "claude-usage");
+  const bufDir = usageBufDir(root);
+  if (!bufDir) return;
   const val = (flag) => (args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "") : "");
   if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"), { deadline });
   else if (args[0] === "--idle") flushIdle(root, bufDir, val("--except"));

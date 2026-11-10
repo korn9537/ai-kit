@@ -10,6 +10,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { isMain } from "./is-main.mjs";
+import { deciderDir } from "./lib/state-dirs.mjs";
 
 const FIELDS = ["verdict", "kind", "question", "choice", "reason", "confidence", "undo", "sources"];
 const MAX_FIELD = 500;
@@ -179,8 +180,8 @@ export function sync(input) {
 export function guard(input, now = Date.now()) {
   const c = context(input);
   if (!c) return "owner";
-  const common = git(c.root, "rev-parse", "--path-format=absolute", "--git-common-dir");
-  const statePath = common ? join(common, "claude-decider", `${c.session}.json`) : "";
+  const stateDir = deciderDir(c.root);
+  const statePath = stateDir ? join(stateDir, `${c.session}.json`) : "";
   let used = [];
   try {
     used = JSON.parse(readFileSync(statePath, "utf8")).used ?? [];

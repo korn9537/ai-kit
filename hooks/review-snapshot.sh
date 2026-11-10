@@ -39,7 +39,7 @@ project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 [[ -n "$project" ]] && project="$(kit_project_root "$project")"
 [[ -n "$session" && -n "$project" ]] || exit 0
 
-gitdir="$(git -C "$project" rev-parse --absolute-git-dir 2>/dev/null)" || exit 0
+rdir="$(kit_state_dir review "$project")" || exit 0
 tree="$(work_tree "$project" 2>/dev/null)" || exit 0
-mkdir -p "$gitdir/claude-review"
-printf '%s\n' "$tree" >"$gitdir/claude-review/$session"
+mkdir -p "$rdir"
+printf '%s\n' "$tree" >"$rdir/$session"
