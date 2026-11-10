@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.41.0
+
+`conventions/nestjs.md` item 4 (issue #47): every mutating handler (POST, PUT, PATCH, DELETE) declares its access rule
+through a project decorator (a required permission, admin-only, or a no-check with a written reason), a metadata test
+enforces it with a baseline list that only shrinks, and the permission guard is attached per controller after the
+authentication guard, never globally. Projects with `nestjs` in `conventions` get it on the next sync.
+
 ## 2.40.0
 
 `usage.mjs digest` gains `## by commits per round`, and per kit the cost per commit over commit rounds only and the
