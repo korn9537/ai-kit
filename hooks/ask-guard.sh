@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # PreToolUse (AskUserQuestion): a question reaches the owner only after an ai-kit:decider call of this session
-# returned OWNER within the last 30 minutes; one such call serves one ask (scripts/decider.mjs guard reads the
-# decider's subagent transcript; kit-log.sh subagent-stop logs it). Otherwise the ask is blocked and the main
-# session runs the decider. Gap: the verdict is matched per decider call, not per question. Off with config
+# returned OWNER for it within the last 30 minutes: each asked question must match an unused OWNER block of the
+# decider's verdict (scripts/decider.mjs guard reads the decider's subagent transcript; kit-log.sh subagent-stop
+# logs it). Otherwise the ask is blocked and the main session runs the decider. Off with config
 # decider.enabled false; a question matching decider.always_owner (jq regex, case-insensitive) goes through, as does
 # one when the pattern is invalid, node is missing or the guard errs.
 set -euo pipefail
@@ -25,14 +25,25 @@ if [[ -n "$always" ]]; then
   ((rc == 1)) || exit 0
 fi
 
-state="$(printf '%s' "$input" | CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/decider.mjs" guard 2>/dev/null || true)"
+out="$(printf '%s' "$input" | CLAUDE_PROJECT_DIR="$kit_root" node "$kit_plugin/scripts/decider.mjs" guard 2>/dev/null || true)"
+state="${out%%$'\n'*}"
+detail=""
+[[ "$out" == *$'\n'* ]] && detail="${out#*$'\n'}"
 case "$state" in
   decided)
     cat >&2 <<'MSG'
-Blocked: the last ai-kit:decider call decided this (DECIDED), so it does not go to the owner. Act on its Choice and
-list it under Decided in the final report. A different question, or facts the decider did not have: launch
-ai-kit:decider again with them.
+Blocked: ai-kit:decider decided this (DECIDED), so it does not go to the owner. Act on its Choice and list it
+under Decided in the final report. Facts the decider did not have: launch ai-kit:decider again with them.
 MSG
+    [[ -z "$detail" ]] || printf 'Question => Choice:\n%s\n' "$detail" >&2
+    ;;
+  unmatched)
+    cat >&2 <<'MSG'
+Blocked: no ai-kit:decider verdict covers this question. Launch ai-kit:decider about it (the decider may have
+restated it: ask again with the question as the decider worded it). A verdict serves the question it answered
+once.
+MSG
+    [[ -z "$detail" ]] || printf 'No verdict for:\n%s\n' "$detail" >&2
     ;;
   pending)
     cat >&2 <<'MSG'

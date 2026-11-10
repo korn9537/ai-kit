@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { deciders, guard, loadDecisions, parseBlocks, report, subagentsDir, sync } from "./decider.mjs";
+import { check, deciders, guard, overlap, loadDecisions, parseBlocks, report, subagentsDir, sync } from "./decider.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -133,6 +133,44 @@ try {
   process.env.CLAUDE_PROJECT_DIR = repo;
   eq("guard: no transcript path lets the ask through", guard({ session_id: "s1" }), "owner");
   eq("guard: no session id lets the ask through", guard({ transcript_path: transcript }), "owner");
+
+  // per-question matching: fresh session files, so earlier cases leave nothing behind
+  for (const f of readdirSync(subs)) rmSync(join(subs, f));
+  rmSync(stateDir, { recursive: true, force: true });
+  const ask = (...qs) => ({ ...input, tool_input: { questions: qs.map((question) => ({ question, header: "H" })) } });
+  const th1 = "ควรใช้ฐานข้อมูลตัวไหนสำหรับระบบนี้";
+  const th2 = "ระบบนี้ควรเลือกฐานข้อมูลอะไร";
+  const th3 = "ต้องการให้ส่งอีเมลแจ้งเตือนลูกค้าตอนไหน";
+  eq("overlap: a rephrased English pair matches", overlap("Which database should we use for the cache?", "Database for the cache layer?") >= 0.5, true);
+  eq("overlap: an unrelated English pair does not", overlap("Which order should the tabs be in?", "Which database engine?") < 0.5, true);
+  eq("overlap: a rephrased Thai pair matches", overlap(th1, th2) >= 0.5, true);
+  eq("overlap: an unrelated Thai pair does not", overlap(th1, th3) < 0.5, true);
+  eq("overlap: punctuation and case do not matter", overlap("DB engine?!", "db, engine"), 1);
+  agent("p1", "ai-kit:decider", block("OWNER", "Which database engine?"), 1);
+  const a = check(ask("Which tab order?"));
+  eq("ask: an OWNER verdict on A does not serve B", [a.state, a.detail], ["unmatched", ["Which tab order? H"]]);
+  eq("ask: A itself passes", guard(ask("Which database engine?")), "owner");
+  eq("ask: the block is used once", guard(ask("Which database engine?")), "none");
+  eq("ask: per-block state written", JSON.parse(readFileSync(join(stateDir, "s1.json"), "utf8")), { used: [], blocks: ["p1#0"] });
+  agent("p2", "ai-kit:decider", `${block("OWNER", "Which tab order?")}\n---\n${block("OWNER", th2)}`, 1);
+  eq("ask: two questions each with an OWNER block pass", guard(ask("Which tab order?", th1)), "owner");
+  eq("ask: both blocks of the call are used", guard(ask("Which tab order?")), "none");
+  agent("p3", "ai-kit:decider", `${block("DECIDED", "Which cache layer?")}\n---\n${block("OWNER", "Which queue?")}`, 1);
+  const d = check(ask("Which queue?", "Which cache layer?"));
+  eq("ask: a DECIDED match blocks with its Choice", [d.state, d.detail], ["decided", ["Which cache layer? H => c-Which cache layer?"]]);
+  eq("ask: the OWNER block was not spent by the blocked ask", guard(ask("Which queue?")), "owner");
+  agent("p4", "ai-kit:decider", "", 0);
+  eq("ask: a running decider gives pending before matching", guard(ask("Which colour scheme?")), "pending");
+  eq("ask: ... also when the question has a DECIDED block", guard(ask("Which cache layer?")), "pending");
+  agent("p4", "ai-kit:decider", block("OWNER", "Which colour scheme?"), 0);
+  eq("ask: the finished call serves its question", guard(ask("Which colour scheme?")), "owner");
+  // a state file of the older format spends whole calls
+  agent("l1", "ai-kit:decider", block("OWNER", "Which legacy thing?"), 1);
+  writeFileSync(join(stateDir, "s1.json"), JSON.stringify({ used: ["l1"] }));
+  eq("ask: an old {used:[ids]} state file still spends its call", guard(ask("Which legacy thing?")), "unmatched");
+  rmSync(join(stateDir, "s1.json"));
+  eq("ask: without it the call serves its question", guard(ask("Which legacy thing?")), "owner");
+  eq("ask: the lock directory is gone afterwards", readdirSync(stateDir).sort(), ["s1.json"]);
   rmSync(join(repo, "ai", "kit"), { recursive: true });
   eq("guard: a project without ai/kit lets the ask through", guard(input), "owner");
 } finally {

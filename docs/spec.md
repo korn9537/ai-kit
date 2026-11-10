@@ -35,7 +35,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `hooks/bash-guard.sh` | PreToolUse Bash | blocks a sweeping `git add`/`git commit -a` (also `xargs git add`, `sh -c "..."` scripts, `git add $(...)`), a build command while `build_guard.port` listens, and a Bash write into the auto-memory dir |
 | `hooks/memory-guard.sh` | PreToolUse Write, Edit, MultiEdit, NotebookEdit | blocks writes into the auto-memory dir (Bash writes: `bash-guard.sh`) |
 | `hooks/agent-model-guard.sh` | PreToolUse Agent, Task | blocks a general-purpose or Explore subagent launched without `model` |
-| `hooks/ask-guard.sh` | PreToolUse AskUserQuestion | blocks an ask until `ai-kit:decider` returned OWNER within 30 minutes (one OWNER serves one ask; verdict read by `decider.mjs guard`); lets it through when `decider.enabled` is false, the question matches `decider.always_owner`, or node is missing |
+| `hooks/ask-guard.sh` | PreToolUse AskUserQuestion | blocks an ask until `ai-kit:decider` returned OWNER within 30 minutes for each asked question (questions matched to verdict blocks by word overlap; a block serves one question once; verdict read by `decider.mjs guard`); lets it through when `decider.enabled` is false, the question matches `decider.always_owner`, or node is missing |
 | `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review; passes small, comment-only, moved-only changes |
 | `hooks/review-snapshot.sh` | PostToolUse Agent, Task, SendMessage; also `--tree` from session-start | records the work tree when the main session calls a review, so the Stop hook can diff against it |
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
@@ -186,8 +186,8 @@ Each step names the file that does it.
 
 1. Summary before a UI, DB or business-rule change. A DB or business-rule change, or a check of how one works
    today, runs `business-analyst` first; a small job skips both.
-2. A question for the owner goes to `decider` first. `ask-guard.sh` blocks AskUserQuestion until it returned OWNER;
-   `decider.mjs guard` reads the verdict from the decider's own transcript.
+2. A question for the owner goes to `decider` first. `ask-guard.sh` blocks AskUserQuestion until it returned OWNER
+   for each asked question; `decider.mjs guard` reads the verdict from the decider's own transcript.
 3. A change over `review.skip_lines` code lines, or a new file, or a `review.always` path goes to `committer` batches;
    the main session edits only the rest.
 4. Every Edit runs `post-edit-check.sh`. Every Bash line passes `bash-guard.sh`; every subagent launch passes

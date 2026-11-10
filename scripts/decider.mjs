@@ -3,11 +3,11 @@
 // (<session>/subagents/agent-<id>.jsonl beside the session transcript), so a background call counts as a foreground
 // one. `sync` (SubagentStop, Stop) writes a finished decider's verdict blocks once to
 // ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl; on SubagentStop from the hook's agent_id and
-// last_assistant_message. `guard` (ask-guard.sh) prints owner, decided, pending or none for the newest unused decider
-// of the last 30 minutes; owner marks it used. `report [--since
-// YYYY-MM-DD]` prints the log as markdown. Never fails: an error is one stderr line.
+// last_assistant_message. `guard` (ask-guard.sh) matches each asked question to a verdict block of the last 30
+// minutes and prints owner, decided, pending, unmatched or none, then one detail line per question; owner marks
+// those blocks used. `report [--since YYYY-MM-DD]` prints the log as markdown. Never fails: an error is one stderr line.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { isMain } from "./lib/is-main.mjs";
 import { deciderDir } from "./lib/state-dirs.mjs";
@@ -173,34 +173,157 @@ export function sync(input) {
   logDeciders(c.root, c.session, c.list);
 }
 
-// owner: an unused call of the last 30 minutes has an OWNER block (the newest such call is now used up) · else the
-// newest unused call decides: pending = no verdict lines yet (running, or it replied without them), decided = only
-// DECIDED blocks · none: no unused call. Without a git dir to keep the used list in, owner is never used up. Gap: a
-// decider continued by SendMessage keeps its id, so its later verdicts are neither logged nor counted once used.
-export function guard(input, now = Date.now()) {
+// Words that carry no topic: "which"/"should"/"use" match every question, so a verdict on one question would pass
+// another that shares only them. Latin-script words only.
+const STOP = new Set(
+  ("a an the of to for in on at by or and is are be it its this that these those which what who how do does should would " +
+    "can could we you i our your use used using with as from if then than so not no yes into about one").split(" "),
+);
+// Scripts written without spaces between words: a run is compared by its character bigrams, not as one token.
+const UNSPACED = /[\p{Script=Thai}\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+
+// Comparable features of a question: lowercase words of Unicode letters, marks (Thai vowels and tones are \p{M}) and
+// digits, without stop words; a word in an unspaced script contributes its character bigrams.
+export function features(text) {
+  const out = new Set();
+  for (const w of String(text ?? "").toLowerCase().match(/[\p{L}\p{M}\p{N}]+/gu) ?? []) {
+    if (UNSPACED.test(w)) {
+      const ch = [...w];
+      if (ch.length === 1) out.add(w);
+      for (let i = 0; i + 1 < ch.length; i++) out.add(ch[i] + ch[i + 1]);
+    } else if (!STOP.has(w)) out.add(w);
+  }
+  return out;
+}
+
+// Shared features over the smaller side. A match needs MATCH_MIN of it: the decider restates a question in its own
+// words, so most of the shorter text must reappear, but one shared word out of two stays a miss (that is "which
+// order?" against "which database?" once stop words are gone, and any single common word out of a long question).
+// Tested with a rephrased English pair and a rephrased Thai pair against unrelated ones.
+const MATCH_MIN = 0.5;
+export function overlap(a, b) {
+  const x = features(a);
+  const y = features(b);
+  if (x.size === 0 || y.size === 0) return 0;
+  let n = 0;
+  for (const f of x) if (y.has(f)) n++;
+  return n / Math.min(x.size, y.size);
+}
+
+const askedQuestions = (input) =>
+  (Array.isArray(input.tool_input?.questions) ? input.tool_input.questions : [])
+    .map((q) => [q?.question, q?.header].filter((s) => typeof s === "string").join(" "))
+    .filter((s) => s.trim());
+
+// A lock directory beside the state file serialises the read-match-write: two parallel AskUserQuestion calls would
+// otherwise both read the same used list and spend one block twice. A lock older than 10 s is stale (a crashed
+// hook); not getting it in 2 s runs unlocked, as before, rather than trap the owner's answer.
+function withStateLock(dir, fn) {
+  mkdirSync(dir, { recursive: true });
+  const lock = join(dir, ".lock");
+  const end = Date.now() + 2000;
+  let held = false;
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      held = true;
+      break;
+    } catch (e) {
+      if (e?.code !== "EEXIST") break;
+    }
+    try {
+      if (Date.now() - statSync(lock).mtimeMs > 10000) rmSync(lock, { recursive: true, force: true });
+    } catch {}
+    if (Date.now() >= end) break;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+  }
+  try {
+    return fn();
+  } finally {
+    if (held) rmSync(lock, { recursive: true, force: true });
+  }
+}
+
+// state: {used: [call ids spent whole (the older format, still read)], blocks: ["<call id>#<block index>"]}
+function readState(path) {
+  try {
+    const s = JSON.parse(readFileSync(path, "utf8"));
+    return { used: Array.isArray(s.used) ? s.used : [], blocks: Array.isArray(s.blocks) ? s.blocks : [] };
+  } catch {
+    return { used: [], blocks: [] };
+  }
+}
+
+function writeState(path, s) {
+  mkdirSync(dirname(path), { recursive: true });
+  // tmp and rename: a torn file would read as no used list, and an owner verdict would count again
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(s) + "\n");
+  renameSync(tmp, path);
+}
+
+// What the ask-guard needs: {state, detail}. Each asked question (tool_input.questions[].question and header) takes
+// the best matching block of the unused decider calls of the last 30 minutes, an OWNER block before a DECIDED one,
+// and a block serves one question once ("<call id>#<index>" kept as used).
+//   owner     every question has an OWNER block (all of them are now used up)
+//   pending   a question has none and the newest call has no verdict lines yet (running, or replied without them)
+//   decided   a question matches a DECIDED block; detail: one "Question => Choice" line each
+//   unmatched a question matches no block; detail: one line each
+//   none      no unused call at all
+// An ask with no questions in its input falls back to the old rule: the newest unused call with an OWNER block
+// serves it whole. Without a git dir to keep the used list in, owner is never used up. Gap: a decider continued by
+// SendMessage keeps its id, so its later verdicts are neither logged nor counted once used.
+export function check(input, now = Date.now()) {
   const c = context(input);
-  if (!c) return "owner";
+  if (!c) return { state: "owner", detail: [] };
   const stateDir = deciderDir(c.root);
   const statePath = stateDir ? join(stateDir, `${c.session}.json`) : "";
-  let used = [];
-  try {
-    used = JSON.parse(readFileSync(statePath, "utf8")).used ?? [];
-  } catch {}
-  const fresh = c.list.filter((d) => now - d.mtime <= FRESH_MS && !used.includes(d.id));
-  const owner = fresh.filter((d) => d.blocks.some((b) => b.verdict === "OWNER")).at(-1);
-  if (!owner) {
+  const asked = askedQuestions(input);
+  const run = () => {
+    const st = statePath ? readState(statePath) : { used: [], blocks: [] };
+    const fresh = c.list.filter((d) => now - d.mtime <= FRESH_MS && !st.used.includes(d.id));
     const last = fresh.at(-1);
-    return !last ? "none" : last.blocks.length === 0 ? "pending" : "decided";
-  }
-  if (statePath) {
-    mkdirSync(dirname(statePath), { recursive: true });
-    // tmp and rename: a torn file would read as no used list, and an owner verdict would count again
-    const tmp = `${statePath}.${process.pid}.tmp`;
-    writeFileSync(tmp, JSON.stringify({ used: [...used, owner.id] }) + "\n");
-    renameSync(tmp, statePath);
-  }
-  return "owner";
+    const pending = !!last && last.blocks.length === 0;
+    const spend = (keys, ids) => {
+      if (statePath) writeState(statePath, { used: [...st.used, ...ids], blocks: [...st.blocks, ...keys] });
+    };
+    if (asked.length === 0) {
+      const owner = fresh.filter((d) => d.blocks.some((b) => b.verdict === "OWNER")).at(-1);
+      if (!owner) return { state: !last ? "none" : pending ? "pending" : "decided", detail: [] };
+      spend([], [owner.id]);
+      return { state: "owner", detail: [] };
+    }
+    const cands = fresh.flatMap((d) => d.blocks.map((b, i) => ({ key: `${d.id}#${i}`, b })).filter((x) => !st.blocks.includes(x.key)));
+    const taken = new Set();
+    const unmatched = [];
+    const decided = [];
+    for (const q of asked) {
+      let best = null;
+      for (const x of cands) {
+        if (taken.has(x.key)) continue;
+        const s = overlap(q, x.b.question);
+        if (s < MATCH_MIN) continue;
+        const rank = (x.b.verdict === "OWNER" ? 2 : 0) + s / 2;
+        if (!best || rank > best.rank) best = { ...x, rank };
+      }
+      if (!best) unmatched.push(q);
+      else {
+        taken.add(best.key);
+        if (best.b.verdict !== "OWNER") decided.push(`${q} => ${best.b.choice ?? "(no Choice line)"}`);
+      }
+    }
+    if (unmatched.length === 0 && decided.length === 0) {
+      spend([...taken], []);
+      return { state: "owner", detail: [] };
+    }
+    if (pending) return { state: "pending", detail: [] };
+    if (decided.length) return { state: "decided", detail: decided };
+    return { state: cands.length || pending ? "unmatched" : "none", detail: unmatched };
+  };
+  return statePath ? withStateLock(stateDir, run) : run();
 }
+
+export const guard = (input, now = Date.now()) => check(input, now).state;
 
 export function loadDecisions(root, since = "") {
   const base = join(root, "ai", "usage", "decisions");
@@ -274,7 +397,8 @@ if (isMain(import.meta.url)) {
     if (cmd === "sync") {
       sync(stdin());
     } else if (cmd === "guard") {
-      process.stdout.write(`${guard(stdin())}\n`);
+      const r = check(stdin());
+      process.stdout.write(`${[r.state, ...r.detail.map((l) => l.replace(/\s+/g, " "))].join("\n")}\n`);
     } else if (cmd === "report") {
       const i = args.indexOf("--since");
       const since = i >= 0 ? (args[i + 1] ?? "") : "";

@@ -102,13 +102,17 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   existing file is never modified). `session-start.sh` does the same for other sessions' buffers idle over 6 hours
   (a crashed session), trying the buffer lock once without waiting. The next commit carries the files.
 - `ask-guard.sh` (PreToolUse on AskUserQuestion) blocks a question to the owner until an `ai-kit:decider` call of
-  the session returned OWNER in the last 30 minutes; one such call serves one ask (the used ids are kept in
-  `<git-common-dir>/claude-decider/<session>.json`). The verdict is read from the decider's own subagent transcript
-  (`<session>/subagents/agent-<id>.jsonl`), so a background call works as a foreground one. DECIDED → the block says
-  to act on the decider's choice; no verdict lines yet → to wait. Gap: the verdict is matched per call, not per
-  question. A general-purpose call whose description names the decider counts too (the type not loaded). Off with
-  `decider.enabled: false`; a question matching `decider.always_owner` goes through, and so does every ask when node
-  is missing or the guard errs.
+  the session returned OWNER for it in the last 30 minutes. Each asked question (`question` and `header`) is matched
+  to a verdict block's `Question:` line by word overlap (stop words dropped; Thai and other unspaced scripts compared
+  by character bigrams; at least half of the shorter side shared). A block serves one question once (the used blocks,
+  `<call id>#<index>`, are kept in `<git-common-dir>/claude-decider/<session>.json` under a lock; an older
+  `{used:[ids]}` file still spends whole calls). A question matching a DECIDED block → the block quotes the
+  decider's Choice to act on; matching no block → says which question has no verdict, to ask the decider about it;
+  the newest call with no verdict lines yet → to wait. The verdict is read from the decider's own subagent transcript
+  (`<session>/subagents/agent-<id>.jsonl`), so a background call works as a foreground one. A general-purpose call
+  whose description names the decider counts too (the type not loaded). Off with `decider.enabled: false`; a
+  question matching `decider.always_owner` goes through, and so does every ask when node is missing or the guard
+  errs.
 - `kit-log.sh subagent-stop` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
   `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl` (one file per call, never rewritten, so branches and
   worktrees never conflict on it), on SubagentStop from the hook's `last_assistant_message`; a call still running is
