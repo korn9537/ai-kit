@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.42.0
+
+`CLAUDE.core.md` gains **Read, do not guess**: a fact the code, docs or git history can settle is checked and cited
+(`path:line`) before the answer, not stated from memory or left as "I guess"; only what the repo cannot show may be a
+marked assumption, and a recommendation resting on an unchecked fact (above all one that deletes data) waits for the
+check. Seen in a reply that recommended deleting a local `.isar` database while guessing whether any notifications
+existed only on the device. No project needs to edit anything.
+
 ## 2.41.0
 
 `conventions/nestjs.md` item 4 (issue #47): every mutating handler (POST, PUT, PATCH, DELETE) declares its access rule

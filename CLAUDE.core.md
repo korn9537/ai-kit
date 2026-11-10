@@ -74,6 +74,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   means every instance of that kind, including ones built a different way: list which changed and which did not.
 - **Recommend, do not list.** Options come with a verdict, the reason and the one condition that would flip it; an
   anomaly found while checking: in scope → fix it; outside the request → follow-up.
+- **Read, do not guess.** A fact the code, docs or git history can settle is checked before the answer, never stated
+  from memory, naming or typical patterns, and never left as "not sure" or "I guess": cite the `path:line` it rests
+  on. Only what the repo cannot show (production data, the user's intent, an external system) may be an assumption,
+  marked as such. A recommendation that rests on an unchecked fact, above all one that deletes data or cannot be
+  undone, is not given until that fact is checked.
 - **Project knowledge lives in the repo, never in auto-memory** (one machine only; `init` sets
   `"autoMemoryEnabled": false`, Write and Edit are hook-guarded), in the same commit as the work. Where each kind goes:
   `ai-kit/docs/ai-layout.md` §Where a fact goes.
