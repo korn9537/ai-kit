@@ -171,8 +171,8 @@ git_sweeps() {
         esac
       fi
       [[ "$arg" == '$' ]] && continue
-      # xargs -I{} git add {}: the replace string stands for the unread file names
-      [[ -n "$xargs_repl" && "$arg" == "$xargs_repl" ]] && continue
+      # xargs -I{} git add {}: the replace string stands for unread file names: a sweep, whatever else is named
+      if [[ -n "$xargs_repl" && "$arg" == "$xargs_repl" ]]; then sweep=1; continue; fi
       named=1
       path_sweeps "$arg" "$base" && sweep=1
     fi

@@ -369,6 +369,9 @@ git_case "pass: bash -c -- named file" 0 'bash -c -- "git add src/a.ts"'
 git_case "block: xargs -I{} git add {}" 2 'git ls-files -m | xargs -I{} git add {}'
 git_case "block: xargs -I % git add %" 2 'git ls-files -m | xargs -I % git add %'
 git_case "block: xargs -i git add" 2 'git ls-files -m | xargs -i git add {}'
+git_case "block: xargs -I{} git add {} with a file named too" 2 'git ls-files -m | xargs -I{} git add {} src/a.ts'
+git_case "pass: xargs -I{} git add -n {} with a file named" 0 'git ls-files -m | xargs -I{} git add -n {} src/a.ts'
+git_case "pass: xargs git add -n {}" 0 'xargs git add -n {}'
 git_case "pass: xargs -I{} git add -n {}" 0 'git ls-files -m | xargs -I{} git add -n {}'
 git_case "block: git add \$(...) in a double quote, raw pass" 2 'echo "$(date)"; git add -A'
 git_case "block: bash -c in a double quote with \$(...), raw words" 2 'bash -c "git add -A $(date)"'
@@ -412,6 +415,11 @@ mem_case "pass: commit message starting with a redirect to the memory dir" 0 "gi
 mem_case "pass: echo of a quoted redirect" 0 "echo '>$M/a.md'"
 mem_case "block: redirect with no space" 2 "echo x >$M/a.md"
 mem_case "block: redirect after a quoted word" 2 "echo 'a b' > $M/a.md"
+mem_case "block: >| redirect" 2 "echo x >| $M/a.md"
+mem_case "block: >| redirect, no space" 2 "echo x >|$M/a.md"
+mem_case "pass: quoted > then a pipe" 0 "echo '>' | cat; echo \">\"|cat"
+git_case "block: pipe after a redirect still splits" 2 'echo a > out.txt | git add -A'
+git_case "block: >| then git add -A" 2 'echo x >| out.txt; git add -A'
 mem_case "pass: write elsewhere under ~/.claude" 0 'echo x > ~/.claude/settings.local.json'
 mem_case "pass: a plan under ~/.claude/projects" 0 'echo x > ~/.claude/projects/p/notes.md'
 mem_case "pass: read of the memory dir" 0 "cat $M/a.md"

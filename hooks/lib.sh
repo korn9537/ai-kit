@@ -302,6 +302,7 @@ BEGIN {
       seg = seg c
     }
     else if (c == ">") seg = seg "\007>"
+    else if (c == "|" && substr(seg, length(seg) - 1) == "\007>") seg = seg c
     else if (c == SQ || c == DQ) { q = c; qn = 0 }
     else if (c == BS) {
       if (line == "") cont = 1
