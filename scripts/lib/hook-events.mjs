@@ -59,11 +59,11 @@ export const HOOK_EVENTS = [
     re: /ALLOW_BUILD_WHILE_DEV=1/ },
   { id: "pre-commit.allow-large-edit", kind: "command", file: PC, anchor: "ALLOW_LARGE_EDIT=1", sample: "ALLOW_LARGE_EDIT=1 git commit -m x", re: /ALLOW_LARGE_EDIT=1/ },
   { id: "pre-commit.no-verify", kind: "command", file: PC, anchor: "--no-verify", sample: "git commit --no-verify -m x",
-    re: /(?:^|[;&|\n(])\s*(?:\w+=\S+\s+)*git\b[^|;&\n]*\bcommit\b[^|;&\n]*--no-verify/ },
+    re: /(?:^|[;&|\n(])\s*(?:\w+=\S+\s+)*git(?:\s+(?:-C\s+\S+|-c\s+\S+|--?[\w-]+(?:=\S+)?))*\s+commit\s[^|;&\n]*--no-verify/ },
 ];
 
 // a simple command that runs `git ... commit`; a grep for the words is not one
-const GIT_COMMIT = /(?:^|[;&|\n(])\s*(?:\w+=\S+\s+)*git\b[^|;&\n]*\bcommit\b/;
+const GIT_COMMIT = /(?:^|[;&|\n(])\s*(?:\w+=\S+\s+)*git(?:\s+(?:-C\s+\S+|-c\s+\S+|--?[\w-]+(?:=\S+)?))*\s+commit(?:\s|$)/;
 const STOP_FEEDBACK = /^Stop hook feedback:\s*/;
 const EDIT_TOOLS = /^(Edit|Write|MultiEdit)$/;
 
