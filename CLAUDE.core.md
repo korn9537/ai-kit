@@ -98,13 +98,14 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 - **Heavy reads go to a subagent** (hook-nudged), plan or not: a browser check (screenshots, page reads, clicking
   through a flow) or a search likely to need more than about three reads or greps. Finding what a summary, plan or
   brief needs (where the code is, what it does today, which files a change touches) is such a search: one Explore
-  subagent per question, sent together when independent, returns the `file:line` list and facts the brief carries;
-  the main session coordinates, it does not explore. The brief names what to check or
-  find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report,
-  never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next
-  edit needs stays. A general-purpose or Explore subagent gets `model: "sonnet"` (hook-guarded; a kit-agent fallback
-  follows the Agent model bullet); another typed agent (web-fetch) keeps its own model. It returns evidence; the main
-  session judges.
+  subagent per question, sent together when independent, returns the `path:start-end` ranges and facts the brief
+  carries; the main session coordinates, it does not explore. For a DB or business-rule change the BA is that
+  subagent. Reads while debugging with the user watching each step stay in the main session. The brief names what to
+  check or find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads
+  that report, never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep
+  -n` the next edit needs stays. A general-purpose or Explore subagent gets `model: "sonnet"` (hook-guarded; a
+  kit-agent fallback follows the Agent model bullet); another typed agent (web-fetch) keeps its own model. It returns
+  evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
   done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
   out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the

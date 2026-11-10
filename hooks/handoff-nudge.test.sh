@@ -64,7 +64,8 @@ prompt2() {
 COUNT="$REPO/.git/claude-review/s2.reads"
 counted() { [[ "$(($(wc -c <"$COUNT")))" == "$1" ]]; }
 
-ctx 120000
+# the default reads_from 0: a note well below the old 100k
+ctx 60000
 for i in 1 2 3; do read_tool Bash "grep -n x src/a.ts"; done
 check "three reads: no note yet" "$(t test -z "$OUT")" "$OUT"
 read_tool Read
