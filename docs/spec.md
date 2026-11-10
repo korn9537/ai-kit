@@ -173,8 +173,9 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `<git-common-dir>/claude-usage/<session>.jsonl` | `usage.mjs record` | `usage.mjs end`, `flush` |
 | `<git-dir>/claude-usage/<session>.json` | `usage.mjs record` (through `scripts/lib/usage-collect.mjs`) | `usage.mjs` (transcript read cache) |
 | `<git-common-dir>/claude-usage/<session>.flushed`, lock files | `usage.mjs` | `usage.mjs` (flush marker, locks) |
-| `<git-common-dir>/claude-decider/<session>.json` | `decider.mjs guard` | `decider.mjs guard` (which OWNER verdicts an ask already used) |
+| `<git-common-dir>/claude-decider/<session>.json`, `.lock` | `decider.mjs guard` (the `.lock` file guards the write) | `decider.mjs guard` (which OWNER verdicts an ask already used, and the `blocks` count) |
 | `<git-dir>/claude-review/<session>` | `review-snapshot.sh`, `session-start.sh` (the review snapshot tree) | `review-before-stop.sh` |
+| `<git-dir>/claude-review/bash-<tool_use_id>` | `post-edit-check.sh mark` (PreToolUse Bash) | `post-edit-check.sh` (PostToolUse and PostToolUseFailure Bash) lists files newer than it, then removes it; one older than a day is removed by the next `mark` |
 | `<git-dir>/claude-review/<session>.reads`, `.handoff` | `handoff-nudge.sh` | `handoff-nudge.sh` (read count, note marks) |
 | `<git-dir>/claude-review/continuous-<job>.json` | `continuous.mjs` | `continuous.mjs`, `/ai-kit:continuous` |
 | `<git-dir>/claude-review/plan-<job>.args.json` | `plan.mjs resume` | the main session, for the Workflow (`commands/run-plan.md`, `commands/continuous.md`) |
