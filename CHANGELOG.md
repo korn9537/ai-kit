@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.38.1
+
+Refactor, no behavior change. One helper for the `claude-review`, `claude-usage` and `claude-decider` folders
+(`kit_state_dir` in `hooks/lib.sh`, `scripts/lib/state-dirs.mjs`). `scripts/kit.mjs` is split into one module per
+command under `scripts/kit/`; the dispatcher and the CLI path are unchanged. `is-main`, `usage-collect` and
+`usage-digest` moved to `scripts/lib/`. No project needs to edit anything.
+
 ## 2.38.0
 
 New `docs/spec.md`: what each kit file does (hooks, git hooks, agents, commands, scripts, workflow, docs,
