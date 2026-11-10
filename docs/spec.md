@@ -135,7 +135,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | File | Role |
 |---|---|
 | `conventions/general.md` | rules for every repo; read by committer and reviewer |
-| `conventions/csharp.md`, `dart.md`, `go.md`, `nestjs.md`, `sql.md`, `typeorm.md`, `typescript.md` | per-language rules, applied when named in `config.json` `conventions` |
+| `conventions/csharp.md`, `dart.md`, `flutter.md` (adds to `dart.md`), `go.md`, `java.md`, `nestjs.md`, `python.md`, `react.md` (adds to `typescript.md`), `sql.md`, `typeorm.md`, `typescript.md` | per-language rules, applied when named in `config.json` `conventions` |
 | `conventions/unattended.md` | rules for a run with no person watching and no plugin |
 | `templates/ai-kit-project/` | starter `ai/kit/` files copied by `init` when missing: `config.json`, `pre-commit.sh`, `post-edit.sh`, `review-checklist.md`, `analysis-sources.md` |
 | `templates/ai/` | one template per `ai/` doc type, never copied by `init`: `api.md`, `data.md`, `decisions.md`, `feature.md`, `notes.md`, `plan.md`, `requirement.md`, `screen.md` |

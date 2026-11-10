@@ -48,7 +48,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
 | `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md`, `handoffs.md`, `owner-kinds.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
-| `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`nestjs`, `typeorm`)     |
+| `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`python`, `react`, ...)  |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
 | `templates/ai/`               | one template per `ai/` doc type (`docs/ai-layout.md`); never copied by `init`                  |
 | `CHANGELOG.md`                | one line per change; the version lives in `.claude-plugin/plugin.json`                         |
@@ -345,6 +345,7 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` หรือ framework เช่น `["typescript", "nestjs", "typeorm"]`
+(มีไฟล์ `python`, `java`, `flutter` ด้วย; `react` ต่อจาก `typescript`, `flutter` ต่อจาก `dart`)
 ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
 `check` จะไม่ผ่าน)
 ข้อยกเว้นของโปรเจกต์เขียนใน `ai/kit/review-checklist.md` พร้อมเหตุผล
