@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.43.1
+
+The git shims' version fallback (issue #50) keeps only `x.y.z` folders that hold the hook before taking the highest:
+a newer folder still unpacking, or a partial cache, no longer wins and skips the plugin hook (commit-msg left the
+Job trailer unchecked) while an older complete version is on disk. `kit.mjs check` reports each project's shim as
+older; run `/ai-kit:init` (or `node <plugin>/scripts/kit.mjs init`) to rewrite it.
+
 ## 2.43.0
 
 Review is once per job (issue #51): the Stop hook asks for one fresh `ai-kit:change-reviewer` over the whole job's

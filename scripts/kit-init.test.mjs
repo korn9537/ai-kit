@@ -52,6 +52,8 @@ try {
   const shim = (h) => spawnSync("sh", [join(".githooks", h), "m"], { cwd: fresh, encoding: "utf8" });
   writeFileSync(join(fresh, ".git", "ai-kit-root"), join(cache, "2.3.0") + "\n");
   eq("shims: a removed version falls to the newest", [shim("pre-commit").stdout, shim("commit-msg").stdout], ["ran 2.10.1\n", "ran 2.10.1\n"]);
+  mkdirSync(join(cache, "2.11.0"), { recursive: true });
+  eq("shims: a newer version folder without the hook is passed over", [shim("pre-commit").stdout, shim("commit-msg").stdout], ["ran 2.10.1\n", "ran 2.10.1\n"]);
   writeFileSync(join(fresh, ".git", "ai-kit-root"), join(cache, "2.9.0") + "\n");
   eq("shims: a recorded version that exists runs", shim("commit-msg").stdout, "ran 2.9.0\n");
   writeFileSync(join(fresh, ".git", "ai-kit-root"), join(tmp, "nowhere", "2.3.0") + "\n");

@@ -55,7 +55,9 @@ const MARK = "ai-kit-root";
 const RESOLVE = (hook) => `kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
 if [ -n "$kit" ] && [ ! -f "$kit/githooks/${hook}" ]; then
   base="$(dirname "$kit")"
+  # only a version folder that holds the hook: a newer one still unpacking would win the sort and run nothing
   kit="$(ls "$base" 2>/dev/null | grep -E '^[0-9]+\\.[0-9]+\\.[0-9]+$' |
+    while read -r v; do [ -f "$base/$v/githooks/${hook}" ] && echo "$v"; done |
     awk -F. '{ printf "%06d%06d%06d %s\\n", $1, $2, $3, $0 }' | sort | tail -n 1 | cut -d' ' -f2)"
   [ -n "$kit" ] && kit="$base/$kit"
 fi
