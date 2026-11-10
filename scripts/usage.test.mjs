@@ -225,7 +225,7 @@ try {
   const rt0 = Date.now();
   const held = refuse("commit-msg.job");
   eq("a held lock: skipped with a stderr line, no record", [held.status, /kit-log/.test(held.stderr), readFileSync(rbufFile, "utf8").split("\n").filter(Boolean).length], [0, true, 1]);
-  eq("and it waited under 4 s", Date.now() - rt0 < 4000, true);
+  eq("and it gave up within the 1.5 s budget (plus node start)", Date.now() - rt0 < 2200, true);
   lockHolder.kill();
   rmSync(join(rbuf, ".lock"), { force: true });
   refuse("commit-msg.job");

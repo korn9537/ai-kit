@@ -218,21 +218,23 @@ export function seedBuffer(root, bufDir, session) {
 }
 
 const kitVersion = () => JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+const REFUSAL_BUDGET_MS = 1500;
 const REFUSAL_BUF = join("refusals", "buffer.log");
 
-const git = (cwd, ...args) => {
+const git = (cwd, ...args) => gitWithin(5000, cwd, ...args);
+const gitWithin = (timeout, cwd, ...args) => {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
 };
 
 // As hooks/lib.sh kit_project_root: the dir holding ai/kit/, else the git toplevel keeping the given spelling.
-export function projectRoot(dir) {
+export function projectRoot(dir, gitMs = 5000) {
   let d = (dir || "/").replace(/\\/g, "/").replace(/\/+$/, "") || "/";
   if (existsSync(join(d, "ai", "kit"))) return d;
-  const prefix = git(d, "rev-parse", "--show-prefix").replace(/\/+$/, "");
+  const prefix = gitWithin(gitMs, d, "rev-parse", "--show-prefix").replace(/\/+$/, "");
   if (prefix && d.endsWith(`/${prefix}`)) d = d.slice(0, -(prefix.length + 1));
   return d || "/";
 }
@@ -304,15 +306,23 @@ function record(input, quiet = false, lockWait = {}) {
 // (a subfolder, so the idle flush of session buffers never sees it). Best effort: never throws on a held lock.
 function refusal(rule) {
   if (!/^[a-z0-9]+([.-][a-z0-9]+)*$/.test(rule ?? "")) throw new Error("usage: usage.mjs refusal <rule-id>");
-  const root = projectRoot(process.cwd());
+  // one budget from process start: git calls and the lock wait share it, so the hook is held at most REFUSAL_BUDGET_MS
+  const deadline = Date.now() - process.uptime() * 1000 + REFUSAL_BUDGET_MS;
+  const left = () => Math.max(0, Math.min(500, deadline - Date.now()));
+  const root = projectRoot(process.cwd(), left() || 1);
   if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
-  const bufDir = usageBufDir(root, { timeout: 5000 });
+  const bufDir = usageBufDir(root, { timeout: left() || 1 });
   if (!bufDir) return;
-  const rec = { v: 1, ts: new Date().toISOString(), rule, kit: kitVersion(), branch: git(root, "rev-parse", "--abbrev-ref", "HEAD") };
-  withLock(bufDir, () => {
-    mkdirSync(join(bufDir, "refusals"), { recursive: true });
-    appendFileSync(join(bufDir, REFUSAL_BUF), `${JSON.stringify(rec)}\n`);
-  });
+  const branch = gitWithin(left() || 1, root, "rev-parse", "--abbrev-ref", "HEAD");
+  const rec = { v: 1, ts: new Date().toISOString(), rule, kit: kitVersion(), branch };
+  withLock(
+    bufDir,
+    () => {
+      mkdirSync(join(bufDir, "refusals"), { recursive: true });
+      appendFileSync(join(bufDir, REFUSAL_BUF), `${JSON.stringify(rec)}\n`);
+    },
+    { deadline },
+  );
 }
 
 // Moves buffered refusals into new files ai/usage/refusals/<YYYY-MM>/<host-hash>-<random>.jsonl (one per month),
