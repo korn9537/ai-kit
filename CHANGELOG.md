@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.37.0
+
+New `docs/why.md`: one row per hook behavior, rule of `CLAUDE.core.md` and agent, with the problem it answered, the
+version and commit that added it, and its source (CHANGELOG, commit message, issue). Recovered from history, nothing
+filled by reasoning: 66 of 153 rows give no recorded problem, mostly behavior from before 2.0.0, where git
+history starts.
+Read it before removing or loosening one. `scripts/why.test.mjs` fails when a script wired in `hooks/hooks.json`, a
+file in `githooks/` or an agent has no row of its own. No project needs to edit anything.
+
 ## 2.36.2
 
 `kit.mjs check` treats an absolute `core.hooksPath` that resolves to the repo's own `.githooks` as wired (it
