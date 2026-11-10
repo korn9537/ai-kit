@@ -84,4 +84,7 @@ regex in Next `app/**/route.ts` and `pages/api`, NestJS `*.controller.ts` (`@Con
 Express/Fastify (`app|router.get('/p'`) and FastAPI/Flask decorators. Each missing one is one warning,
 `METHOD /path (file:line) has no entry in <ui.api>`. Path params match in every spelling: `{id}`, `:id`, `<int:id>`,
 `[id]`, `[...slug]`. Blind spots: dynamic paths, mounts with a prefix (`app.use('/v1', router)`), a Nest global
-prefix, a `pages/api` handler's methods (any method entry for the path covers it). Warnings never block a commit.
+prefix, a `pages/api` handler's methods (any method entry for the path covers it). Skipped on purpose: files
+matching `ui.include` outside the Next `route.*` and `pages/api` shapes, and receivers other than
+`app`, `router`, `server`, `fastify` and `*Router` (`api.get` is taken for a client call).
+Warnings never block a commit.

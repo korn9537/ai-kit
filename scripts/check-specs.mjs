@@ -43,6 +43,7 @@ try {
   if (typeof ui.include === "string") INCLUDE = new RegExp(ui.include);
 } catch {}
 
+const ROUTE_SHAPE = /(^|\/)(app\/(.*\/)?route\.[cm]?[jt]s|pages\/api\/.+)$/;
 const list = (...a) => (git(...a, "-z") ?? "").split("\0").filter(Boolean);
 // specs are read from the working tree, so a partially staged spec is checked as edited
 if (flag("staged")) {
@@ -196,7 +197,7 @@ if (api === null) {
 
 if (routesOn && api && (flag("staged") || flag("all"))) {
   const files = flag("all") ? list("ls-files") : list("diff", "--cached", "--name-only", "--diff-filter=ACMR");
-  for (const f of files.filter((x) => isRouteCandidate(x) && !INCLUDE?.test(x))) {
+  for (const f of files.filter((x) => isRouteCandidate(x) && !(INCLUDE?.test(x) && !ROUTE_SHAPE.test(x)))) {
     let text;
     try {
       text = readFileSync(f, "utf8");

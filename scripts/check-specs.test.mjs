@@ -218,9 +218,10 @@ CASES.push(
   route("route: pages/api any method covered by any entry", "pages/api/users/[id].ts", "export default function h() {}\n", ["PUT /api/users/{id}"], []),
   route("route: Next catch-all spellings", "app/docs/[...slug]/route.ts", NEXT, ["GET /docs/{slug}"], []),
   route("route: Next optional catch-all", "app/docs/[[...slug]]/route.ts", NEXT, ["GET /docs/{x}"], []),
-  route("route: client file with api.get and an axios import → no route", "src/client.ts", "import axios from 'axios';\nconst api = axios.create();\napi.get('/orders');\n", ["GET /x"], []),
   route("route: api.get is not a server receiver even without axios", "src/client.ts", "api.get('/orders');\n", ["GET /x"], []),
-  route("route: ui.include screen file is skipped", "app/o/page.tsx", "router.get('/orders');\n", ["GET /x"], ["@: new screen file listed in no spec's files (add it to its ai/screens/S-<n> spec, the plugin's docs/screen-specs.md)"], conf({ platforms: ["web"], include: "^app/.*/page\\.tsx$", api: "ai/api/" })),
+  route("route: ui.include file outside route shapes is skipped", "src/views/o.ts", "router.get('/orders');\n", ["GET /x"], ["@: new screen file listed in no spec's files (add it to its ai/screens/S-<n> spec, the plugin's docs/screen-specs.md)"], conf({ platforms: ["web"], include: "^src/views/", api: "ai/api/" })),
+  route("route: ui.include matching a Next route.ts is still checked", "app/x/route.ts", NEXT, ["GET /y"], ["GET /x (@:1) has no entry in ai/api/", "@: new screen file listed in no spec's files (add it to its ai/screens/S-<n> spec, the plugin's docs/screen-specs.md)"], conf({ platforms: ["web"], include: "^app/", api: "ai/api/" })),
+  route("route: Express router importing axios keeps its routes", "src/r.js", "import axios from 'axios';\nrouter.get('/orders', h);\n", ["GET /x"], ["GET /orders (@:2) has no entry in ai/api/"]),
   route("route: test files are skipped", "src/a.test.ts", "app.get('/zzz', h);\n", ["GET /x"], []),
   {
     desc: "route: not staged and no --all → not checked; --all checks tracked files",
