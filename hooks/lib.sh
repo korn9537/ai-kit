@@ -205,7 +205,8 @@ EOT
 # removed and the text inside a quote stays one word. A line is its words joined and ended by \037 (read it with
 # IFS=$'\037' read -r -a), placeholders already decoded; an empty quote is an empty word. A line of \006( or \006) marks
 # a parenthesis, so a caller can scope a cd; a line of \006` marks a backtick, so a caller sees that `git add `ls``
-# had an argument it cannot read. The last line is \006ok, or \006raw when the scan could not follow the
+# had an argument it cannot read (backticks come in pairs: the odd mark opens one). An unquoted > is written \007>, so
+# a caller tells a redirect from a quoted >. The last line is \006ok, or \006raw when the scan could not follow the
 # text (it ended inside a quote or heredoc, a double quote or an unquoted heredoc holds $( or a backtick, an open
 # $(( )): the caller then checks the raw text as well. The one $( read through is the message form of git and gh: a
 # double quote ending its line in an unescaped $(cat <<'W', whose body is dropped, closed by a line of ) alone; for any
@@ -249,7 +250,7 @@ function dqend(s,   off, k, pos, b, j) {
   return 0
 }
 BEGIN {
-  SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`]"; US = "\037"; MK = "\006"
+  SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`>]"; US = "\037"; MK = "\006"
   PH = "[\001-\005\016-\021]"
 }
 {
@@ -295,11 +296,12 @@ BEGIN {
     c = substr(line, RSTART, 1)
     line = substr(line, RSTART + 1)
     prev = substr(seg, length(seg), 1)
-    if (ar > 0 && (c == "(" || c == ")" || c == "<" || c == ";" || c == "&" || c == "|" || c == "#")) {
+    if (ar > 0 && (c == "(" || c == ")" || c == "<" || c == ";" || c == "&" || c == "|" || c == "#" || c == ">")) {
       if (c == "(") ar++
       else if (c == ")") ar--
       seg = seg c
     }
+    else if (c == ">") seg = seg "\007>"
     else if (c == SQ || c == DQ) { q = c; qn = 0 }
     else if (c == BS) {
       if (line == "") cont = 1

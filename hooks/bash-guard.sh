@@ -112,6 +112,7 @@ path_sweeps() {
 
 # xargs_mode: the segment runs under xargs; unk_next: the git add has an argument the scan cannot read ($( or backtick)
 xargs_mode=0
+xargs_repl=""
 unk_next=0
 
 # git_sweeps <dir>: t[i] is git; 0 when the command stages or commits more than named files
@@ -170,6 +171,8 @@ git_sweeps() {
         esac
       fi
       [[ "$arg" == '$' ]] && continue
+      # xargs -I{} git add {}: the replace string stands for the unread file names
+      [[ -n "$xargs_repl" && "$arg" == "$xargs_repl" ]] && continue
       named=1
       path_sweeps "$arg" "$base" && sweep=1
     fi
@@ -251,10 +254,13 @@ memory_writes() {
   local j w r last inplace=0
   for ((j = i; j < n; j++)); do
     w="${t[j]}"
-    if [[ "$w" =~ ^[0-9]*\>[\>\|]?(.*)$ ]]; then
-      r="${BASH_REMATCH[1]}"
+    # an unquoted > is \007> (kit_split_cmd): a quoted one is no redirect
+    if [[ "$w" == *$'\007>'* ]]; then
+      r="${w#*$'\007'>}"
+      r="${r#$'\007'>}"
+      r="${r#[|]}"
       if [[ -z "$r" ]]; then r="${t[j + 1]:-}"; fi
-      [[ -n "$r" ]] && in_memory "$r" && return 0
+      [[ -n "$r" && "$r" != '&'* ]] && in_memory "$r" && return 0
     fi
   done
   r="${t[i]##*/}"
@@ -315,12 +321,14 @@ shell_script() {
   for ((j = i + 1; j < n; j++)); do
     w="${t[j]}"
     if [[ "$w" == -*c* && "$w" != --* ]]; then
-      ((j + 1 < n)) || return 0
+      ((++j))
+      [[ "${t[j]:-}" == -- ]] && ((++j))
+      ((j < n)) || return 0
       if [[ "$1" == split ]]; then
-        nested_scan split "${t[j + 1]}"
+        nested_scan split "${t[j]}"
       else
         # each raw level has fewer words, so it ends without a cap
-        nested_scan raw "${t[*]:j+1}"
+        nested_scan raw "${t[*]:j}"
       fi
       return 0
     fi
@@ -331,7 +339,7 @@ shell_script() {
 # scan <split|raw> [dir]: check the lines on stdin; split = kit_split_cmd output, raw = the command cut without quote
 # handling. dir is where the first line runs (a nested scan keeps its caller's directory).
 scan() {
-  local seg j rest idx mode="$1" lines=() k nxt
+  local seg j rest idx mode="$1" lines=() k nxt bt=0
   wd="${2:-$cwd0}"
   wd_stack=()
   while IFS= read -r seg; do lines+=("$seg"); done
@@ -340,6 +348,7 @@ scan() {
     nxt="${lines[k + 1]:-}"
     if [[ "$seg" == $'\006'* ]]; then
       case "${seg#?}" in
+        '`') ((++bt)) ;;
         "(") wd_stack+=("$wd") ;;
         ")")
           if ((${#wd_stack[@]})); then
@@ -356,9 +365,10 @@ scan() {
     n=${#t[@]}
     i=0
     xargs_mode=0
+    xargs_repl=""
     unk_next=0
     # git add $(...) unquoted: the splitter cuts at $( leaving a bare $ word, then \006(; a backtick leaves \006`
-    if [[ "$nxt" == $'\006`' ]]; then unk_next=1; fi
+    if [[ "$nxt" == $'\006`' ]] && ((bt % 2 == 0)); then unk_next=1; fi
     if ((n)) && [[ "${t[n - 1]}" == '$' ]] && [[ "$nxt" == $'\006(' || "$mode" == raw ]]; then unk_next=1; fi
     strip_lead
     ((i < n)) || continue
@@ -366,7 +376,13 @@ scan() {
       # skip xargs flags (a value flag takes the next word), then the command it runs
       ((++i))
       while ((i < n)) && [[ "${t[i]}" == -* ]]; do
-        case "${t[i]}" in -I | -L | -n | -P | -s | -d | -E | -a | -J) ((++i)) ;; esac
+        case "${t[i]}" in
+          -I | -J) xargs_repl="${t[i + 1]:-}"; ((++i)) ;;
+          -I?* | -J?*) xargs_repl="${t[i]#-?}" ;;
+          -i) xargs_repl='{}' ;;
+          -i?*) xargs_repl="${t[i]#-i}" ;;
+          -L | -n | -P | -s | -d | -E | -a) ((++i)) ;;
+        esac
         ((++i))
       done
       xargs_mode=1

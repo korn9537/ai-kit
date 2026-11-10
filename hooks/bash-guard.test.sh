@@ -361,6 +361,15 @@ git_case "block: git add \$(...) after a file" 2 'git add src/a.ts $(git ls-file
 git_case "pass: git add -n \$(...)" 0 'git add -n $(git ls-files -m)'
 git_case "pass: commit message naming xargs git add" 0 'git commit -m "docs: xargs git add and bash -c git add -A are blocked"'
 git_case "pass: echo of backticks" 0 'echo `date` > /dev/null'
+git_case "pass: git add inside backticks" 0 'echo `git add src/a.ts`'
+git_case "pass: git add inside backticks, assigned" 0 'out=`git add src/a.ts`'
+git_case "block: backtick pair, then git add backticks" 2 'echo `date`; git add `git ls-files -m`'
+git_case "block: bash -c -- script" 2 'bash -c -- "git add -A"'
+git_case "pass: bash -c -- named file" 0 'bash -c -- "git add src/a.ts"'
+git_case "block: xargs -I{} git add {}" 2 'git ls-files -m | xargs -I{} git add {}'
+git_case "block: xargs -I % git add %" 2 'git ls-files -m | xargs -I % git add %'
+git_case "block: xargs -i git add" 2 'git ls-files -m | xargs -i git add {}'
+git_case "pass: xargs -I{} git add -n {}" 0 'git ls-files -m | xargs -I{} git add -n {}'
 git_case "block: git add \$(...) in a double quote, raw pass" 2 'echo "$(date)"; git add -A'
 git_case "block: bash -c in a double quote with \$(...), raw words" 2 'bash -c "git add -A $(date)"'
 
@@ -399,6 +408,10 @@ mem_case "block: inside sh -c" 2 "sh -c 'echo x > $M/a.md'"
 mem_case "block: \$CLAUDE_CONFIG_DIR spelling" 2 'echo x > $CLAUDE_CONFIG_DIR/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
 mem_case "block: \${CLAUDE_CONFIG_DIR} spelling" 2 'tee ${CLAUDE_CONFIG_DIR}/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
 mem_case "block: literal CLAUDE_CONFIG_DIR path" 2 'cp a /opt/cfg/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
+mem_case "pass: commit message starting with a redirect to the memory dir" 0 "git commit -m \"> $M/a.md\""
+mem_case "pass: echo of a quoted redirect" 0 "echo '>$M/a.md'"
+mem_case "block: redirect with no space" 2 "echo x >$M/a.md"
+mem_case "block: redirect after a quoted word" 2 "echo 'a b' > $M/a.md"
 mem_case "pass: write elsewhere under ~/.claude" 0 'echo x > ~/.claude/settings.local.json'
 mem_case "pass: a plan under ~/.claude/projects" 0 'echo x > ~/.claude/projects/p/notes.md'
 mem_case "pass: read of the memory dir" 0 "cat $M/a.md"
