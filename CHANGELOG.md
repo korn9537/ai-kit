@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.44.0
+
+`plan.mjs write` refuses a batch whose `accept` is missing or empty: the job's one review checks every batch against
+its Done when checks, and a batch with none left it only the request to go by. A plan file written before 2.44.0 still
+resumes without them. No project needs to edit anything.
+
 ## 2.43.1
 
 The git shims' version fallback (issue #50) keeps only `x.y.z` folders that hold the hook before taking the highest:

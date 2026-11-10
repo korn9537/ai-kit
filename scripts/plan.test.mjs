@@ -33,7 +33,7 @@ const args = (batches = [{ id: "a", title: "A" }, { id: "b", title: "B", waitsFo
   request: "ส่งออกใบแจ้งหนี้ **ด่วน** 2026-11-05",
   plugin: "/plugin",
   job: JOB,
-  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, risks: ["r"], tests: ["t"], ...b })),
+  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, accept: ["ok"], risks: ["r"], tests: ["t"], ...b })),
 });
 
 const plan = merge(null, args());
@@ -47,6 +47,9 @@ const long = `Change "the handlers"  so that\n\tthe codes stay ${"word ".repeat(
 let thrown = "";
 try { merge(null, args([{ id: "a", accept: ["ok", 3] }])); } catch (e) { thrown = e.message; }
 ok("accept that is not a list of strings is refused", /accept is a list/.test(thrown));
+thrown = "";
+try { merge(null, args([{ id: "a", accept: [] }])); } catch (e) { thrown = e.message; }
+ok("a new plan with an empty accept is refused", /accept is empty/.test(thrown));
 ok("accept survives the plan file", parse(render(merge(null, args([{ id: "a", accept: ["x shows y"] }])))).batches[0].accept[0] === "x shows y");
 const wide = merge(null, { ...args([{ id: "a", title: long, brief: long, verify: long, alsoInScope: [long, "short"] }]), request: long });
 const wideText = render(wide);
@@ -80,7 +83,7 @@ throws("a batch with an empty tests list is refused", () => merge(null, { job: J
 throws("a blank risk is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [" "], tests: ["t"] }] }), /risks is a list/);
 for (const bare of ["none", "None.", "n/a", "-"])
   throws(`a bare ${bare} is refused`, () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [bare], tests: ["t"] }] }), /says why/);
-ok("none: <why> passes", merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: ["none: doc only"], tests: ["none: doc only"] }] }).batches.length === 1);
+ok("none: <why> passes", merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", accept: ["ok"], risks: ["none: doc only"], tests: ["none: doc only"] }] }).batches.length === 1);
 throws("a batch with no brief is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A" }] }), /title and a brief/);
 throws("a batch with no title is refused", () => merge(null, { job: JOB, batches: [{ id: "a", brief: "B" }] }), /title and a brief/);
 throws("a wait on a later batch is refused", () => merge(null, args([{ id: "a", waitsFor: ["b"] }, { id: "b" }])), /planned after/);
@@ -160,10 +163,10 @@ try {
   git(oldRepo, "add", "ai");
   git(oldRepo, "commit", "-q", "-m", "older plan");
   ok("a plan already in the repo stays writable, however wide", write(oldRepo, oldArgs).committed === false);
-  ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d", risks: ["r"], tests: ["t"] }] }).committed === true);
+  ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d", accept: ["ok"], risks: ["r"], tests: ["t"] }] }).committed === true);
   const narrow = repoAt("narrow");
   write(narrow, args());
-  throws("a plan already in the repo refuses a new wide line", () => write(narrow, { ...args(), batches: [{ id: "e", title: "E", brief: "do e", risks: ["r"], tests: ["t"], ["k".repeat(130)]: 1 }] }), /passes 120 columns/);
+  throws("a plan already in the repo refuses a new wide line", () => write(narrow, { ...args(), batches: [{ id: "e", title: "E", brief: "do e", accept: ["ok"], risks: ["r"], tests: ["t"], ["k".repeat(130)]: 1 }] }), /passes 120 columns/);
   throws("write refuses a key too long for the file", () => write(repoAt("wide-key"), args([{ id: "a", ["k".repeat(130)]: 1 }])), /passes 120 columns/);
   ok("the refused plan leaves no file", !existsSync(join(tmp, "shaped", "ai", "plans", `${JOB}.md`)));
   const rel = `ai/plans/${JOB}.md`;

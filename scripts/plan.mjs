@@ -124,6 +124,9 @@ export function merge(old, args, commits = new Map(), replace = false) {
   const seen = new Set();
   for (const b of args.batches) {
     checkBatch(b);
+    // a new plan only (a plan file from before 2.44.0 resumes without): the job's one review checks every batch
+    // against these, and a batch with none leaves it only the request to go by
+    if (!b.accept?.length) throw new Error(`batch ${b.id}: accept is empty: give the summary's Done when checks it must meet`);
     if (seen.has(b.id)) throw new Error(`batch id appears twice: ${b.id}`);
     if (commits.has(b.id)) throw new Error(`batch ${b.id} already has commit ${commits.get(b.id)}, pick a new id`);
     for (const w of b.waitsFor || []) {

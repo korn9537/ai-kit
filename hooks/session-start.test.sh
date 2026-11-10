@@ -57,7 +57,7 @@ mkdir -p "$REPO/ai/plans"
 printf '# Plan x\n\n| T-1 x | todo | a |\n' >"$REPO/ai/plans/hand.md"
 bash "$HOOK" </dev/null >"$TMP/hand.out"
 check "a hand-written plan is not named" "$(grep -q 'not closed' "$TMP/hand.out" && echo 1 || echo 0)"
-printf '{"job":"%s","plugin":"p","batches":[{"id":"a","title":"A","brief":"B","risks":["r"],"tests":["t"]}]}' "$job" >"$TMP/args.json"
+printf '{"job":"%s","plugin":"p","batches":[{"id":"a","title":"A","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]}]}' "$job" >"$TMP/args.json"
 git -C "$REPO" config user.email t@e.c
 git -C "$REPO" config user.name t
 PLAN="$PWD/../scripts/plan.mjs"
