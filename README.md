@@ -319,14 +319,18 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
    the review leaves no CONFIRMED finding open, or `CHANGELOG.md` names the ones left. Tag the version commit
    `vX.Y.Z` and push `main` with the tag; a bad release is reverted on `main`.
 
-Agent evals (optional, early access in Claude Code 2.1.234): `evals/<case>/prompt.md` plus `graders/*.md` hold five
-cases (`decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`). Each run calls
-the model and costs money, so `node scripts/test-all.mjs` does not run them. Run one family by hand:
-`claude plugin eval . --ablation none --runs 1 --case 'decider-*'`. CI form: add `--no-publish --max-cost-usd 5
---threshold 0.9`. Cost: one session per case per run (cases x runs: the full suite at `--runs 1` is 5 sessions, the
+Agent evals (optional): `evals/<case>/prompt.md` plus `graders/*.md` hold five cases (`decider-decided`,
+`decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`). `claude plugin eval` is early access:
+on an account without it the command prints "`plugin eval` is currently in early access", exits 1 and runs nothing.
+Each run is a real `claude -p` session, so `node scripts/test-all.mjs` does not run them. What a session costs depends
+on how Claude Code is signed in: on a subscription (Pro, Max) it uses the plan's usage limits, with no charge beyond
+the plan; with `ANTHROPIC_API_KEY` set it is billed per token, and `--max-cost-usd` caps that bill. Run one family by
+hand: `claude plugin eval . --ablation none --runs 1 --case 'decider-*'`. CI form: add `--no-publish --max-cost-usd 5
+--threshold 0.9`. Size: one session per case per run (cases x runs: the full suite at `--runs 1` is 5 sessions, the
 decider and business-analyst ones on opus). Results go to `evals/results/` (git-ignored). The cases carry their
 context inline, so they need no `--allow-tools` or `--scaffold`. The `tool_used` graders name the `Agent` tool; the
-first paid run confirms that is the name in the trace. `node scripts/evals.test.mjs` checks the case files offline.
+first run that gets through confirms that is the name in the trace. `node scripts/evals.test.mjs` checks the case
+files offline, with no model call.
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected

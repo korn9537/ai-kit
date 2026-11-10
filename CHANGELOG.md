@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.47.1
+
+README's evals paragraph says what a run costs on each sign-in: on a subscription (Pro, Max) a `claude plugin eval`
+session uses the plan's usage limits with no charge beyond it; only with `ANTHROPIC_API_KEY` is it billed per token,
+which `--max-cost-usd` caps. 2.47.0 said every run "costs money". It also says the command is early access: on an
+account without it, it prints "`plugin eval` is currently in early access", exits 1 and runs nothing, as the first
+run of the decider cases did. No project needs to edit anything.
+
 ## 2.47.0
 
 The post-edit checks (comment and docs rules) also run on files a Bash call wrote (`>`, `>>`, `tee`, `sed -i`, `cp`,
