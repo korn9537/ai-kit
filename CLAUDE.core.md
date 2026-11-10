@@ -76,7 +76,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   anomaly found while checking: in scope → fix it; outside the request → follow-up.
 - **Read, do not guess.** A fact the code, docs or git history can settle is checked before the answer, never stated
   from memory, naming or typical patterns, and never left as "not sure" or "I guess": cite the `path:line` it rests
-  on. Only what the repo cannot show (production data, the user's intent, an external system) may be an assumption,
+  on. A fact outside the repo (library, API, standard, law, platform rule) is looked up on the web, official docs
+  first, and cited by URL. Only what neither can show (production data, the user's intent) may be an assumption,
   marked as such. A recommendation that rests on an unchecked fact, above all one that deletes data or cannot be
   undone, is not given until that fact is checked.
 - **Project knowledge lives in the repo, never in auto-memory** (one machine only; `init` sets

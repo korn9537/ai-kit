@@ -6,7 +6,10 @@
 (`path:line`) before the answer, not stated from memory or left as "I guess"; only what the repo cannot show may be a
 marked assumption, and a recommendation resting on an unchecked fact (above all one that deletes data) waits for the
 check. Seen in a reply that recommended deleting a local `.isar` database while guessing whether any notifications
-existed only on the device. No project needs to edit anything.
+existed only on the device. A fact outside the repo (library, API, standard, law, platform rule) is looked up on the
+web and cited by URL. `ai-kit:business-analyst` gains WebSearch and WebFetch and the same rule: outside facts and
+comparable practice come from the web, each claim may cite a URL, and an Owner decisions assumption is only for what
+neither the repo nor the web can settle, with what was searched. No project needs to edit anything.
 
 ## 2.41.0
 
