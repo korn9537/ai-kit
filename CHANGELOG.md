@@ -1,5 +1,36 @@
 # Changelog
 
+## 2.47.0
+
+The post-edit checks (comment and docs rules) also run on files a Bash call wrote (`>`, `>>`, `tee`, `sed -i`, `cp`,
+`mv`), and `PostToolUseFailure` is wired too. They skip git work-tree commands and background calls. CHANGELOG 2.46.1
+counted 49 committers that met the comment rule only at the commit because they wrote through Bash, where no post-edit
+check ran.
+
+bash-guard sees `xargs git add` (also `-I{}`), `sh -c` and `bash -c` (also `-c --`), `git add $(...)` and backticks,
+and Bash writes into the auto-memory directory (`>`, `>>`, `>|`, `tee`, `cp`, `mv`, `sed -i`). The README listed these
+as not seen; each was a way round the sweep-add and memory rules.
+
+ask-guard matches the decider verdict per question, not per call: a call with several questions needed one verdict
+for all of them. Thai is matched by character bigrams, and the state file is locked against two writers.
+
+review-before-stop reviews a mid-plan edit outside the open plan's files (`plan.mjs scope`). 2.45.0 named this as a
+gap: an edit made while a plan was open, but outside its files, was never reviewed.
+
+Usage: a refused commit leaves a refusal record in `ai/usage/refusals/`, so refusals are counted across machines and
+not only from local transcripts. The digest has a refusals section, and `digest --compare <kitA> <kitB>` sets two kit
+versions side by side, so a rule change can be judged by its effect.
+
+`check-specs` warns (never blocks) of an API route with no entry in the API spec: Next, NestJS, Express/Fastify,
+FastAPI and Flask. `ui.routes: false` turns it off. It works for backend-only repos that set `ui.api`.
+
+New conventions: `python`, `react` (adds to `typescript`), `flutter` (adds to `dart`) and `java`.
+
+`evals/` holds a suite for the agents (the decider, the reviewer, the business analyst): 5 cases, with an offline
+grader tested by `scripts/evals.test.mjs`. Running it costs money, so it is not part of `test-all`; the first paid run
+confirms the trace name of the Agent/Task tool. No project needs to edit anything; `ui.routes` defaults on where
+`ui.api` is set.
+
 ## 2.46.2
 
 A request to check, verify or explain how a business rule or data behaves today runs `ai-kit:business-analyst`, not

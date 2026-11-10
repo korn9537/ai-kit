@@ -364,6 +364,8 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 ไฟล์ละหน้าจอ (`S-<n>-<slug>.md`) ผูกกับ API spec (`ui.api`) — ลำดับงานคือ data (`ai/data/`) → screen spec → API spec → API → หน้าจอ
 หนึ่งหน้าจออ่านข้อมูลจาก server read เดียว ห้ามหน้าจอดึงหลาย API มารวมเอง รายละเอียดใน `docs/screen-specs.md`
 pre-commit เตือน (ไม่ block) ด้วย `scripts/check-specs.mjs` หน้าจอเดิมที่ยังไม่มี spec ให้เขียนเมื่อแก้หน้านั้นครั้งถัดไป
+นอกจากนี้เตือนเมื่อมี API route (Next, NestJS, Express/Fastify, FastAPI/Flask) ที่ไม่มีใน API spec ปิดได้ด้วย
+`ui.routes: false` ใช้กับ repo ที่มีแต่ backend ได้ถ้าตั้ง `ui.api`
 
 เอกสารใน `ai/` มีหมวดตายตัว (decisions, requirements, data ไฟล์ละ entity, specs, screens, api, plans, notes) แต่ละหมวดมี
 ชื่อไฟล์ id และ format ของตัวเอง template อยู่ใน `templates/ai/` รายละเอียดใน `docs/ai-layout.md` — `ai/data/` เป็นฐานที่
@@ -378,6 +380,11 @@ kit บันทึกการใช้ token ของทุก round (ค่�
 และ commit ไปกับ commit ถัดไปเอง ไม่แก้ไฟล์ที่ commit แล้ว จึงไม่ขวางการสลับ branch
 สรุปหนึ่งบรรทัดแสดงให้ผู้ใช้เห็นอย่างเดียว ปิดทั้งหมดด้วย `"usage": { "enabled": false }`
 ใน `ai/kit/config.json` สั่ง `/ai-kit:usage` เพื่อดูว่าอะไรใช้ token มากที่สุด
+commit ที่ถูก pre-commit ปฏิเสธเก็บเป็น refusal record ใน `ai/usage/refusals/` จึงนับรวมทุกเครื่อง (ไม่ใช่แค่ transcript
+ในเครื่อง) digest มีหัวข้อ refusals และเทียบสอง kit version ได้ด้วย `digest --compare <kitA> <kitB>`
+
+การเขียนไฟล์ผ่าน Bash ก็ถูกตรวจหลังแก้ (comment, docs) เหมือนการใช้ Edit ยกเว้นคำสั่ง git ที่แตะ work tree และ
+การเรียกแบบ background
 
 ต้องมี `jq` และ Node 22 ขึ้นไป
 
