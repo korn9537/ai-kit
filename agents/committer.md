@@ -32,6 +32,11 @@ Context is the cost. Every result you read stays in your context and is re-read 
   its last lines (`2>&1 | tail -n 20`); on a failure, rerun the one failing file or test, not the whole suite.
 - A lint or type check over a whole app prints every finding: filter it to the files you changed
   (`| grep -F -e <file> ...`) or to the rule you are fixing, and cap it (`| head -n 40`).
+- Edit code with the Edit tool: each edit then gets the comment and doc checks the pre-commit runs. A file you wrote
+  through Bash (python3, sed -i, a heredoc) got none: before staging, run
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-comments.mjs --strict <those files>` and
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-docs.mjs --strict <those files>` and fix what they print, so the
+  commit does not fail on them.
 - Do not print a file, diff or log you have already seen; `git diff --stat` before the commit, not the full diff.
 
 Commit: stage the files you changed by name (`git add <files>`), read `git diff --cached --stat`, then

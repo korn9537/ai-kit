@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.46.1
+
+The committer edits code with the Edit tool, and runs `check-comments.mjs --strict` and `check-docs.mjs --strict` on
+any file it wrote through Bash before staging. In 5 days 49 committers hit the pre-commit comment rule (59 refused
+commits in brieflane and asw-sales-flow); every one had edited through Bash (python3, sed), which the post-edit check
+never sees, so the rule was first met at the commit. No project needs to edit anything.
+
 ## 2.46.0
 
 The main session coordinates and does not explore: finding what a summary, plan or brief needs (where the code is,
