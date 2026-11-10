@@ -23,7 +23,8 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
 | `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
-| `scripts/kit.mjs`             | `init` / `check` / `sync` / `unattended` / `uninstall` / `inventory` (§Commands); the `unattended` warnings are in it |
+| `scripts/kit.mjs`             | dispatcher for `init` / `check` / `sync` / `unattended` / `uninstall` / `inventory` (§Commands)  |
+| `scripts/kit/*.mjs`           | one module per command (`init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`) and `shared.mjs` |
 | `scripts/kit-migrate.mjs`     | `kit.mjs migrate`: a clean 1.x repo to the plugin; test `scripts/kit-migrate.test.mjs`         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |

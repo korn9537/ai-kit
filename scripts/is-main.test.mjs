@@ -1,7 +1,7 @@
 // Tests for is-main.mjs: each CLI runs through a symlinked path, and no script compares process.argv[1] by hand.
 // Usage: node scripts/is-main.test.mjs
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,9 +28,10 @@ try {
     const r = spawnSync(process.execPath, [join(link, `${name}.mjs`), ...args], { encoding: "utf8", input: "", cwd: tmp });
     ok(`${name}.mjs runs its CLI through a symlinked path`, /usage|error/i.test(r.stderr + r.stdout), JSON.stringify(r.stderr));
   }
-  const bad = readdirSync(dir)
-    .filter((f) => f.endsWith(".mjs") && f !== "is-main.mjs" && !f.endsWith(".test.mjs"))
-    .filter((f) => /process\.argv\[1\]/.test(readFileSync(join(dir, f), "utf8")));
+  const scanned = [dir, join(dir, "kit"), join(dir, "lib")].flatMap((d) => (existsSync(d) ? readdirSync(d).map((f) => join(d, f)) : []));
+  const bad = scanned
+    .filter((f) => f.endsWith(".mjs") && !f.endsWith(".test.mjs") && !f.endsWith("is-main.mjs"))
+    .filter((f) => /process\.argv\[1\]/.test(readFileSync(f, "utf8")));
   ok("no script uses process.argv[1] outside is-main.mjs", bad.length === 0, bad.join(","));
 } finally {
   rmSync(tmp, { recursive: true, force: true });

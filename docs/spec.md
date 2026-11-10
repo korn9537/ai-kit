@@ -81,7 +81,14 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `scripts/kit.mjs` | `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`; dispatches `migrate` |
+| `scripts/kit.mjs` | dispatcher for `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`, `migrate`; re-exports what `kit-migrate.mjs` and the tests import |
+| `scripts/kit/shared.mjs` | constants and helpers more than one command uses: `kit` (plugin root), `root` (git top of cwd), git and file readers, the shim and `check.sh` texts |
+| `scripts/kit/sync.mjs` | `sync`: writes the generated copies in `ai/kit/`; `snapshotWarnings`, their drift check |
+| `scripts/kit/check.mjs` | `check`: every warning and problem (`allWarnings`), also run by `init` |
+| `scripts/kit/init.mjs` | `init`: `initFiles` wires the project, then sync and check |
+| `scripts/kit/uninstall.mjs` | `uninstall [--purge]`: reverses `initFiles` |
+| `scripts/kit/unattended.mjs` | `unattended`: rewrites `ai/kit/pre-commit.sh` to `$AI_KIT_RANGE`, writes `requires.txt`, runs sync |
+| `scripts/kit/inventory.mjs` | `inventory`: read-only list of what a retrofit starts from |
 | `scripts/kit-migrate.mjs` | 1.x repo to plugin |
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
