@@ -90,7 +90,8 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/kit/inventory.mjs` | `inventory`: read-only list of what a retrofit starts from |
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
-| `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index; warnings only |
+| `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index, routes with no API entry; warnings only |
+| `scripts/lib/routes.mjs` | regex route extraction (Next, Nest, Express, FastAPI, Flask) and path-param normalizing |
 | `scripts/usage.mjs` | `record`, `end`, `flush`, `digest` (`--compare <kitA> <kitB>`), `refusal <rule-id>` (called by the git hooks): token records; `hooks`: counts of each hook's firings |
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
@@ -126,7 +127,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `docs/handoffs.md` | what each step hands the next, on every route |
 | `docs/owner-kinds.md` | the one list of what only the owner decides |
 | `docs/kit-proposals.md` | filing and landing kit proposals |
-| `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set |
+| `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set; route check when `ui.api` is set |
 | `docs/superpowers/` | design specs and plans of the kit's own features |
 
 ### conventions/ and templates/

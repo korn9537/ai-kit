@@ -191,6 +191,8 @@ never a secret or personal data (`agents/decider.md`).
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns
 when the key is absent in a repo that looks like web or mobile, and when it is set without `ai/screens/index.md`.
+With `ui.api` set, pre-commit also warns of a staged route (Next, NestJS, Express, FastAPI, Flask) with no entry in
+the API spec; `"routes": false` inside `ui` turns that off.
 
 ## Commands
 

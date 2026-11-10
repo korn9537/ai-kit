@@ -1,8 +1,9 @@
 // Reports screen specs out of step with the API and the code (docs/screen-specs.md §Check). Warnings only, exit 0.
-// Usage, cwd in the repo: node <plugin>/scripts/check-specs.mjs [--staged: only when a guarded file is staged] [--map]
+// Usage, cwd in the repo: node <plugin>/scripts/check-specs.mjs [--staged: only on a guarded staged file] [--map] [--all]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { extractRoutes, isRouteCandidate, normRoute } from "./lib/routes.mjs";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -29,7 +30,10 @@ if (existsSync("ai/kit/config.json")) {
     console.log(`specs: ai/kit/config.json is not valid JSON, screen-spec checks are off: ${e.message}`);
   }
 }
-if (!Array.isArray(ui.platforms) || !ui.platforms.length) process.exit(0);
+const screensOn = Array.isArray(ui.platforms) && ui.platforms.length > 0;
+// route check: on when ui.api is set, off with ui.routes false; it also runs in a repo with no ui.platforms
+const routesOn = typeof ui.api === "string" && ui.routes !== false;
+if (!screensOn && !routesOn) process.exit(0);
 const DIR = "ai/screens";
 const API = typeof ui.api === "string" ? ui.api : "ai/api/";
 const apiRel = API.replace(/^\.\//, "").replace(/\/$/, "");
@@ -43,14 +47,16 @@ const list = (...a) => (git(...a, "-z") ?? "").split("\0").filter(Boolean);
 // specs are read from the working tree, so a partially staged spec is checked as edited
 if (flag("staged")) {
   const guarded = (f) =>
-    f.startsWith(`${DIR}/`) || f === apiRel || f.startsWith(`${apiRel}/`) || INCLUDE?.test(f);
+    (screensOn && (f.startsWith(`${DIR}/`) || INCLUDE?.test(f))) ||
+    f === apiRel ||
+    f.startsWith(`${apiRel}/`) ||
+    (routesOn && isRouteCandidate(f));
   if (!list("diff", "--cached", "--name-only", "--diff-filter=ACMRD").some(guarded)) process.exit(0);
 }
 
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const EP = new RegExp(`\\b(${METHODS.join("|")})\\s+(/[^\\s·,;)\`]*)`, "g");
-const norm = (m, p) =>
-  `${m.toUpperCase()} ${p.split("?")[0].replace(/\{[^}]*\}|:[A-Za-z_]\w*/g, "{}").replace(/(.)\/$/, "$1")}`;
+const norm = normRoute;
 // lines outside fenced blocks: a fence closes on its own marker and length, so ~~~ inside ``` is text; a backtick
 // fence's info string holds no backtick (```x``` is inline)
 const prose = (text) => {
@@ -82,7 +88,7 @@ const items = (v) => {
 const warn = [];
 const screens = [];
 const ids = new Map();
-const names = existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".md") && f !== "index.md") : [];
+const names = screensOn && existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".md") && f !== "index.md") : [];
 for (const f of names) {
   const path = `${DIR}/${f}`;
   const m = /^S-(\d+)-[a-z0-9-]+\.md$/.exec(f);
@@ -187,6 +193,25 @@ if (api === null) {
     warn.push(`ui.api ${API} is missing or unreadable: endpoint links not checked (API in another repo: point ui.api at a local copy of its spec)`);
 } else
   for (const s of screens) for (const e of s.eps) if (!api.has(e) && !api.has(e.replace(/^\S+/, "*"))) warn.push(`${s.path}: ${e} is not in ${API}`);
+
+if (routesOn && api && (flag("staged") || flag("all"))) {
+  const files = flag("all") ? list("ls-files") : list("diff", "--cached", "--name-only", "--diff-filter=ACMR");
+  for (const f of files.filter(isRouteCandidate)) {
+    let text;
+    try {
+      text = readFileSync(f, "utf8");
+    } catch {
+      continue;
+    }
+    for (const r of extractRoutes(f, text)) {
+      const n = norm(r.method === "*" ? "GET" : r.method, r.path);
+      const path = n.replace(/^\S+ /, "");
+      const has =
+        r.method === "*" ? [...api].some((e) => e.endsWith(` ${path}`)) : api.has(n) || api.has(`* ${path}`);
+      if (!has) warn.push(`${r.method} ${r.path} (${f}:${r.line}) has no entry in ${API}`);
+    }
+  }
+}
 
 if (names.length) {
   const idx = `${DIR}/index.md`;

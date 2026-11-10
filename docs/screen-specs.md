@@ -67,10 +67,21 @@ Keys, one line each (repeat a key to continue it), items split by ` · `:
 ## Check
 
 `scripts/check-specs.mjs`, warnings (`!`) only. Pre-commit runs it when a file under `ai/screens/`, the `ui.api`
-source or a file matching `ui.include` is staged. Reports:
+source, a file matching `ui.include` or (route check on) a staged `.js`/`.ts`/`.py` file. Reports:
 
 - an endpoint in `reads`, `lookups`, `loads` or `actions` missing from `ui.api`
 - `reads` with more than one item
 - a duplicate `S-<n>`, a file name or heading not in the `S-<n>` form
 - `index.md` missing, or out of step with the files
 - an added file matching `ui.include` that no spec lists under `files`
+- a route in code with no entry in `ui.api` (see Route check)
+
+### Route check
+
+On when `ui.api` is set; `"ui": { "routes": false }` turns it off. It runs in a repo without `ui.platforms` too (a
+backend). Pre-commit checks the staged files; `check-specs.mjs --all` checks every tracked file. A route is found by
+regex in Next `app/**/route.ts` and `pages/api`, NestJS `*.controller.ts` (`@Controller` + `@Get`/`@Post`...),
+Express/Fastify (`app|router.get('/p'`) and FastAPI/Flask decorators. Each missing one is one warning,
+`METHOD /path (file:line) has no entry in <ui.api>`. Path params match in every spelling: `{id}`, `:id`, `<int:id>`,
+`[id]`, `[...slug]`. Blind spots: dynamic paths, mounts with a prefix (`app.use('/v1', router)`), a Nest global
+prefix, a `pages/api` handler's methods (any method entry for the path covers it). Warnings never block a commit.

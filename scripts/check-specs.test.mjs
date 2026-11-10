@@ -184,12 +184,49 @@ const CASES = [
   {
     desc: "staged: nothing guarded staged → silent",
     head: { "ai/kit/config.json": UI, "ai/screens/x.md": "x\n" },
-    work: { "src/x.ts": "" },
+    work: { "src/x.css": "" },
     stage: ["src"],
     args: ["--staged"],
     want: [],
   },
 ];
+
+const RUI = conf({ platforms: ["web"], api: "ai/api/" });
+const BACKEND = conf({ api: "ai/api/" });
+const api = (...eps) => `# API\n\n${eps.map((e) => `## ${e}\n`).join("\n")}`;
+const route = (desc, file, src, spec, want, ui = RUI, extra = {}) => ({
+  desc,
+  head: { "ai/kit/config.json": ui, "ai/api/a.md": api(...spec), ...extra },
+  work: { [file]: src },
+  stage: [file],
+  args: ["--staged"],
+  raw: true,
+  want: want.map((w) => `! ${w.replace("@", file)}`),
+});
+const NEXT = "export async function GET() {}\n";
+CASES.push(
+  route("route: staged Next route.ts alone, no spec entry → one warning with file:line", "app/api/orders/[id]/route.ts", NEXT, ["GET /x"], ["GET /api/orders/[id] (@:1) has no entry in ai/api/"]),
+  route("route: Next route.ts with the entry → none", "app/api/orders/[id]/route.ts", NEXT, ["GET /api/orders/:id"], []),
+  route("route: Next group dropped, src/app prefix, POST const", "src/app/(shop)/cart/route.ts", "\nexport const POST = () => {}\n", ["GET /cart"], ["POST /cart (@:2) has no entry in ai/api/"]),
+  route("route: backend-only config (no platforms, ui.api set) still warns", "app/api/o/route.ts", NEXT, ["GET /x"], ["GET /api/o (@:1) has no entry in ai/api/"], BACKEND),
+  route("route: ui.routes false → off", "app/api/o/route.ts", NEXT, ["GET /x"], [], conf({ platforms: ["web"], api: "ai/api/", routes: false })),
+  route("route: no ui.api and no platforms → unchanged, silent", "app/api/o/route.ts", NEXT, ["GET /x"], [], conf({})),
+  route("route: NestJS controller prefix + methods", "src/o.controller.ts", "@Controller('orders')\nexport class C {\n  @Get()\n  a() {}\n  @Post(':id/approve')\n  b() {}\n}\n", ["GET /orders"], ["POST /orders/:id/approve (@:5) has no entry in ai/api/"]),
+  route("route: Express app.get and router.post", "src/server.js", "app.get('/health', h);\nrouter.post(\"/orders\", h);\n", ["GET /health"], ["POST /orders (@:2) has no entry in ai/api/"]),
+  route("route: FastAPI decorators", "app/main.py", "@app.get('/items/{item_id}')\ndef a(): ...\n@router.post(\"/items\")\ndef b(): ...\n", ["GET /items/{id}"], ["POST /items (@:3) has no entry in ai/api/"]),
+  route("route: Flask <int:id> and methods list", "app/views.py", "@app.route('/u/<int:id>', methods=['GET', 'DELETE'])\ndef a(): ...\n@app.route('/v')\ndef b(): ...\n", ["GET /u/{id}", "GET /v"], ["DELETE /u/<int:id> (@:1) has no entry in ai/api/"]),
+  route("route: pages/api any method covered by any entry", "pages/api/users/[id].ts", "export default function h() {}\n", ["PUT /api/users/{id}"], []),
+  route("route: Next catch-all spellings", "app/docs/[...slug]/route.ts", NEXT, ["GET /docs/{slug}"], []),
+  route("route: Next optional catch-all", "app/docs/[[...slug]]/route.ts", NEXT, ["GET /docs/{x}"], []),
+  route("route: test files are skipped", "src/a.test.ts", "app.get('/zzz', h);\n", ["GET /x"], []),
+  {
+    desc: "route: not staged and no --all → not checked; --all checks tracked files",
+    head: { "ai/kit/config.json": RUI, "ai/api/a.md": api("GET /x"), "app/api/o/route.ts": NEXT },
+    raw: true,
+    args: ["--all"],
+    want: ["! GET /api/o (app/api/o/route.ts:1) has no entry in ai/api/"],
+  },
+);
 
 const put = (dir, files) => {
   for (const [p, t] of Object.entries(files ?? {})) {
