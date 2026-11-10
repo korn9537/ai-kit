@@ -174,11 +174,38 @@ kit_memory_dir() {
   printf '%s\n' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/${main//[^a-zA-Z0-9]/-}/memory"
 }
 
+# kit_memory_re: an extended regex for a path inside any project's auto-memory dir: ~/.claude/projects/<slug>/memory,
+# or under CLAUDE_CONFIG_DIR (also its Git Bash /c/x spelling). Used by memory-guard.sh and bash-guard.sh.
+kit_memory_re() {
+  local cfg='\.claude' c lit
+  if [[ -n "${CLAUDE_CONFIG_DIR:-}" ]]; then
+    c="$(kit_path "$CLAUDE_CONFIG_DIR")" && c="${c%/}"
+    lit="$(printf '%s' "$c" | sed 's/[][\.*^$+?(){}|]/\\&/g')"
+    cfg="(\\.claude|$lit"
+    if [[ "$c" =~ ^([A-Za-z]):(/.*)$ ]]; then
+      lit="/$(printf '%s' "${BASH_REMATCH[1]}" | tr A-Z a-z)${BASH_REMATCH[2]}"
+      cfg+="|$(printf '%s' "$lit" | sed 's/[][\.*^$+?(){}|]/\\&/g')"
+    fi
+    cfg+=")"
+  fi
+  printf '%s\n' "$cfg/projects/[^/[:space:]]+/memory(/|\$)"
+}
+
+# kit_memory_msg: the block message for a write into the auto-memory dir
+kit_memory_msg() {
+  cat <<'EOT'
+Blocked: auto-memory (~/.claude/projects/*/memory/) is on this machine only; the team never sees it. Write the fact
+to its repo target, same commit as the work (working conventions, Project knowledge): CLAUDE.md,
+ai/kit/review-checklist.md, the decisions source, ai/notes.md, or a kit proposal.
+EOT
+}
+
 # kit_split_cmd: a Bash command on stdin as one simple command per line. Splits on ; && || | a single & (not >& or &>)
 # a newline, backtick and parentheses; drops heredoc bodies and # comments; skips << inside $(( )). Quote characters are
 # removed and the text inside a quote stays one word. A line is its words joined and ended by \037 (read it with
 # IFS=$'\037' read -r -a), placeholders already decoded; an empty quote is an empty word. A line of \006( or \006) marks
-# a parenthesis, so a caller can scope a cd. The last line is \006ok, or \006raw when the scan could not follow the
+# a parenthesis, so a caller can scope a cd; a line of \006` marks a backtick, so a caller sees that `git add `ls``
+# had an argument it cannot read. The last line is \006ok, or \006raw when the scan could not follow the
 # text (it ended inside a quote or heredoc, a double quote or an unquoted heredoc holds $( or a backtick, an open
 # $(( )): the caller then checks the raw text as well. The one $( read through is the message form of git and gh: a
 # double quote ending its line in an unescaped $(cat <<'W', whose body is dropped, closed by a line of ) alone; for any
@@ -302,6 +329,7 @@ BEGIN {
         hdword = w; hdpend = 1; line = r
       } else seg = seg c
     }
+    else if (c == "`") { flush(); print MK "`" }
     else flush()
   }
   if (q != "") { seg = seg "\004"; qn++ }

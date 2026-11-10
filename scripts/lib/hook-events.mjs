@@ -17,7 +17,7 @@ export const HOOK_EVENTS = [
   m("bash-guard.staging", BG, "pre", "Blocked: a sweeping stage", "Blocked: a sweeping stage (git add -A/-u/./a directory)."),
   m("bash-guard.build", BG, "pre", "is listening (the user's dev server)", "Blocked: :3000 is listening (the user's dev server).",
     /is listening \(the user's dev server\)/),
-  m("memory-guard", "hooks/memory-guard.sh", "pre", "Blocked: auto-memory", "Blocked: auto-memory (~/.claude/projects/*/memory/) is on this machine only"),
+  m("memory-guard", "hooks/lib.sh", "pre", "Blocked: auto-memory", "Blocked: auto-memory (~/.claude/projects/*/memory/) is on this machine only"),
   m("agent-model-guard", "hooks/agent-model-guard.sh", "pre", "Blocked: a general-purpose or Explore subagent without a model",
     "Blocked: a general-purpose or Explore subagent without a model inherits the main session's model"),
   m("ask-guard.none", "hooks/ask-guard.sh", "pre", "Blocked: the agent decides; the owner holds only", "Blocked: the agent decides; the owner holds only the four owner kinds"),

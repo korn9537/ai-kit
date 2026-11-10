@@ -110,23 +110,27 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   not logged. The pre-commit stages the log with `ai/usage`; reviews skip it.
   `/ai-kit:decisions` prints it as a report.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit) blocks writes into
-  `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead; Bash is not
-  inspected (`init` sets `autoMemoryEnabled` false, which `kit.mjs check` verifies).
+  `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead. Bash writes into
+  that dir are blocked by `bash-guard.sh`; `init` also sets `autoMemoryEnabled` false (`kit.mjs check` verifies it).
 - `bash-guard.sh` (PreToolUse on Bash) cuts the command into simple commands (`;`, `&&`, `||`, `|`, `&`, newline,
   parentheses; quoted text, comments and heredoc bodies are dropped, so a commit message that names a command
   does not block). When the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds
   `$(`), it checks the raw text as well, cut on `;`, `&&`, `||`, `|`, `&`, parentheses, backtick and newline: a
-  heredoc body or message there that names `git add -A` can block. It runs two checks:
+  heredoc body or message there that names `git add -A` can block. It runs three checks:
   - blocks `git add`/`git stage` of `-A`, `-u`, `.`, a directory or a glob, and `git commit -a` or with such a path
     (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, behind `env`/`command`/`sudo`,
     after `cd` or `git -C` (the directory is resolved there, and a relative path is also tried in the starting
-    directory; a submodule pointer passes); `git add -n` passes. Not seen: `xargs git add`,
-    `bash -c "..."`, `git add $(...)`.
+    directory; a submodule pointer passes); `git add -n` passes. Also blocked: `xargs git add` naming no file,
+    `bash`/`sh`/`zsh -c "git add -A"` (the script is scanned, three levels deep, then the raw text), and `git add`
+    with an argument from `$(...)` or backticks (unreadable, so a sweep). Not seen: a heredoc fed to a shell, `eval`.
   - blocks a build command while the dev port listens: `build_guard.build_re` when set, else `pnpm`/`npm`/`yarn`/`bun`
     running a `build` or `build:*` script (options such as `--filter`, `-C`, `--dir`, `-w`, `-r`, `-s`; `run`,
     `exec`, `workspace`) and `next`/`turbo`/`vite`/`nuxt`/`nx`/`ng`... `build`, also behind `npx`, `time`, `env`,
     `timeout`. It probes the port with `lsof`, else `ss`, `netstat` (Git Bash on Windows) or `nc`; with none it lets
     the build run and says the port was not checked. `ALLOW_BUILD_WHILE_DEV=1 <command>` skips this check.
+  - blocks a write into the auto-memory dir through Bash (same regex as `memory-guard.sh`, `kit_memory_re` in
+    `hooks/lib.sh`): a `>`/`>>` target, `tee`, `cp`/`mv`/`install`/`ln` into it, `sed -i`, `perl -i`, `mkdir`, `touch`,
+    with a leading `~`, `$HOME` and `$CLAUDE_CONFIG_DIR` expanded. Quoted text and heredoc bodies are not matched.
 
 ## Project settings (`ai/kit/`)
 

@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# PreToolUse guard (Bash), two checks on the commands kit_split_cmd (lib.sh) cuts out of one command line:
+# PreToolUse guard (Bash), three checks on the commands kit_split_cmd (lib.sh) cuts out of one command line:
 # 1. a sweeping stage (`git add -A/-u/./<dir>/<glob>`, `git commit -a/./<dir>`): the checkout and index are shared
 #    with other sessions, so it commits their work too (docs/shared-checkout.md in this plugin).
+#    Also seen: `xargs git add` with no file named, `bash|sh|zsh -c "git add -A"` (the script is scanned, three levels
+#    deep, then cut raw), `git add $(...)` or backtick arguments (unreadable, so a sweep).
 # 2. a build command (config build_guard.build_re, else a built-in list) while the dev port (build_guard.port)
 #    listens: a build writes to the directory the dev server serves.
+# 3. a write into the auto-memory dir (~/.claude/projects/*/memory, see lib.sh kit_memory_re): a > or >> target, tee,
+#    cp, mv, install, ln, sed -i, perl -i, mkdir, touch; a leading ~, $HOME, $CLAUDE_CONFIG_DIR are expanded. Only on
+#    the split segments, so a heredoc body or message naming the path does not block.
 # Build escape hatch: prefix the command with ALLOW_BUILD_WHILE_DEV=1 when the port is unrelated.
 # Fail closed: when the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds $( ),
 # the raw text, cut on ; && || | & ( ) backtick and newline with the quotes blanked, is checked as well, so a
 # heredoc body or message naming `git add -A` there can block. The usual -m "$(cat <<'EOF' ...)" is followed, not raw.
-# Known gaps (the text is not run, so these stay unseen): `xargs git add`, `bash -c "git add -A"`, `git add $(...)`,
-# a heredoc fed to a shell (`bash <<E`), an attached -S key id ending in a value flag (`git commit -Sfoot -a`).
+# Known gaps (the text is not run, so these stay unseen): a heredoc fed to a shell (`bash <<E`), an attached -S key id
+# ending in a value flag (`git commit -Sfoot -a`), `eval`, a script file.
 set -o pipefail
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -105,9 +110,13 @@ path_sweeps() {
   [[ "$2" != "$cwd0" ]] && dir_sweeps "$cwd0/$1" "$cwd0"
 }
 
+# xargs_mode: the segment runs under xargs; unk_next: the git add has an argument the scan cannot read ($( or backtick)
+xargs_mode=0
+unk_next=0
+
 # git_sweeps <dir>: t[i] is git; 0 when the command stages or commits more than named files
 git_sweeps() {
-  local base="$1" sub="" arg pre sweep=0 dry=0 dd=0
+  local base="$1" sub="" arg pre sweep=0 dry=0 dd=0 named=0
   ((++i))
   while ((i < n)); do
     case "${t[i]}" in
@@ -160,9 +169,13 @@ git_sweeps() {
             ;;
         esac
       fi
+      [[ "$arg" == '$' ]] && continue
+      named=1
       path_sweeps "$arg" "$base" && sweep=1
     fi
   done
+  # xargs git add: the files come from stdin; $(...) or backticks: an argument the scan cannot read
+  if [[ "$sub" != commit ]] && ((xargs_mode && !named || unk_next)); then sweep=1; fi
   ((sweep && !dry))
 }
 
@@ -215,12 +228,116 @@ build_words() {
 build_re="$(kit_conf .build_guard.build_re "")"
 build=0
 
-# scan <split|raw>: check the lines on stdin; split = kit_split_cmd output, raw = the command cut without quote handling
+# mem_re: kit_memory_re, built when the first write-like segment needs it
+mem_re=""
+# in_memory <word>: 0 when the word, with a leading ~ / $HOME / ${HOME} / $CLAUDE_CONFIG_DIR expanded, is inside the
+# auto-memory dir
+in_memory() {
+  local w="$1" cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  case "$w" in
+    "~" | "~/"*) w="$HOME${w#\~}" ;;
+    '$HOME' | '$HOME/'*) w="$HOME${w#\$HOME}" ;;
+    '${HOME}' | '${HOME}/'*) w="$HOME${w#\$\{HOME\}}" ;;
+    '$CLAUDE_CONFIG_DIR' | '$CLAUDE_CONFIG_DIR/'*) w="$cfg${w#\$CLAUDE_CONFIG_DIR}" ;;
+    '${CLAUDE_CONFIG_DIR}' | '${CLAUDE_CONFIG_DIR}/'*) w="$cfg${w#\$\{CLAUDE_CONFIG_DIR\}}" ;;
+  esac
+  [[ -n "$mem_re" ]] || mem_re="$(kit_memory_re)"
+  [[ "$(kit_path "$w")" =~ $mem_re ]]
+}
+
+# memory_writes: 0 when the words t[i..] write into the auto-memory dir: a redirect target, tee, cp/mv/install,
+# sed -i / perl -i, mkdir, touch. Words are unquoted already, so the match is per word and linear.
+memory_writes() {
+  local j w r last inplace=0
+  for ((j = i; j < n; j++)); do
+    w="${t[j]}"
+    if [[ "$w" =~ ^[0-9]*\>[\>\|]?(.*)$ ]]; then
+      r="${BASH_REMATCH[1]}"
+      if [[ -z "$r" ]]; then r="${t[j + 1]:-}"; fi
+      [[ -n "$r" ]] && in_memory "$r" && return 0
+    fi
+  done
+  r="${t[i]##*/}"
+  case "$r" in
+    tee | mkdir | touch | cp | mv | install | ln) ;;
+    sed | perl | gsed)
+      for ((j = i + 1; j < n; j++)); do
+        if [[ "${t[j]}" == -*i* && "${t[j]}" != --* ]]; then inplace=1; fi
+      done
+      ((inplace)) || return 1
+      ;;
+    *) return 1 ;;
+  esac
+  # cp/mv/install/ln write the last word (or the -t dir); the others, every file word
+  last=""
+  for ((j = i + 1; j < n; j++)); do
+    w="${t[j]}"
+    if [[ "$w" == -t && "$r" =~ ^(cp|mv|install|ln)$ ]]; then
+      in_memory "${t[j + 1]:-}" && return 0
+    fi
+    [[ "$w" == -* ]] && continue
+    if [[ "$r" =~ ^(cp|mv|install|ln)$ ]]; then last="$w"; else in_memory "$w" && return 0; fi
+  done
+  [[ -n "$last" ]] && in_memory "$last"
+}
+
+depth=0
+
+# cut_raw: ; & | ( ) and backtick start a new line, both quote characters and backslash become spaces
+cut_raw() { LC_ALL=C tr $';&|()`"\'\\' $'\n\n\n\n\n\n   '; }
+
+# nested_scan <split|raw> <text>: scan the text of a `sh -c` script as part of this command, keeping the caller's
+# words and directory; past depth 3, or when the splitter cannot follow it, the text is cut raw instead
+nested_scan() {
+  local s_wd="$wd" s_n=$n s_i=$i s_out
+  local s_t=("${t[@]}") s_stack=("${wd_stack[@]}")
+  depth=$((depth + 1))
+  if [[ "$1" == split && $depth -le 3 ]]; then
+    s_out="$(printf '%s\n' "$2" | kit_split_cmd)"
+    scan split "$s_wd" <<<"$s_out"
+    case "$s_out" in *$'\006ok') ;; *) scan raw "$s_wd" <<<"$(printf '%s\n' "$2" | cut_raw)" ;; esac
+  elif [[ "$1" == split ]]; then
+    scan raw "$s_wd" <<<"$(printf '%s\n' "$2" | cut_raw)"
+  else
+    scan raw "$s_wd" <<<"$2"
+  fi
+  depth=$((depth - 1))
+  wd="$s_wd"
+  n=$s_n
+  i=$s_i
+  t=("${s_t[@]}")
+  wd_stack=("${s_stack[@]}")
+}
+
+# shell_script <mode>: t[i] is a shell; scan its -c script (split: the one word after -c; raw: the rest of the words)
+shell_script() {
+  local j w
+  for ((j = i + 1; j < n; j++)); do
+    w="${t[j]}"
+    if [[ "$w" == -*c* && "$w" != --* ]]; then
+      ((j + 1 < n)) || return 0
+      if [[ "$1" == split ]]; then
+        nested_scan split "${t[j + 1]}"
+      else
+        # each raw level has fewer words, so it ends without a cap
+        nested_scan raw "${t[*]:j+1}"
+      fi
+      return 0
+    fi
+    [[ "$w" == -* ]] || return 0
+  done
+}
+
+# scan <split|raw> [dir]: check the lines on stdin; split = kit_split_cmd output, raw = the command cut without quote
+# handling. dir is where the first line runs (a nested scan keeps its caller's directory).
 scan() {
-  local seg j rest idx
-  wd="$cwd0"
+  local seg j rest idx mode="$1" lines=() k nxt
+  wd="${2:-$cwd0}"
   wd_stack=()
-  while IFS= read -r seg; do
+  while IFS= read -r seg; do lines+=("$seg"); done
+  for ((k = 0; k < ${#lines[@]}; k++)); do
+    seg="${lines[k]}"
+    nxt="${lines[k + 1]:-}"
     if [[ "$seg" == $'\006'* ]]; then
       case "${seg#?}" in
         "(") wd_stack+=("$wd") ;;
@@ -235,11 +352,31 @@ scan() {
       continue
     fi
     t=()
-    if [[ "$1" == split ]]; then IFS=$'\037' read -r -a t <<<"$seg"; else read -r -a t <<<"$seg"; fi
+    if [[ "$mode" == split ]]; then IFS=$'\037' read -r -a t <<<"$seg"; else read -r -a t <<<"$seg"; fi
     n=${#t[@]}
     i=0
+    xargs_mode=0
+    unk_next=0
+    # git add $(...) unquoted: the splitter cuts at $( leaving a bare $ word, then \006(; a backtick leaves \006`
+    if [[ "$nxt" == $'\006`' ]]; then unk_next=1; fi
+    if ((n)) && [[ "${t[n - 1]}" == '$' ]] && [[ "$nxt" == $'\006(' || "$mode" == raw ]]; then unk_next=1; fi
     strip_lead
     ((i < n)) || continue
+    if [[ "${t[i]##*/}" == xargs ]]; then
+      # skip xargs flags (a value flag takes the next word), then the command it runs
+      ((++i))
+      while ((i < n)) && [[ "${t[i]}" == -* ]]; do
+        case "${t[i]}" in -I | -L | -n | -P | -s | -d | -E | -a | -J) ((++i)) ;; esac
+        ((++i))
+      done
+      xargs_mode=1
+      strip_lead
+      ((i < n)) || continue
+    fi
+    if [[ "$mode" == split ]] && memory_writes; then
+      kit_memory_msg >&2
+      exit 2
+    fi
     case "${t[i]##*/}" in
       cd)
         for ((j = i + 1; j < n; j++)); do
@@ -251,11 +388,13 @@ scan() {
           break
         done
         ;;
+      bash | sh | zsh | dash | ksh) shell_script "$mode" ;;
       git)
         if git_sweeps "$wd"; then
           cat >&2 <<EOF
-Blocked: a sweeping stage (git add -A/-u/./a directory/a glob, git commit -a or with such a path). Other sessions
-share this working tree and index, so it would commit their work. Stage your files by name, read
+Blocked: a sweeping stage (git add -A/-u/./a directory/a glob, git commit -a or with such a path; xargs git add;
+git add with an argument from \$( ) or a backtick). Other sessions share this working tree and index, so it would
+commit their work. Stage your files by name, read
 \`git diff --cached --stat\`, then commit ($(kit_conf .shared_checkout_doc "$kit_plugin/docs/shared-checkout.md")).
 EOF
           exit 2
@@ -288,7 +427,7 @@ esac
 scan split <<<"$split_out"
 if ((raw)); then
   # ; & | ( ) and backtick start a new line, both quote characters become spaces
-  scan raw <<<"$(printf '%s\n' "$cmd" | LC_ALL=C tr $';&|()`"\'' $'\n\n\n\n\n\n  ')"
+  scan raw <<<"$(printf '%s\n' "$cmd" | cut_raw)"
 fi
 
 [[ "$build" == "1" ]] || exit 0

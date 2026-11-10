@@ -336,6 +336,82 @@ else
   fail=$((fail + 1))
 fi
 
+mkdir -p "$REPO/ai/kit"
+# xargs, sh -c, and git add with an argument the scan cannot read
+git_case "block: xargs git add" 2 "git ls-files -m | xargs git add"
+git_case "block: xargs -n1 git add" 2 "git ls-files -m | xargs -n 1 git add"
+git_case "pass: xargs git add -n" 0 "git ls-files -m | xargs git add -n"
+git_case "pass: xargs git add with a file named" 0 "xargs git add src/a.ts"
+git_case "block: bash -c git add -A" 2 'bash -c "git add -A"'
+git_case "block: sh -c git add ." 2 "sh -c 'git add .'"
+git_case "block: sudo zsh -lc git add -A" 2 "sudo zsh -lc 'git add -A'"
+git_case "pass: bash -c git add a file" 0 'bash -c "git add src/a.ts"'
+git_case "block: bash -c with two commands" 2 "bash -c 'echo hi; git add -A'"
+git_case "block: nested sh -c, two levels" 2 "sh -c \"bash -c 'git add -A'\""
+deep="git add -A"
+for _ in 1 2 3 4 5; do deep="sh -c $(printf '%q' "$deep")"; done
+git_case "block: nested sh -c, past the depth cap" 2 "$deep"
+deep="git add src/a.ts"
+for _ in 1 2 3 4 5; do deep="sh -c $(printf '%q' "$deep")"; done
+git_case "pass: nested sh -c, past the depth cap, a named file" 0 "$deep"
+git_case "pass: nested sh -c with a file" 0 "sh -c \"bash -c 'git add src/a.ts'\""
+git_case "block: git add \$(...)" 2 'git add $(git ls-files -m)'
+git_case "block: git add backticks" 2 'git add `git ls-files -m`'
+git_case "block: git add \$(...) after a file" 2 'git add src/a.ts $(git ls-files -m)'
+git_case "pass: git add -n \$(...)" 0 'git add -n $(git ls-files -m)'
+git_case "pass: commit message naming xargs git add" 0 'git commit -m "docs: xargs git add and bash -c git add -A are blocked"'
+git_case "pass: echo of backticks" 0 'echo `date` > /dev/null'
+git_case "block: git add \$(...) in a double quote, raw pass" 2 'echo "$(date)"; git add -A'
+git_case "block: bash -c in a double quote with \$(...), raw words" 2 'bash -c "git add -A $(date)"'
+
+# the auto-memory dir: a write through Bash
+FAKE_HOME="$(mktemp -d)"
+trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE" "$STUBS" "$REPO" "$FAKE_HOME"' EXIT
+# mem_case <desc> <expected exit> <command> [extra env]
+mem_case() {
+  local rc=0
+  jq -n --arg c "$3" --arg d "$REPO" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $d}' |
+    env HOME="$FAKE_HOME" CLAUDE_PROJECT_DIR="$REPO" CLAUDE_DEV_GUARD_PORT=39174 ${4:+"$4"} "$GUARD" >/dev/null 2>&1 || rc=$?
+  if [[ "$rc" == "$2" ]]; then
+    echo "ok   - $1"
+    pass=$((pass + 1))
+  else
+    echo "FAIL - $1 (want exit $2, got $rc)"
+    fail=$((fail + 1))
+  fi
+}
+M='~/.claude/projects/p/memory'
+mem_case "block: redirect into the memory dir" 2 "echo x > $M/a.md"
+mem_case "block: append into the memory dir" 2 "echo x >> $M/a.md"
+mem_case "block: attached redirect target" 2 "echo x >$M/a.md"
+mem_case "block: fd redirect" 2 "echo x 2>$M/a.md"
+mem_case "block: tee into the memory dir" 2 "echo x | tee $M/a.md"
+mem_case "block: cp into the memory dir" 2 "cp notes.md $M/"
+mem_case "block: mv into the memory dir" 2 "mv notes.md $M/a.md"
+mem_case "block: sed -i in the memory dir" 2 "sed -i 's/a/b/' $M/a.md"
+mem_case "block: perl -pi in the memory dir" 2 "perl -pi -e 's/a/b/' $M/a.md"
+mem_case "block: mkdir in the memory dir" 2 "mkdir -p $M/sub"
+mem_case "block: touch in the memory dir" 2 "touch $M/a.md"
+mem_case "block: \$HOME spelling" 2 'echo x > $HOME/.claude/projects/p/memory/a.md'
+mem_case "block: \${HOME} spelling" 2 'echo x > ${HOME}/.claude/projects/p/memory/a.md'
+mem_case "block: absolute spelling" 2 "echo x > $FAKE_HOME/.claude/projects/p/memory/a.md"
+mem_case "block: inside sh -c" 2 "sh -c 'echo x > $M/a.md'"
+mem_case "block: \$CLAUDE_CONFIG_DIR spelling" 2 'echo x > $CLAUDE_CONFIG_DIR/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
+mem_case "block: \${CLAUDE_CONFIG_DIR} spelling" 2 'tee ${CLAUDE_CONFIG_DIR}/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
+mem_case "block: literal CLAUDE_CONFIG_DIR path" 2 'cp a /opt/cfg/projects/p/memory/a.md' CLAUDE_CONFIG_DIR=/opt/cfg
+mem_case "pass: write elsewhere under ~/.claude" 0 'echo x > ~/.claude/settings.local.json'
+mem_case "pass: a plan under ~/.claude/projects" 0 'echo x > ~/.claude/projects/p/notes.md'
+mem_case "pass: read of the memory dir" 0 "cat $M/a.md"
+mem_case "pass: cp out of the memory dir" 0 "cp $M/a.md /tmp/a.md"
+mem_case "pass: sed without -i" 0 "sed 's/a/b/' $M/a.md"
+mem_case "pass: commit message naming the memory dir" 0 "git commit -m 'do not write > $M/a.md'"
+mem_case "pass: heredoc body naming the memory dir" 0 "cat > notes.txt <<'EOF'
+echo x > $M/a.md
+EOF"
+mem_case "pass: heredoc body, \$( in quotes (raw pass)" 0 "echo \"\$(date)\" > out.txt <<'EOF'
+echo x > $M/a.md
+EOF"
+
 echo
 echo "$pass passed, $fail failed"
 [[ "$fail" == "0" ]]
