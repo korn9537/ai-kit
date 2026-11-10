@@ -2,7 +2,7 @@
 // Usage: node scripts/spec.test.mjs
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const root = join(import.meta.dirname, "..");
@@ -62,14 +62,17 @@ spec.split("\n").forEach((l, i) => ok(`docs/spec.md:${i + 1} fits 120 characters
 const modDir = join(root, "scripts/kit");
 const mods = readdirSync(modDir).filter((n) => n.endsWith(".mjs"));
 const graph = new Map();
+const entry = join(root, "scripts/kit.mjs");
+const edges = (p) =>
+  [...readFileSync(p, "utf8").matchAll(/(?:from|import)\s*\(?\s*["'](\.\.?\/[^"']+\.mjs)["']/g)].map((m) => resolve(dirname(p), m[1]));
+graph.set(entry, edges(entry));
 for (const f of mods) {
   const p = join(modDir, f);
   ok(`scripts/kit/${f} is at most 40 KB`, statSync(p).size <= 40960);
   const href = pathToFileURL(p).href;
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(href)})`], { encoding: "utf8" });
   ok(`scripts/kit/${f} imports on its own${r.status === 0 ? "" : `: ${r.stderr}`}`, r.status === 0);
-  const deps = [...readFileSync(p, "utf8").matchAll(/from\s+"(\.\.?\/[^"]+\.mjs)"/g)].map((m) => resolve(modDir, m[1]));
-  graph.set(p, deps);
+  graph.set(p, edges(p));
 }
 const state = new Map();
 function cyclic(n) {
