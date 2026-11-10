@@ -172,7 +172,7 @@ export function summaryLine(rec, sessionRecs, prices, { money = true } = {}) {
   return line;
 }
 
-const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3 };
+const CAP = { models: 6, users: 5, projects: 5, roles: 6, roleModels: 3, tools: 5, rounds: 10, kits: 10, outliers: 10, months: 6, mix: 3, rules: 12 };
 const PEAK_OUTLIER = 150000;
 const CALLS_OUTLIER = 150;
 const TYPES = ["input", "read", "write_5m", "write_1h", "output"];
@@ -196,10 +196,10 @@ export function loadRecords(usageDir, since = "") {
   const out = { recs: [], bad: 0, skipped: 0 };
   let files = [];
   try {
-    // decisions/ holds the decider log (decider.mjs), not token records
+    // decisions/ holds the decider log (decider.mjs), refusals/ the hook refusals (loadRefusals), not token records
     files = readdirSync(usageDir, { recursive: true })
       .map(String)
-      .filter((f) => f.endsWith(".jsonl") && !/^decisions[/\\]/.test(f))
+      .filter((f) => f.endsWith(".jsonl") && !/^(decisions|refusals)[/\\]/.test(f))
       .sort();
   } catch {
     return out;
@@ -234,6 +234,41 @@ export function loadRecords(usageDir, since = "") {
       }
       if (since && !(r.ts >= since)) continue;
       out.recs.push(r);
+    }
+  }
+  return out;
+}
+
+// The refusal records of ai/usage/refusals/**: {v:1, ts, rule, kit, branch}; unusable lines are dropped, a line
+// flushed twice (a crash between write and cleanup) counts once.
+export function loadRefusals(usageDir, since = "") {
+  let files = [];
+  try {
+    files = readdirSync(join(usageDir, "refusals"), { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl")).sort();
+  } catch {
+    return [];
+  }
+  const seen = new Set();
+  const out = [];
+  for (const f of files) {
+    let text = "";
+    try {
+      text = readFileSync(join(usageDir, "refusals", f), "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of text.split("\n")) {
+      let r;
+      try {
+        r = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!isObj(r) || r.v !== 1 || typeof r.ts !== "string" || typeof r.rule !== "string") continue;
+      const key = `${r.ts}\n${r.rule}\n${r.branch}`;
+      if (seen.has(key) || (since && !(r.ts >= since))) continue;
+      seen.add(key);
+      out.push(r);
     }
   }
   return out;
@@ -279,6 +314,28 @@ const bySemver = (a, b) => (a === "baseline" ? -1 : b === "baseline" ? 1 : a.loc
 const nameOf = (s, fallback) => one(s, 20).replace(/\s/g, "_") || fallback;
 
 const max = (xs) => xs.reduce((m, x) => Math.max(m, x), 0);
+
+// Per round (records sharing session#round, summed first): each commit belongs to the earliest round that saw it.
+function roundInfoOf(recs, prices) {
+  const roundInfo = new Map();
+  const owned = new Map();
+  for (const r of recs) {
+    const e = roundInfo.get(`${r.session}#${r.round}`) ?? { kit: one(r.kit || "?", 20), cost: 0, roles: new Map(), n: 0 };
+    for (const a of r.agents) {
+      const w = weight(a, prices) ?? 0;
+      e.cost += w;
+      bump(e.roles, a.role ?? "other", w);
+    }
+    for (const h of uniqueCommits(r.commits ?? [])) {
+      const kept = owned.get(h.slice(0, 7)) ?? [];
+      if (kept.some((x) => sameCommit(x, h))) continue;
+      owned.set(h.slice(0, 7), [...kept, h]);
+      e.n++;
+    }
+    roundInfo.set(`${r.session}#${r.round}`, e);
+  }
+  return roundInfo;
+}
 
 // meta: bad = unparsable lines, skipped = unusable records, sessionsSkipped = baseline sessions that failed, source "baseline".
 export function digest(recs, prices, meta = {}) {
@@ -377,24 +434,7 @@ export function digest(recs, prices, meta = {}) {
   if (!base) out.push(`per round ≈ ${fmtUsd(total / rounds.size)} (rounds ${rounds.size})`);
   out.push(`per session ≈ ${fmtUsd(total / sessions.size)} (sessions ${sessions.size})`);
 
-  // Per round (records sharing session#round, summed first): each commit belongs to the earliest round that saw it.
-  const roundInfo = new Map();
-  const owned = new Map();
-  for (const r of recs) {
-    const e = roundInfo.get(`${r.session}#${r.round}`) ?? { kit: one(r.kit || "?", 20), cost: 0, roles: new Map(), n: 0 };
-    for (const a of r.agents) {
-      const w = weight(a, prices) ?? 0;
-      e.cost += w;
-      bump(e.roles, a.role ?? "other", w);
-    }
-    for (const h of uniqueCommits(r.commits ?? [])) {
-      const kept = owned.get(h.slice(0, 7)) ?? [];
-      if (kept.some((x) => sameCommit(x, h))) continue;
-      owned.set(h.slice(0, 7), [...kept, h]);
-      e.n++;
-    }
-    roundInfo.set(`${r.session}#${r.round}`, e);
-  }
+  const roundInfo = roundInfoOf(recs, prices);
   const perCommit = (cost, n) => (cost > 0 ? fmtUsd(cost / n) : "unpriced");
   if (!base) {
     out.push("## by commits per round");
@@ -492,6 +532,22 @@ export function digest(recs, prices, meta = {}) {
     out.push(`${m}: ${e.n} reviews, ${per(e.confirmed)} confirmed/review, ${per(e.plausible)} plausible/review, ${fmtUsd(e.cost / e.n)}/review`);
   }
 
+  // hook refusals (ai/usage/refusals/**), per rule and per kit; only for the committed records, not a baseline
+  if (meta.refusals) {
+    out.push("## refusals");
+    const byRule = new Map();
+    const byKit = new Map();
+    for (const r of meta.refusals) {
+      bump(byRule, one(r.rule, 40), 1);
+      bump(byKit, one(r.kit || "?", 20), 1);
+    }
+    if (!byRule.size) out.push("none");
+    else {
+      out.push(`${meta.refusals.length} refusals · per rule: ${top(byRule, CAP.rules).map(([k, n]) => `${k} ${n}`).join(", ")}${byRule.size > CAP.rules ? `, +${byRule.size - CAP.rules}` : ""}`);
+      out.push(`per kit: ${[...byKit].sort((a, b) => bySemver(a[0], b[0])).slice(-CAP.kits).map(([k, n]) => `${k} ${n}`).join(", ")}`);
+    }
+  }
+
   // costliest rounds (a round's records are summed); in baseline one record is a whole session
   out.push(base ? "## costliest sessions" : "## costliest rounds");
   const rds = new Map();
@@ -516,5 +572,61 @@ export function digest(recs, prices, meta = {}) {
   for (const g of outl.slice(0, CAP.outliers))
     out.push(`- ${fmtUsd(g.cost)} ${one(g.role, 12)}${g.desc ? ` "${one(g.desc, 40)}"` : ""} ${modelShort(g.model)} · peak ${fmtTok(g.peak)} · ${g.calls} calls · ${String(g.session).slice(0, 8)} ${nameOf(g.user, "anon")}`);
   if (outl.length > CAP.outliers) out.push(`+${outl.length - CAP.outliers} more`);
+  return out.join("\n");
+}
+
+// ---- compare ----
+
+const kitMatches = (kit, v) => kit === v || String(kit).startsWith(`${v}.`);
+
+// The metrics of the records of one kit version (a prefix matches all its patches); null for a metric with no base.
+function kitMetrics(recs, refusals, prices) {
+  const rounds = roundInfoOf(recs, prices);
+  const cost = sum([...rounds.values()].map((e) => e.cost));
+  const commits = new Set(uniqueCommits(recs.flatMap((r) => r.commits ?? []))).size;
+  const agents = new Map();
+  for (const r of recs) {
+    for (const a of r.agents) {
+      const g = agents.get(`${r.session}/${a.id}`) ?? { role: a.role ?? "other", calls: 0, peak: 0, readGrep: 0, findings: null };
+      g.calls += a.calls ?? 0;
+      g.peak = Math.max(g.peak, a.peak ?? 0);
+      g.readGrep += (a.tools?.Read ?? 0) + (a.tools?.Grep ?? 0);
+      if (a.findings) g.findings = a.findings;
+      agents.set(`${r.session}/${a.id}`, g);
+    }
+  }
+  const all = [...agents.values()];
+  const mains = all.filter((g) => g.role === "coordinator");
+  const revs = all.filter((g) => g.role === "reviewer" && g.findings);
+  const ratio = (x, n) => (n > 0 ? x / n : null);
+  return {
+    sessions: new Set(recs.map((r) => r.session)).size,
+    rounds: rounds.size,
+    "cost/round": ratio(cost, rounds.size),
+    "cost/commit": cost > 0 ? ratio(cost, commits) : null,
+    "main peak": mains.length ? mean(mains.map((g) => g.peak)) : null,
+    "Read+Grep/round": ratio(sum(all.map((g) => g.readGrep)), rounds.size),
+    "committer calls/commit": ratio(sum(all.filter((g) => g.role === "commit").map((g) => g.calls)), commits),
+    "confirmed/review": ratio(sum(revs.map((g) => g.findings.confirmed ?? 0)), revs.length),
+    "plausible/review": ratio(sum(revs.map((g) => g.findings.plausible ?? 0)), revs.length),
+    "refusals/commit": ratio(refusals.length, commits),
+  };
+}
+
+const FMT = { "cost/round": fmtUsd, "cost/commit": fmtUsd, "main peak": fmtTok };
+const cell = (k, v) => (v === null ? "n/a" : (FMT[k] ?? ((x) => String(Math.round(x * 100) / 100)))(v));
+const change = (a, b) => (a === null || b === null || a === 0 ? "n/a" : `${b >= a ? "+" : ""}${Math.round((100 * (b - a)) / a)}%`);
+
+// Two kit versions side by side from the same records the `## by kit` section reads, with the change in %.
+export function compare(recs, refusals, prices, kitA, kitB) {
+  const usable = recs.filter(validRecord);
+  const known = [...new Set(usable.map((r) => String(r.kit || "?")))].sort(bySemver);
+  const missing = [kitA, kitB].filter((v) => !usable.some((r) => kitMatches(r.kit, v)));
+  if (missing.length) return `unknown kit version ${missing.map((v) => one(v, 20)).join(", ")}: no records; known: ${known.slice(-CAP.kits).join(", ") || "none"}`;
+  const side = (v) => kitMetrics(usable.filter((r) => kitMatches(r.kit, v)), refusals.filter((r) => kitMatches(r.kit, v)), prices);
+  const [a, b] = [side(kitA), side(kitB)];
+  const out = [`compare kit ${one(kitA, 20)} vs ${one(kitB, 20)} · metric: ${one(kitA, 20)} | ${one(kitB, 20)} | change`];
+  for (const k of Object.keys(a)) out.push(`${k}: ${cell(k, a[k])} | ${cell(k, b[k])} | ${change(a[k], b[k])}`);
+  out.push("commits and costs are per kit's own records; a prefix such as 2.45 covers all its patches");
   return out.join("\n");
 }

@@ -5,7 +5,7 @@
 // --idle) moves other sessions' buffered records into new files there. None ever fails, and none waits over 1.5 s for
 // the lock.
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -14,7 +14,7 @@ import { isMain } from "./lib/is-main.mjs";
 import { usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
 import { collectSession, loadCache, mergeCommits, saveCache, transcriptsDir } from "./lib/usage-collect.mjs";
 import { formatHooks, scanHooks } from "./lib/hook-events.mjs";
-import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./lib/usage-digest.mjs";
+import { DEFAULT_PRICES, baselineRecords, buildRecord, compare, digest, loadRecords, loadRefusals, summaryLine } from "./lib/usage-digest.mjs";
 
 const IDLE_MS = 6 * 3600 * 1000;
 
@@ -217,6 +217,9 @@ export function seedBuffer(root, bufDir, session) {
   setFlushed(join(bufDir, `${session}.flushed`), lines.length, found.length);
 }
 
+const kitVersion = () => JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+const REFUSAL_BUF = join("refusals", "buffer.log");
+
 const git = (cwd, ...args) => {
   try {
     return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -273,7 +276,7 @@ function record(input, quiet = false, lockWait = {}) {
   const buffer = join(bufDir, `${session}.jsonl`);
   const user = git(root, "config", "user.name");
   const branch = git(root, "rev-parse", "--abbrev-ref", "HEAD");
-  const kit = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", ".claude-plugin", "plugin.json"), "utf8")).version;
+  const kit = kitVersion();
   // the lock deadline starts here, not at the process start: a cold transcript scan must not use it up
   lockWait.deadline ??= Date.now() + LOCK_WAIT_MS;
   // seed, read, build and append under one lock: parallel records would each read the same prior
@@ -297,6 +300,49 @@ function record(input, quiet = false, lockWait = {}) {
   );
 }
 
+// refusal <rule-id>: a git hook refused a commit; appends {v, ts, rule, kit, branch} to the untracked refusal buffer
+// (a subfolder, so the idle flush of session buffers never sees it). Best effort: never throws on a held lock.
+function refusal(rule) {
+  if (!/^[a-z0-9]+([.-][a-z0-9]+)*$/.test(rule ?? "")) throw new Error("usage: usage.mjs refusal <rule-id>");
+  const root = projectRoot(process.cwd());
+  if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
+  const bufDir = usageBufDir(root, { timeout: 5000 });
+  if (!bufDir) return;
+  const rec = { v: 1, ts: new Date().toISOString(), rule, kit: kitVersion(), branch: git(root, "rev-parse", "--abbrev-ref", "HEAD") };
+  withLock(bufDir, () => {
+    mkdirSync(join(bufDir, "refusals"), { recursive: true });
+    appendFileSync(join(bufDir, REFUSAL_BUF), `${JSON.stringify(rec)}\n`);
+  });
+}
+
+// Moves buffered refusals into new files ai/usage/refusals/<YYYY-MM>/<host-hash>-<random>.jsonl (one per month),
+// never modifying a file there; the buffer is removed once written. Called with the lock held.
+function flushRefusalsLocked(root, bufDir) {
+  const buf = join(bufDir, REFUSAL_BUF);
+  const lines = linesOf(buf);
+  if (!lines?.length) return [];
+  const byMonth = new Map();
+  for (const l of lines) {
+    let month = new Date().toISOString().slice(0, 7);
+    try {
+      const ts = JSON.parse(l).ts;
+      if (/^\d{4}-\d{2}/.test(ts)) month = ts.slice(0, 7);
+    } catch {}
+    byMonth.set(month, [...(byMonth.get(month) ?? []), l]);
+  }
+  const hostHash = createHash("sha256").update(HOST).digest("hex").slice(0, 6);
+  const out = [];
+  for (const [month, ls] of byMonth) {
+    const dir = join(root, "ai", "usage", "refusals", month);
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, `${hostHash}-${randomBytes(4).toString("hex")}.jsonl`);
+    writeFileSync(path, `${ls.join("\n")}\n`, { flag: "wx" });
+    out.push(path);
+  }
+  unlinkSync(buf);
+  return out;
+}
+
 // flush --session <id> | flush --idle [--except <id>]: moves buffered records into ai/usage/ (never modifies a file there).
 function flushCmd(args, deadline) {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
@@ -307,27 +353,40 @@ function flushCmd(args, deadline) {
   if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"), { deadline });
   else if (args[0] === "--idle") flushIdle(root, bufDir, val("--except"));
   else throw new Error("usage: usage.mjs flush --session <id> | --idle [--except <id>]");
+  if (!existsSync(join(bufDir, REFUSAL_BUF))) return;
+  try {
+    withLock(bufDir, () => flushRefusalsLocked(root, bufDir), args[0] === "--idle" ? { waitMs: 0 } : { deadline });
+  } catch (e) {
+    if (e?.code !== "ELOCKED") throw e;
+  }
 }
 
-// digest [--since YYYY-MM-DD] [--baseline]: prints the fixed-size digest of ai/usage/** (or of the local transcripts
+// digest [--since YYYY-MM-DD] [--baseline] | [--compare <kitA> <kitB>]: prints the fixed-size digest of ai/usage/** (or of the local transcripts
 // with --baseline, in memory only). Reads only; writes nothing.
 function digestCmd(args) {
   let since = "";
   let baseline = false;
+  let kits = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--baseline") baseline = true;
+    else if (args[i] === "--compare" && args[i + 1] && args[i + 2] && !args[i + 1].startsWith("--") && !args[i + 2].startsWith("--")) kits = [args[i + 1], args[(i += 2)]];
     else if (args[i] === "--since" && /^\d{4}-\d{2}-\d{2}$/.test(args[i + 1] ?? "")) since = args[++i];
-    else throw new Error("usage: usage.mjs digest [--since YYYY-MM-DD] [--baseline]");
+    else throw new Error("usage: usage.mjs digest [--since YYYY-MM-DD] [--baseline] | digest --compare <kitA> <kitB>");
   }
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   const prices = { ...DEFAULT_PRICES, ...(readConfig(root).usage?.prices ?? {}) };
+  if (kits && !baseline) {
+    const usageDir = join(root, "ai", "usage");
+    process.stdout.write(`${compare(loadRecords(usageDir, since).recs, loadRefusals(usageDir, since), prices, kits[0], kits[1])}\n`);
+    return;
+  }
   if (!baseline) {
     const { recs, bad, skipped } = loadRecords(join(root, "ai", "usage"), since);
     if (since && !recs.length && loadRecords(join(root, "ai", "usage")).recs.length) {
       process.stdout.write(`no records since ${since}\n`);
       return;
     }
-    process.stdout.write(`${digest(recs, prices, { bad, skipped })}\n`);
+    process.stdout.write(`${digest(recs, prices, { bad, skipped, refusals: loadRefusals(join(root, "ai", "usage"), since) })}\n`);
     return;
   }
   const who = { project: basename(root), user: git(root, "config", "user.name") };
@@ -406,6 +465,14 @@ function main() {
     }
     return;
   }
+  if (cmd === "refusal") {
+    try {
+      refusal(process.argv[3]);
+    } catch (e) {
+      process.stderr.write(`kit-log: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+    }
+    return;
+  }
   if (cmd === "hooks") {
     hooksCmd(process.argv.slice(3)).catch((e) => {
       process.stderr.write(`usage-hooks: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
@@ -413,7 +480,7 @@ function main() {
     });
     return;
   }
-  process.stderr.write("usage: usage.mjs record | end | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline] | hooks [--since YYYY-MM-DD]\n");
+  process.stderr.write("usage: usage.mjs record | end | refusal <rule-id> | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline | --compare <kitA> <kitB>] | hooks [--since YYYY-MM-DD]\n");
   process.exitCode = 2;
 }
 

@@ -194,6 +194,63 @@ try {
   await Promise.all([1, 2, 3].map(() => run("node", [cli, "record"], { env, input })));
   const lines = readFileSync(join(bufDir, "par.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
   eq("three parallel records sum to the true input", lines.reduce((n, r) => n + r.agents.reduce((m, a) => m + (a.input ?? 0), 0), 0), 1000);
+
+  // refusals: a hook's record lands in a subfolder buffer, flushes to a new ai/usage/refusals/** file only
+  const rrepo = join(tmp, "rrepo");
+  mkdirSync(join(rrepo, "ai", "kit"), { recursive: true });
+  writeFileSync(join(rrepo, "ai", "kit", "config.json"), "{}");
+  const rg = (...a) => spawnSync("git", ["-C", rrepo, ...a], { encoding: "utf8" });
+  rg("init", "-q");
+  rg("config", "user.name", "t");
+  rg("config", "user.email", "t@t");
+  rg("add", "-A");
+  rg("commit", "-qm", "base");
+  const rbuf = join(rrepo, ".git", "claude-usage");
+  const renv = { ...process.env, CLAUDE_PROJECT_DIR: rrepo };
+  const refuse = (rule, cwd = rrepo) => spawnSync("node", [cli, "refusal", rule], { cwd, env: renv, encoding: "utf8" });
+  const rbufFile = join(rbuf, "refusals", "buffer.log");
+  eq("refusal exits 0", refuse("pre-commit.comments").status, 0);
+  const brec = readFileSync(rbufFile, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  eq("one record in the buffer", brec.length, 1);
+  eq("record fields", [brec[0].v, brec[0].rule, typeof brec[0].ts, typeof brec[0].kit, typeof brec[0].branch], [1, "pre-commit.comments", "string", "string", "string"]);
+  eq("the lock is released after a refusal", existsSync(join(rbuf, ".lock")), false);
+  eq("a bad rule id writes nothing", [refuse("bad id!").status, readFileSync(rbufFile, "utf8").split("\n").filter(Boolean).length], [0, 1]);
+  // an old buffer in the subfolder is left alone by the idle flush of session buffers, and nothing lands in ai/usage/<month>
+  const old6 = Date.now() / 1000 - 25200;
+  utimesSync(rbufFile, old6, old6);
+  eq("idle flush leaves the refusal buffer", [flushIdle(rrepo, rbuf), existsSync(rbufFile), existsSync(join(rrepo, "ai", "usage"))], [[], true, false]);
+  // a lock held by a live process: the refusal gives up within the wait and writes nothing
+  const lockHolder = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"], { stdio: "ignore" });
+  writeFileSync(join(rbuf, ".lock"), `${lockHolder.pid}:${hostname().replace(/:/g, "_")}:tok`);
+  const rt0 = Date.now();
+  const held = refuse("commit-msg.job");
+  eq("a held lock: skipped with a stderr line, no record", [held.status, /kit-log/.test(held.stderr), readFileSync(rbufFile, "utf8").split("\n").filter(Boolean).length], [0, true, 1]);
+  eq("and it waited under 4 s", Date.now() - rt0 < 4000, true);
+  lockHolder.kill();
+  rmSync(join(rbuf, ".lock"), { force: true });
+  refuse("commit-msg.job");
+  spawnSync("node", [cli, "flush", "--idle"], { env: renv });
+  const rfiles = readdirSync(join(rrepo, "ai", "usage"), { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl"));
+  eq("flush writes the refusals to new files under ai/usage/refusals/ only", [rfiles.length, rfiles.every((f) => /^refusals[/\\]\d{4}-\d{2}[/\\][0-9a-f]{6}-[0-9a-f]{8}\.jsonl$/.test(f))], [1, true]);
+  eq("the refusal buffer is emptied", existsSync(rbufFile), false);
+  const rlines = readFileSync(join(rrepo, "ai", "usage", rfiles[0]), "utf8").split("\n").filter(Boolean).length;
+  eq("both refusals are in the file", rlines, 2);
+  eq("refusals are not token records", loadRecords(join(rrepo, "ai", "usage")).recs.length, 0);
+  const before = readFileSync(join(rrepo, "ai", "usage", rfiles[0]), "utf8");
+  refuse("pre-commit.docs");
+  spawnSync("node", [cli, "flush", "--idle"], { env: renv });
+  const after = readdirSync(join(rrepo, "ai", "usage"), { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl"));
+  eq("a second flush writes a new file and never rewrites the first", [after.length, readFileSync(join(rrepo, "ai", "usage", rfiles[0]), "utf8") === before], [2, true]);
+
+  // usage.enabled false: no refusal record, no flush
+  writeFileSync(join(rrepo, "ai", "kit", "config.json"), JSON.stringify({ usage: { enabled: false } }));
+  rmSync(rbuf, { recursive: true, force: true });
+  refuse("pre-commit.docs");
+  eq("usage.enabled false: refusal records nothing", existsSync(rbufFile), false);
+  mkdirSync(join(rbuf, "refusals"), { recursive: true });
+  writeFileSync(rbufFile, `${JSON.stringify({ v: 1, ts: "2030-01-01T00:00:00Z", rule: "x", kit: "1", branch: "b" })}\n`);
+  spawnSync("node", [cli, "flush", "--idle"], { env: renv });
+  eq("usage.enabled false: flush leaves the buffer", [existsSync(rbufFile), readdirSync(join(rrepo, "ai", "usage"), { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl")).length], [true, 2]);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

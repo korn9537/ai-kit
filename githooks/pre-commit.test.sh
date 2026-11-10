@@ -208,5 +208,28 @@ for cfg in true false; do
 done
 git -C "$REPO" reset -q --hard HEAD
 
+# a refused commit leaves one record in the usage buffer; node missing still refuses and leaves none
+mkdir -p "$REPO/ai/kit"
+echo '{}' >"$REPO/ai/kit/config.json"
+buf="$REPO/.git/claude-usage/refusals/buffer.log"
+before="$(git -C "$REPO" rev-parse HEAD)"
+echo x >"$REPO/bad\\name.txt"
+git -C "$REPO" add -- 'bad\name.txt'
+git -C "$REPO" commit -qm "backslash" >/dev/null 2>&1
+check "a refused commit (backslash path) is not made" "$([ "$(git -C "$REPO" rev-parse HEAD)" = "$before" ] && echo blocked || echo committed)" blocked
+check "and leaves one refusal record" "$(grep -c '"rule":"pre-commit.backslash"' "$buf" 2>/dev/null || echo 0)" 1
+check "which is not a staged file" "$(git -C "$REPO" diff --cached --name-only | grep -c usage)" 0
+rm -f "$buf"
+(cd "$REPO" && PATH="/usr/bin:/bin" sh "$PLUGIN/githooks/pre-commit" >/dev/null 2>&1)
+rc=$?
+if env PATH="/usr/bin:/bin" sh -c 'command -v node' >/dev/null 2>&1; then
+  echo "skip - node is on the minimal PATH"
+else
+  check "node missing: still refuses" "$rc" 1
+  check "node missing: no record" "$([ -e "$buf" ] && echo record || echo none)" none
+fi
+git -C "$REPO" reset -q
+rm -f "$REPO/bad\\name.txt"
+
 echo "$pass passed, $fail failed"
 ((fail == 0))

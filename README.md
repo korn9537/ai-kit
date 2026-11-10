@@ -27,7 +27,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/kit/*.mjs`           | one module per command (`init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`) and `shared.mjs` |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
-| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` / `hooks` (§Commands), over `scripts/lib/usage-collect.mjs`, `scripts/lib/usage-digest.mjs` and `scripts/lib/hook-events.mjs` |
+| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `refusal` (git hooks) / `digest` / `hooks` (§Commands), over `scripts/lib/usage-collect.mjs`, `scripts/lib/usage-digest.mjs` and `scripts/lib/hook-events.mjs` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
@@ -235,7 +235,17 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
 - `node <plugin>/scripts/usage.mjs digest [--since YYYY-MM-DD] [--baseline]` (read-only) prints a fixed-size text
   digest of `ai/usage/**`: cost per model, role and kit version, driver signals, cost per commit by commits per
   round (0, 1, 2-3, 4-7, 8+; commits are the hashes seen in this repo's transcripts), reviewer findings, the costliest
-  rounds, outliers. `--baseline` builds it from this machine's local transcripts instead, before any record exists.
+  rounds, outliers, and the commits the git hooks refused, per rule and per kit (`## refusals`). `--baseline` builds
+  it from this machine's local transcripts instead, before any record exists.
+- `node <plugin>/scripts/usage.mjs digest --compare <kitA> <kitB>` (read-only) prints two kit versions side by side
+  from the same records: sessions, rounds, cost per round and per commit, main-session peak, Read+Grep per round,
+  committer calls per commit, reviewer findings per review, refusals per commit, and the change in %. A prefix such as
+  `2.45` covers all its patches; a version with no records is named. Use it to measure a kit change.
+- `node <plugin>/scripts/usage.mjs refusal <rule-id>` is called by `githooks/pre-commit` and `githooks/commit-msg` when
+  they refuse a commit (ids as in `scripts/lib/hook-events.mjs`, e.g. `pre-commit.comments`, `commit-msg.job`): it
+  appends `{v, ts, rule, kit, branch}` to `<git-common-dir>/claude-usage/refusals/buffer.log` and never fails the hook
+  (a lock held over 1.5 s skips the record; node missing skips it too). The next flush moves the buffer to a new file
+  `ai/usage/refusals/<YYYY-MM>/<host hash>-<random>.jsonl`; `usage.enabled: false` records nothing.
   `/ai-kit:usage` (`commands/usage.md`) runs it and names the largest driver with the one change that cuts it.
 - `node <plugin>/scripts/usage.mjs hooks [--since YYYY-MM-DD]` (read-only) counts each kit hook's firings (main
   and subagent, sessions, kit versions) from this machine's transcripts of the project; counts only, no message text.

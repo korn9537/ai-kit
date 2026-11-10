@@ -9,6 +9,9 @@
 ai_kit_plugin="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+# Records a refusal in the usage buffer (scripts/usage.mjs refusal); best effort, never changes the hook's result.
+refused() { node "$ai_kit_plugin/scripts/usage.mjs" refusal "$1" >/dev/null 2>&1 || true; }
+
 # Print a check's output only when it fails; on success, collapse its `!` warnings into one line.
 quiet() {
   out=$("$@" 2>&1); rc=$?
@@ -52,6 +55,7 @@ if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | gr
   echo "commit blocked: staged path contains a backslash (\\) — likely a malformed build dir."
   git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep '\\' | sed 's/^/   /'
   echo "Delete it (e.g. rm -rf the offending dir) and re-stage. To bypass: git commit --no-verify"
+  refused pre-commit.backslash
   exit 1
 fi
 
@@ -61,6 +65,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   node "$ai_kit_plugin/scripts/check-docs.mjs" --staged --strict || {
     echo ""
     echo "Docs rule failed. Drop emoji, bold, filler and dates; quote Thai product copy; point at a symbol, not a line. To bypass: git commit --no-verify"
+    refused pre-commit.docs
     exit 1
   }
 fi
@@ -72,6 +77,7 @@ if [ -n "$moved" ]; then
   echo "commit blocked: an eslint-disable gives \"moved verbatim\" as its reason:"
   printf '%s\n' "$moved" | sed 's/^+/   /'
   echo "Fix the moved code, or name why the rule does not apply. To bypass: git commit --no-verify"
+  refused pre-commit.eslint-moved
   exit 1
 fi
 
@@ -79,6 +85,7 @@ fi
 if [ -n "$(git diff --cached --name-only -M20% --diff-filter=MR)" ]; then
   node "$ai_kit_plugin/scripts/check-comments.mjs" --size || {
     echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"
+    refused pre-commit.size
     exit 1
   }
 fi
@@ -90,6 +97,7 @@ if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --
   if [ ! -f "$prettier" ]; then
     echo "commit blocked: node_modules/prettier is missing — install packages first."
     echo "   To bypass: git commit --no-verify"
+    refused pre-commit.prettier-fail
     exit 1
   fi
   unstaged="$(git -c core.quotePath=false diff --name-only)"
@@ -108,6 +116,7 @@ EOF
     printf '%s' "$whole" | tr '\n' '\0' \
       | xargs -0 node "$prettier" --write --ignore-unknown --log-level warn || {
       echo "prettier failed — fix the error above, or to bypass: git commit --no-verify"
+      refused pre-commit.prettier-fail
       exit 1
     }
     printf '%s' "$whole" | tr '\n' '\0' | xargs -0 git --literal-pathspecs add --
@@ -129,6 +138,7 @@ EOF
       git show ":$f" | node "$prettier" --stdin-filepath "$f" --log-level warn >"$tmp" || {
         rm -f "$tmp"
         echo "prettier failed on the staged $f — fix the error above, or to bypass: git commit --no-verify"
+        refused pre-commit.prettier-fail
         exit 1
       }
       blob="$(git hash-object -w --path="$f" "$tmp")"
@@ -150,6 +160,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   node "$ai_kit_plugin/scripts/check-comments.mjs" --staged --strict || {
     echo ""
     echo "Comment rule failed. Shorten to 1-2 lines, move the rule to a doc, or drop the date / who asked. To bypass: git commit --no-verify"
+    refused pre-commit.comments
     exit 1
   }
 fi
@@ -165,6 +176,7 @@ if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMRD | g
   node "$ai_kit_plugin/scripts/kit.mjs" check || {
     echo ""
     echo "ai-kit check failed: apply the fix each line names. To bypass: git commit --no-verify"
+    refused pre-commit.kit-check
     exit 1
   }
 fi

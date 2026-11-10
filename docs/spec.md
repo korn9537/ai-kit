@@ -91,7 +91,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index; warnings only |
-| `scripts/usage.mjs` | `record`, `end`, `flush`, `digest`: token records; `hooks`: counts of each hook's firings |
+| `scripts/usage.mjs` | `record`, `end`, `flush`, `digest` (`--compare <kitA> <kitB>`), `refusal <rule-id>` (called by the git hooks): token records; `hooks`: counts of each hook's firings |
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
@@ -153,6 +153,7 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `ai/kit/kit-proposals.md` | a session | `session-start.sh` note, then filed as issues |
 | `ai/plans/<job>.md` | `plan.mjs` | `session-start.sh` note, `plan.mjs resume`, `continuous.mjs` |
 | `ai/usage/<YYYY-MM>/<session>.jsonl` (`.2`, `.3` on each later flush) | `usage.mjs end` (from `kit-log.sh session-end`) and `usage.mjs flush --idle` (from `session-start.sh`) | `usage.mjs digest` |
+| `ai/usage/refusals/<YYYY-MM>/<host hash>-<random>.jsonl` | `usage.mjs refusal` from `githooks/pre-commit` and `githooks/commit-msg` (buffer `claude-usage/refusals/buffer.log`), moved by `usage.mjs flush` | `usage.mjs digest` (`## refusals`, `--compare`) |
 | `ai/usage/decisions/<YYYY-MM>/*.jsonl` | `decider.mjs sync` (from `kit-log.sh subagent-stop`) | `/ai-kit:decisions` |
 | `.githooks/pre-commit`, `.githooks/commit-msg` | `init` | git |
 | `.claude/settings.json` (`autoMemoryEnabled: false`) | `init` | Claude Code, `kit.mjs check` |

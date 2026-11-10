@@ -75,5 +75,22 @@ git -C "$REPO" commit -qm "feat: c" -m "Job: 2026-01-05-c" >/dev/null 2>&1
 git -C "$REPO" merge -q --no-ff --no-edit side >/dev/null 2>&1
 check "merge commit without Job → made" "$(git -C "$REPO" rev-list --count --merges HEAD)" 1
 
+# a refused commit leaves one record in the usage buffer (a project with ai/kit); a commit that passes leaves none
+mkdir -p "$REPO/ai/kit"
+echo '{}' >"$REPO/ai/kit/config.json"
+buf="$REPO/.git/claude-usage/refusals/buffer.log"
+echo d >"$REPO/d.txt"
+git -C "$REPO" add d.txt
+git -C "$REPO" commit -qm "feat: d" >/dev/null 2>&1
+check "a commit refused for its Job trailer writes one refusal record" "$(grep -c '"rule":"commit-msg.job"' "$buf" 2>/dev/null || echo 0)" 1
+git -C "$REPO" commit -qm "feat: d" -m "Job: 2026-01-05-d" >/dev/null 2>&1
+check "a passing commit adds no record" "$(wc -l <"$buf" | tr -d ' ')" 1
+# node missing: the runner still refuses and writes no record
+rm -f "$buf"
+printf '%s\n' 'feat: e' '' 'no job here' >"$TMP/msg"
+(cd "$REPO" && PATH="/usr/bin:/bin" sh "$PLUGIN/githooks/commit-msg" "$TMP/msg" >/dev/null 2>&1)
+check "node missing: still refuses" "$?" 1
+check "node missing: no record" "$([ -e "$buf" ] && echo record || echo none)" none
+
 echo "$pass passed, $fail failed"
 [[ $fail -eq 0 ]]

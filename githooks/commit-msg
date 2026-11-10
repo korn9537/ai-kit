@@ -17,6 +17,8 @@ n=$(printf '%s' "$jobs" | grep -c .)
 if [ "$n" -ne 1 ] || ! printf '%s\n' "$jobs" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*$'; then
   echo "commit-msg: the message needs exactly one trailer 'Job: <yyyy-mm-dd>-<slug>' (e.g. Job: 2026-01-05-invoice-export)."
   echo "Every commit of one request shares it; a fix commit copies the job of the commit it fixes (ai-kit docs/shared-checkout.md §Jobs)."
+  # best effort: a record of the refusal for scripts/usage.mjs digest; node may be missing
+  node "$(cd "$(dirname "$0")/.." && pwd)/scripts/usage.mjs" refusal commit-msg.job >/dev/null 2>&1 || true
   exit 1
 fi
 exit 0

@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  baselineRecords, buildRecord, dec, digest, enc, loadRecords, modelShort, sameCommit, summaryLine, uniqueCommits, validRecord, weight,
+  baselineRecords, buildRecord, compare, dec, digest, enc, loadRecords, loadRefusals, modelShort, sameCommit, summaryLine, uniqueCommits, validRecord, weight,
 } from "./lib/usage-digest.mjs";
 
 let passed = 0;
@@ -329,6 +329,48 @@ eq("a record whose commits hold a non-string or a too-short hash is invalid",
   match("a commit seen in two rounds counts once, header and buckets agree", dup, /commits 1 · /);
   match("the one commit sits in one round", dup, /^1 commits: 1 rounds .* · 1 commits · /m);
   match("the other round is a 0 round", dup, /^0 commits: 1 rounds /m);
+}
+
+// refusals section and kit comparison
+{
+  const dir = mkdtempSync(join(tmpdir(), "usage-refusals-"));
+  try {
+    const rf = (ts, rule, kit) => ({ v: 1, ts, rule, kit, branch: "b" });
+    mkdirSync(join(dir, "refusals", "2026-02"), { recursive: true });
+    mkdirSync(join(dir, "2026-02"), { recursive: true });
+    const lines = [rf("2026-02-01T10:00:00Z", "pre-commit.comments", "2.45.1"), rf("2026-02-01T10:01:00Z", "pre-commit.comments", "2.46.0"),
+      rf("2026-02-01T10:02:00Z", "commit-msg.job", "2.46.0")].map((r) => JSON.stringify(r));
+    writeFileSync(join(dir, "refusals", "2026-02", "a.jsonl"), `${lines.join("\n")}\nnot json\n`);
+    writeFileSync(join(dir, "refusals", "2026-02", "b.jsonl"), `${lines[0]}\n`);
+    writeFileSync(join(dir, "2026-02", "s.jsonl"), `${JSON.stringify(rec({}))}\n`);
+    const refusals = loadRefusals(dir);
+    eq("refusals load, a duplicate line counts once", refusals.length, 3);
+    eq("refusal files are not token records", loadRecords(dir).recs.length, 1);
+    const sec = digest([rec({})], P, { refusals }).split("\n");
+    const at = sec.indexOf("## refusals");
+    eq("refusals section counted per rule", sec[at + 1], "3 refusals · per rule: pre-commit.comments 2, commit-msg.job 1");
+    eq("and per kit", sec[at + 2], "per kit: 2.45.1 1, 2.46.0 2");
+    eq("no refusals: the section says none", digest([rec({})], P, { refusals: [] }).includes("## refusals\nnone"), true);
+    eq("old digests without refusals still digest", digest([rec({})], P).includes("## refusals"), false);
+
+    const kr = (kit, session, cost, commits, extra = {}) => rec({ kit, session, commits, agents: [
+      ag({ id: "main", peak: cost * 1000, tools: { Read: 4, Grep: 2 }, input: cost * 1e6 }),
+      ag({ id: "c1", role: "commit", calls: 10, model: SONNET }), ...(extra.agents ?? [])] });
+    const cmp = (a, b, rr = refusals) => compare([kr("2.45.1", "sa", 1, ["aaaaaaa"]), kr("2.46.0", "sb", 2, ["bbbbbbb", "ccccccc"])], rr, P, a, b);
+    const out = cmp("2.45", "2.46").split("\n");
+    eq("compare names both kits", out[0].startsWith("compare kit 2.45 vs 2.46"), true);
+    eq("compare: sessions column and change", out.find((l) => l.startsWith("sessions:")), "sessions: 1 | 1 | +0%");
+    match("compare: cost per round doubles", out.find((l) => l.startsWith("cost/round:")), /^cost\/round: \$\d+\.\d\d \| \$\d+\.\d\d \| \+100%$/);
+    eq("compare: committer calls per commit", out.find((l) => l.startsWith("committer calls/commit:")), "committer calls/commit: 10 | 5 | -50%");
+    eq("compare: Read+Grep per round", out.find((l) => l.startsWith("Read+Grep/round:")), "Read+Grep/round: 6 | 6 | +0%");
+    eq("compare: refusals per commit by kit", out.find((l) => l.startsWith("refusals/commit:")), "refusals/commit: 1 | 1 | +0%");
+    eq("compare: no reviews is n/a", out.find((l) => l.startsWith("confirmed/review:")), "confirmed/review: n/a | n/a | n/a");
+    eq("a full version matches only itself", cmp("2.45.1", "2.46.0").split("\n")[0].startsWith("compare kit 2.45.1 vs 2.46.0"), true);
+    match("an unknown version is named", cmp("2.45", "2.9"), /^unknown kit version 2\.9: no records; known: 2\.45\.1, 2\.46\.0$/);
+    eq("a prefix is not a substring", cmp("2.4", "2.46").startsWith("unknown kit version 2.4:"), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log(`${passed} passed, ${failed} failed`);
