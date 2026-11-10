@@ -21,6 +21,8 @@ Analyse token usage from the digest, never from the records.
      `review.*` in `ai/kit/config.json`, `.claude/settings.json`).
 5. The digest's by-kit section has more than one row → compare the versions: did cost per commit, peak or
    reviewer findings per review move the way the change meant? Say which version helped, which raised cost or
-   lowered findings.
+   lowered findings. Name cost per commit from the `by commits per round` section and each kit row's
+   `commit rounds cost/commit` (rounds with a commit seen only), never from `all cost / commits`, which also holds
+   rounds whose commits are in a sibling clone's records; `no-commit rounds` says how much cost that is.
 6. End with the working-conventions report: files written under Files, the proposal or setting chosen under Decided,
    what the digest could not show under Open.

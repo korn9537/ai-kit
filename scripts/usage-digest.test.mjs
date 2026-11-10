@@ -64,8 +64,8 @@ const recs = [
 const d = digest(recs, P);
 
 eq("empty", digest([], P), "no usage records");
-const SECTIONS = ["totals", "by role", "per commit", "by kit", "drivers", "reviews", "costliest rounds", "outliers"];
-const BASE_SECTIONS = SECTIONS.map((s) => (s === "costliest rounds" ? "costliest sessions" : s));
+const SECTIONS = ["totals", "by role", "per commit", "by commits per round", "by kit", "drivers", "reviews", "costliest rounds", "outliers"];
+const BASE_SECTIONS = SECTIONS.filter((s) => s !== "by commits per round").map((s) => (s === "costliest rounds" ? "costliest sessions" : s));
 eq("sections in order", [...d.matchAll(/^## (.+)$/gm)].map((m) => m[1]), SECTIONS);
 match("role share and model within role", d, /commit 6\d% \(opus 9\d%, sonnet \d+%\)/);
 match("cost per commit says it is all cost over commits, unpriced excluded", d, /all cost \/ commits ≈ \$\d.*unpriced tokens excluded/);
@@ -300,6 +300,35 @@ eq("a record whose commits hold a non-string or a too-short hash is invalid",
   eq("uniqueCommits: a hash is compared only within its prefix, not with every other", (() => { const n = compares(10000); return n > 0 && n < 10000; })(), true);
   eq("uniqueCommits: one commit per prefix family, the longest spelling kept", uniqueCommits(["abc1234", "abc12345", "def5678"]), ["abc12345", "def5678"]);
   eq("duplicate commit hashes collapse", buildRecord({ ...session, commits: [{ ts: "t", hash: "abc1234" }, { ts: "t", hash: "abc1234" }] }, [], ctx).commits, ["abc1234"]);
+}
+
+// ---- by commits per round ----
+{
+  const hx = (i) => `${String(i).padStart(7, "0")}`;
+  let n = 0;
+  const hs = (k) => Array.from({ length: k }, () => hx(++n));
+  const mk = (sess, round, kit, k, o = {}) => rec({ session: sess, round, kit, commits: hs(k), agents: [ag({ model: o.model ?? OPUS, read: 1e6 }), ...(k ? [ag({ id: "c", role: "commit", read: 1e6, model: o.model ?? OPUS })] : [])] });
+  const rr = [mk("sa", 1, "1.0.0", 0), mk("sb", 1, "1.0.0", 1), mk("sc", 1, "2.0.0", 3), mk("sd", 1, "2.0.0", 5), mk("se", 1, "2.0.0", 9)];
+  const g = digest(rr, P);
+  const lines = g.split("\n");
+  const sec = lines.slice(lines.indexOf("## by commits per round") + 1, lines.indexOf("## by kit"));
+  eq("commit buckets: one line per bucket plus the note", sec.map((l) => l.split(" ")[0]), ["0", "1", "2-3", "4-7", "8+", "commits"]);
+  match("bucket 1", sec[1], /^1 commits: 1 rounds · \$0\.40 · 1 commits · cost\/commit \$0\.40 · reviewer 0% · coordinator 50% · commit 50%$/);
+  match("bucket 2-3", sec[2], /^2-3 commits: 1 rounds · \$0\.40 · 3 commits · cost\/commit \$0\.13 /);
+  match("bucket 4-7", sec[3], /^4-7 commits: 1 rounds · \S+ · 5 commits · cost\/commit /);
+  match("bucket 8+", sec[4], /^8\+ commits: 1 rounds · \S+ · 9 commits · cost\/commit /);
+  match("bucket 0 gives its share of cost", sec[0], /^0 commits: 1 rounds · \$0\.20 · 0 commits · 11% of cost · reviewer 0% · coordinator 100% · commit 0%$/);
+  match("by kit 1.0.0 commit-round figure", g, /^1\.0\.0 · .* commit rounds cost\/commit \$\d+\.\d\d · no-commit rounds \d+% of cost$/m);
+  match("by kit 2.0.0 commit-round figure", g, /^2\.0\.0 · .* commit rounds cost\/commit \$\d+\.\d\d · no-commit rounds 0% of cost$/m);
+  eq("baseline digest has no such section", /by commits per round|commit rounds/.test(digest(rr, P, { source: "baseline" })), false);
+  const z = digest([mk("sa", 1, "1.0.0", 0)], P);
+  eq("no commits: only the 0 bucket", z.split("\n").filter((l) => /^\S+ commits: /.test(l)).length, 1);
+  const up = digest([mk("sa", 1, "1.0.0", 2, { model: "unknown-model" })], P);
+  eq("zero priced cost with commits prints unpriced, no NaN", [/NaN/.test(up), /2-3 commits: .*cost\/commit unpriced/.test(up)], [false, true]);
+  const dup = digest([rec({ session: "sa", commits: ["abc1234"], agents: [ag({ read: 1e6 })] }), rec({ ts: "2026-02-02T10:00:00Z", session: "sb", commits: ["abc12345"], agents: [ag({ read: 1e6 })] })], P);
+  match("a commit seen in two rounds counts once, header and buckets agree", dup, /commits 1 · /);
+  match("the one commit sits in one round", dup, /^1 commits: 1 rounds .* · 1 commits · /m);
+  match("the other round is a 0 round", dup, /^0 commits: 1 rounds /m);
 }
 
 console.log(`${passed} passed, ${failed} failed`);

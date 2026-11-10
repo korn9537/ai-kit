@@ -377,6 +377,40 @@ export function digest(recs, prices, meta = {}) {
   if (!base) out.push(`per round ≈ ${fmtUsd(total / rounds.size)} (rounds ${rounds.size})`);
   out.push(`per session ≈ ${fmtUsd(total / sessions.size)} (sessions ${sessions.size})`);
 
+  // Per round (records sharing session#round, summed first): each commit belongs to the earliest round that saw it.
+  const roundInfo = new Map();
+  const owned = new Map();
+  for (const r of recs) {
+    const e = roundInfo.get(`${r.session}#${r.round}`) ?? { kit: one(r.kit || "?", 20), cost: 0, roles: new Map(), n: 0 };
+    for (const a of r.agents) {
+      const w = weight(a, prices) ?? 0;
+      e.cost += w;
+      bump(e.roles, a.role ?? "other", w);
+    }
+    for (const h of uniqueCommits(r.commits ?? [])) {
+      const kept = owned.get(h.slice(0, 7)) ?? [];
+      if (kept.some((x) => sameCommit(x, h))) continue;
+      owned.set(h.slice(0, 7), [...kept, h]);
+      e.n++;
+    }
+    roundInfo.set(`${r.session}#${r.round}`, e);
+  }
+  const perCommit = (cost, n) => (cost > 0 ? fmtUsd(cost / n) : "unpriced");
+  if (!base) {
+    out.push("## by commits per round");
+    const BUCKETS = [["0", (n) => n === 0], ["1", (n) => n === 1], ["2-3", (n) => n >= 2 && n <= 3], ["4-7", (n) => n >= 4 && n <= 7], ["8+", (n) => n >= 8]];
+    for (const [label, inB] of BUCKETS) {
+      const rs2 = [...roundInfo.values()].filter((e) => inB(e.n));
+      if (!rs2.length) continue;
+      const cost = sum(rs2.map((e) => e.cost));
+      const n = sum(rs2.map((e) => e.n));
+      const role = (k) => pct(sum(rs2.map((e) => e.roles.get(k) ?? 0)), cost);
+      out.push(`${label} commits: ${rs2.length} rounds · ${fmtUsd(cost)} · ${n} commits · ${label === "0" ? `${pct(cost, total)} of cost`
+        : `cost/commit ${perCommit(cost, n)}`} · reviewer ${role("reviewer")} · coordinator ${role("coordinator")} · commit ${role("commit")}`);
+    }
+    out.push("commits are the hashes seen in this repo's session transcripts; a sibling clone's commits are in its own records");
+  }
+
   // by kit version
   out.push("## by kit");
   const kits = new Map();
@@ -408,6 +442,12 @@ export function digest(recs, prices, meta = {}) {
     if (revs.length) {
       const per = (f) => (Math.round((10 * sum(revs.map((g) => g.findings[f] ?? 0))) / revs.length) / 10).toString();
       parts.push(`${revs.length} reviews ${per("confirmed")} confirmed/review ${per("plausible")} plausible/review`);
+    }
+    if (!base) {
+      const mineR = [...roundInfo.values()].filter((e) => e.kit === k);
+      const withC = mineR.filter((e) => e.n > 0);
+      if (withC.length) parts.push(`commit rounds cost/commit ${perCommit(sum(withC.map((e) => e.cost)), sum(withC.map((e) => e.n)))}`);
+      parts.push(`no-commit rounds ${pct(sum(mineR.filter((e) => e.n === 0).map((e) => e.cost)), sum(mineR.map((e) => e.cost)))} of cost`);
     }
     out.push(`${k} · ${parts.join(" · ")}`);
   }

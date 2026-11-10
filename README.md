@@ -213,7 +213,8 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
   then fills the `ai/` layout one category per commit, only from the code and existing docs.
 
 - `node <plugin>/scripts/usage.mjs digest [--since YYYY-MM-DD] [--baseline]` (read-only) prints a fixed-size text
-  digest of `ai/usage/**`: cost per model, role and kit version, driver signals, reviewer findings, the costliest
+  digest of `ai/usage/**`: cost per model, role and kit version, driver signals, cost per commit by commits per
+  round (0, 1, 2-3, 4-7, 8+; commits are the hashes seen in this repo's transcripts), reviewer findings, the costliest
   rounds, outliers. `--baseline` builds it from this machine's local transcripts instead, before any record exists.
   `/ai-kit:usage` (`commands/usage.md`) runs it and names the largest driver with the one change that cuts it.
   `record` is the Stop hook's entry point, not run by hand.
