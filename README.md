@@ -48,6 +48,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
 | `docs/`                       | `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md`, `handoffs.md`, `owner-kinds.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
+| `evals/`                      | `claude plugin eval` cases for the agents (decider, change-reviewer, business-analyst); not run by `test-all`  |
 | `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`python`, `react`, ...)  |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
 | `templates/ai/`               | one template per `ai/` doc type (`docs/ai-layout.md`); never copied by `init`                  |
@@ -317,6 +318,14 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
    `git merge --ff-only` once `node scripts/test-all.mjs` passes (rerun a flaky test alone before counting it) and
    the review leaves no CONFIRMED finding open, or `CHANGELOG.md` names the ones left. Tag the version commit
    `vX.Y.Z` and push `main` with the tag; a bad release is reverted on `main`.
+
+Agent evals (optional, early access in Claude Code 2.1.234): `evals/<case>/prompt.md` plus `graders/*.md` hold five
+cases (`decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`). Each run calls
+the model and costs money, so `node scripts/test-all.mjs` does not run them. Run one family by hand:
+`claude plugin eval . --ablation none --runs 1 --case 'decider-*'`. CI form: add `--no-publish --max-cost-usd 5
+--threshold 0.9`. Cost: one session per case per run (cases x runs: the full suite at `--runs 1` is 5 sessions, the
+decider and business-analyst ones on opus). Results go to `evals/results/` (git-ignored). The cases carry their
+context inline, so they need no `--allow-tools` or `--scaffold`.
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected

@@ -130,6 +130,13 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set; route check when `ui.api` is set |
 | `docs/superpowers/` | design specs and plans of the kit's own features |
 
+### evals/ (agent evals for `claude plugin eval`, run by hand, not by `scripts/test-all.mjs`)
+
+| File | Role |
+|---|---|
+| `evals/<case>/prompt.md`, `evals/<case>/graders/*.md` | one case each: `decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`; regex, tool_used and llm graders; every run costs model calls |
+| `evals/results/` | run output, git-ignored |
+
 ### conventions/ and templates/
 
 | File | Role |
