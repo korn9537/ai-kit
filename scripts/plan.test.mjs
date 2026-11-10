@@ -50,6 +50,16 @@ ok("accept that is not a list of strings is refused", /accept is a list/.test(th
 thrown = "";
 try { merge(null, args([{ id: "a", accept: [] }])); } catch (e) { thrown = e.message; }
 ok("a new plan with an empty accept is refused", /accept is empty/.test(thrown));
+{
+  // a plan file from before 2.44.0: its batches have no accept
+  const bare = (bs) => ({ job: JOB, batches: bs.map((b) => ({ title: b.id, brief: `do ${b.id}`, risks: ["r"], tests: ["t"], ...b })) });
+  const legacy = { job: JOB, request: "", batches: bare([{ id: "a" }, { id: "b" }]).batches };
+  ok("an old plan's batch re-written without accept is kept", merge(legacy, bare([{ id: "a", brief: "answered" }])).batches[0].brief === "answered");
+  thrown = "";
+  try { merge(legacy, bare([{ id: "n" }])); } catch (e) { thrown = e.message; }
+  ok("a new batch on an old plan still needs accept", /accept is empty/.test(thrown));
+  ok("an old plan resumes: its args keep every batch", resumeArgs(legacy, new Map(), "/p").batches.length === 2);
+}
 ok("accept survives the plan file", parse(render(merge(null, args([{ id: "a", accept: ["x shows y"] }])))).batches[0].accept[0] === "x shows y");
 const wide = merge(null, { ...args([{ id: "a", title: long, brief: long, verify: long, alsoInScope: [long, "short"] }]), request: long });
 const wideText = render(wide);
