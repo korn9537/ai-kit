@@ -27,7 +27,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/kit/*.mjs`           | one module per command (`init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`) and `shared.mjs` |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
-| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `scripts/lib/usage-collect.mjs` and `scripts/lib/usage-digest.mjs` |
+| `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` / `hooks` (§Commands), over `scripts/lib/usage-collect.mjs`, `scripts/lib/usage-digest.mjs` and `scripts/lib/hook-events.mjs` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
@@ -37,7 +37,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
 | `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`); test `scripts/state-dirs.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
-| `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record): `node scripts/<name>.test.mjs`                   |
+| `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record; `usage-hooks.test.mjs`: hook counts and the anchor drift check): `node scripts/<name>.test.mjs` |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite in parallel: `node scripts/test-all.mjs` |
 | `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from; test `scripts/spec.test.mjs` |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
@@ -217,6 +217,9 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
   round (0, 1, 2-3, 4-7, 8+; commits are the hashes seen in this repo's transcripts), reviewer findings, the costliest
   rounds, outliers. `--baseline` builds it from this machine's local transcripts instead, before any record exists.
   `/ai-kit:usage` (`commands/usage.md`) runs it and names the largest driver with the one change that cuts it.
+- `node <plugin>/scripts/usage.mjs hooks [--since YYYY-MM-DD]` (read-only) counts each kit hook's firings (main
+  and subagent, sessions, kit versions) from this machine's transcripts of the project; counts only, no message text.
+  A kit whose hook text differed from the current table is undercounted: `no firing` is not proof a hook is unused.
   `record` is the Stop hook's entry point, not run by hand.
 
 The shim reads the plugin path from `<git-common-dir>/ai-kit-root`, written by `init` and at each session start.

@@ -91,9 +91,10 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index; warnings only |
-| `scripts/usage.mjs` | `record`, `end`, `flush`, `digest`: token records |
+| `scripts/usage.mjs` | `record`, `end`, `flush`, `digest`: token records; `hooks`: counts of each hook's firings |
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
+| `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
 | `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live |

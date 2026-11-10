@@ -24,5 +24,7 @@ Analyse token usage from the digest, never from the records.
    lowered findings. Name cost per commit from the `by commits per round` section and each kit row's
    `commit rounds cost/commit` (rounds with a commit seen only), never from `all cost / commits`, which also holds
    rounds whose commits are in a sibling clone's records; `no-commit rounds` says how much cost that is.
-6. End with the working-conventions report: files written under Files, the proposal or setting chosen under Decided,
+6. Before judging that a hook or rule can go, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" hooks [--since
+   YYYY-MM-DD]`: how often each hook fired (an older kit's changed hook text is undercounted).
+7. End with the working-conventions report: files written under Files, the proposal or setting chosen under Decided,
    what the digest could not show under Open.

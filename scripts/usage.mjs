@@ -12,7 +12,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
 import { usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
-import { collectSession, loadCache, mergeCommits, saveCache } from "./lib/usage-collect.mjs";
+import { collectSession, loadCache, mergeCommits, saveCache, transcriptsDir } from "./lib/usage-collect.mjs";
+import { formatHooks, scanHooks } from "./lib/hook-events.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./lib/usage-digest.mjs";
 
 const IDLE_MS = 6 * 3600 * 1000;
@@ -338,6 +339,23 @@ function digestCmd(args) {
   process.stdout.write(`${digest(recs, prices, { sessionsSkipped: skipped, source: "baseline" })}\n`);
 }
 
+// hooks [--since YYYY-MM-DD]: counts each kit hook's firings in this machine's transcripts of the project. Prints
+// counts only; writes nothing.
+async function hooksCmd(args) {
+  let since = "";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--since" && /^\d{4}-\d{2}-\d{2}$/.test(args[i + 1] ?? "")) since = args[++i];
+    else throw new Error("usage: usage.mjs hooks [--since YYYY-MM-DD]");
+  }
+  const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  if (!existsSync(join(root, "ai", "kit"))) return void process.stdout.write("no ai/kit in this project: no hook counts\n");
+  const dir = transcriptsDir(root);
+  if (!existsSync(dir)) return void process.stdout.write("no transcripts for this project\n");
+  const kitOf = new Map();
+  for (const r of loadRecords(join(root, "ai", "usage")).recs) if (r.session && r.kit && !kitOf.has(r.session)) kitOf.set(r.session, r.kit);
+  process.stdout.write(`${formatHooks(await scanHooks(dir, { since, kitOf }))}\n`);
+}
+
 function main() {
   const cmd = process.argv[2];
   if (cmd === "record") {
@@ -388,7 +406,14 @@ function main() {
     }
     return;
   }
-  process.stderr.write("usage: usage.mjs record | end | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline]\n");
+  if (cmd === "hooks") {
+    hooksCmd(process.argv.slice(3)).catch((e) => {
+      process.stderr.write(`usage-hooks: ${String(e?.message ?? e).replace(/\s+/g, " ")}\n`);
+      process.exitCode = 2;
+    });
+    return;
+  }
+  process.stderr.write("usage: usage.mjs record | end | flush --session <id> | flush --idle | digest [--since YYYY-MM-DD] [--baseline] | hooks [--since YYYY-MM-DD]\n");
   process.exitCode = 2;
 }
 
