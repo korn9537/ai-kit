@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.40.0
+
+`usage.mjs digest` gains `## by commits per round`, and per kit the cost per commit over commit rounds only and the
+share of cost in rounds with no seen commit. `all cost / commits` divided all cost by the commits seen in one
+project's transcripts: in asw-sales-flow it read $0.85 for 2.22.0 against $2.60 for 2.36.0, while the share of cost
+in no-commit rounds rose from 40% to 73% and the commit-round figure showed no rise ($0.83 to $0.70). A commit counts
+in the earliest round that saw it. New `usage.mjs hooks [--since]` counts each kit hook's firings from the local
+transcripts (no hook changed; the table is `scripts/lib/hook-events.mjs`, and a test fails when a hook message it
+matches is renamed). No project needs to edit anything.
+
 ## 2.39.0
 
 `/ai-kit:migrate`, `kit.mjs migrate` and the 1.x checks of `check` and `init` are removed because no repo is on 1.x:

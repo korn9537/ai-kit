@@ -227,6 +227,8 @@ Each step names the file that does it.
 2. `kit-log.sh session-end` runs `usage.mjs end`: records the rest, writes new files under `ai/usage/`. A crashed
    session's buffer is written by `usage.mjs flush --idle` from `session-start.sh`. The next commit stages them.
 3. `usage.mjs digest` (`scripts/lib/usage-digest.mjs`) reads them; `/ai-kit:usage` names the largest driver.
+4. `usage.mjs hooks [--since]` counts each kit hook's firings from the local transcripts; the table is
+   `scripts/lib/hook-events.mjs`.
 
 ### P6 Decisions
 
