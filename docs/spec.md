@@ -36,7 +36,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `hooks/memory-guard.sh` | PreToolUse Write, Edit, MultiEdit, NotebookEdit | blocks writes into the auto-memory dir (Bash writes: `bash-guard.sh`) |
 | `hooks/agent-model-guard.sh` | PreToolUse Agent, Task | blocks a general-purpose or Explore subagent launched without `model` |
 | `hooks/ask-guard.sh` | PreToolUse AskUserQuestion | blocks an ask until `ai-kit:decider` returned OWNER within 30 minutes for each asked question (questions matched to verdict blocks by word overlap; a block serves one question once; verdict read by `decider.mjs guard`); lets it through when `decider.enabled` is false, the question matches `decider.always_owner`, or node is missing |
-| `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review; passes small, comment-only, moved-only changes |
+| `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review; passes small, comment-only, moved-only changes, and mid-plan stops whose changed paths all lie in `plan.mjs scope` |
 | `hooks/review-snapshot.sh` | PostToolUse Agent, Task, SendMessage; also `--tree` from session-start | records the work tree when the main session calls a review, so the Stop hook can diff against it |
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
 | `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`; send searches to a subagent; read a line range instead of a whole file |
@@ -97,13 +97,14 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
-| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live |
+| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths) |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
 | `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders; twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
 | `scripts/lib/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
 | `scripts/lib/` | note: modules with no CLI; every CLI entry point stays in `scripts/` (commands, hooks and project copies name those paths) |
 | `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
+| `scripts/fixtures/plan-gaps-and-measurement.md` | a copy of a real plan file: `plan.test.mjs` reads the scope of its briefs |
 | `scripts/*.test.mjs` | fixture tests, one per module (`handoffs.test.mjs` checks `docs/handoffs.md` against prompts, `spec.test.mjs` this file) |
 
 ### workflows/

@@ -370,6 +370,50 @@ export function sharedFiles(batches, root = "") {
   return [...by].filter(([, ids]) => ids.length > 1).map(([file, batches]) => ({ file, batches }));
 }
 
+// the files a plan's batch texts name: a path, root file, directory (evals/), glob or <placeholder> path (a wildcard
+// segment); accept and tests count too, not only the briefs
+export function scopePaths(batches, root = "") {
+  const top = `${root.replace(/\/+$/, "")}/`;
+  const out = new Set();
+  for (const b of batches ?? []) {
+    const text = [b.brief, b.accept, b.risks, b.tests, b.alsoInScope].flat(Infinity).filter((t) => typeof t === "string").join("\n");
+    for (let t of text.split(/[\s,=`'"]+/)) {
+      t = t.replace(/^[([{:]+/, "").replace(/[)\]},.;:]+$/, "").replace(/(:\d+(-\d+)?)+$/, "").replace(/[)\]},.;:]+$/, "");
+      if (root && t.startsWith(top)) t = t.slice(top.length);
+      t = t.replace(/^\.\//, "");
+      if (!t || t.includes("://") || t.startsWith("-") || t.startsWith("/") || /^[./]+$/.test(t)) continue;
+      const last = t.split("/").pop();
+      if (t.endsWith("/")) {
+        if (/[\w*>]\/$/.test(t) && !t.includes("//")) out.add(t);
+      } else if (/^[\w@.<>*-]*\.[A-Za-z][A-Za-z0-9]+$/.test(last) || (t.includes("/") && /^\*+$/.test(last))) out.add(t);
+    }
+  }
+  return [...out];
+}
+
+// does a changed path fall under one entry of scopePaths: a directory covers what is under it, * stays in a segment,
+// ** crosses them, a <placeholder> is one segment, and a name with no slash matches the basename (briefs name files loosely)
+export function inScope(path, entries) {
+  const p = path.replace(/^\.\//, "");
+  const re = (e) => e.split(/(\*\*|\*|<[^<>/]*>)/).map((x, i) => (i % 2 === 0 ? x.replace(/[.+?^${}()|[\]\\]/g, "\\$&") : x === "**" ? ".*" : "[^/]*")).join("");
+  return entries.some((e) => {
+    if (e.endsWith("/")) return new RegExp(`^${re(e)}`).test(p);
+    if (!e.includes("/")) return new RegExp(`^${re(e)}$`).test(p.split("/").pop());
+    return new RegExp(`^${re(e)}$`).test(p);
+  });
+}
+
+// the plan's scope: what its batches name, plus every file the job's commits touched (literal paths)
+export function scope(root, job) {
+  const text = readFileSync(join(root, relPath(job)), "utf8");
+  const plan = parse(text);
+  if (!plan) throw new Error(`${relPath(job)} is not a plan this script wrote`);
+  const entries = new Set(scopePaths(plan.batches, root));
+  const log = execFileSync("git", ["log", "-E", `--grep=^Job: ${job}$`, "--name-only", "--format="], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  for (const f of log.split("\n").filter(Boolean)) entries.add(f);
+  return [...entries];
+}
+
 export function write(root, args, replace = false) {
   const rel = relPath(args.job);
   const path = join(root, rel);
@@ -598,12 +642,18 @@ if (isMain(import.meta.url)) {
       console.log(JSON.stringify(resume(projectRoot(process.cwd()), arg, plugin)));
     } else if (cmd === "close" && arg) {
       console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
+    } else if (cmd === "scope" && arg) {
+      const entries = scope(projectRoot(process.cwd()), arg);
+      // --outside: the paths on stdin (one per line) the plan does not cover
+      if (flags.includes("--outside")) {
+        readFileSync(0, "utf8").split("\n").filter((l) => l && !inScope(l, entries)).forEach((l) => console.log(l));
+      } else entries.forEach((l) => console.log(l));
     } else if (cmd === "live" && arg) {
       const dir = nodePath(arg);
       if (!existsSync(join(dir, "journal.jsonl"))) throw new Error(`no workflow journal in ${dir}`);
       console.log(liveStatus(dir, Date.now()).join("\n"));
     } else {
-      console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop] | live <dir>");
+      console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop] | scope <job> [--outside] | live <dir>");
       process.exit(2);
     }
   } catch (e) {

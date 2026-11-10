@@ -399,7 +399,7 @@ reset
 # mid-job: a plan.mjs plan of the last commit's job with batches left, named in this transcript → no review yet
 J=2026-11-10-midjob
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
-printf '{"job":"%s","batches":[{"id":"a","title":"A","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]},{"id":"b","title":"B","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]}]}' "$J" >"$REPO/.git/args.json"
+printf '{"job":"%s","batches":[{"id":"a","title":"A","brief":"edit src/a.ts and docs","accept":["ok"],"risks":["r"],"tests":["t"]},{"id":"b","title":"B","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]}]}' "$J" >"$REPO/.git/args.json"
 (cd "$REPO" && node "$(dirname "$HOOK")/../scripts/plan.mjs" write .git/args.json >/dev/null)
 named="$(line Bash "$(jq -cn --arg c "git commit -m x -m 'Batch: a' -m 'Job: $J'" '{command: $c}')")"
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
@@ -414,6 +414,31 @@ run_case "pass: a Workflow run of the job names it" pass - "$(edit src/a.ts)" \
   "$(line Workflow "$(jq -cn --arg j "$J" '{scriptPath: "w.js", args: {job: $j, batches: []}}')")"
 run_case "pass: a committer brief carrying the trailer names it" pass - "$(edit src/a.ts)" \
   "$(line Agent "$(jq -cn --arg p "End with the trailer line \`Job: $J\` please" '{subagent_type: "ai-kit:committer", description: "commit: a", prompt: $p}')")"
+# an edit the plan does not name goes to the normal review, naming the path; a path of the job's commits is covered
+sed -i.bak '1,20s/$/x/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
+run_case "block: mid-job, a changed file the plan does not name" block "src/c.ts" "$(edit src/a.ts)" "$(edit src/c.ts)" "$named"
+run_case "block: the reason says the plan's pass did not apply" block "outside the open plan" "$(edit src/a.ts)" "$(edit src/c.ts)" "$named"
+git -C "$REPO" checkout -q -- src/c.ts
+# after a Bash edit the paths are all changes since the snapshot: the one made before it is not counted, one after is
+sed -i.bak '1,20s/$/o/' "$REPO/src/other.ts" && rm "$REPO/src/other.ts.bak"
+mkdir -p "$REPO/.git/claude-review"
+"$(dirname "$HOOK")/review-snapshot.sh" --tree "$REPO" >"$REPO/.git/claude-review/s1"
+viabash="$(line Bash "{\"command\": \"sed -i '' s/a/b/ $REPO/src/a.ts\"}")"
+sed -i.bak '1,20s/$/w/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "pass: mid-job after a Bash edit, another session's file is in the snapshot" pass - "$viabash" "$named"
+sed -i.bak '21,30s/$/o/' "$REPO/src/other.ts" && rm "$REPO/src/other.ts.bak"
+run_case "block: mid-job after a Bash edit, a file changed after the snapshot that the plan does not name" block "src/other.ts" "$viabash" "$named"
+git -C "$REPO" checkout -q -- src/other.ts
+rm -rf "$REPO/.git/claude-review"
+# plan.mjs scope failing never blocks: a copy of the plugin whose scope exits 1
+FAKE="$TMP/fakeplugin"
+mkdir -p "$FAKE" && cp -R "$(dirname "$HOOK")" "$FAKE/hooks" && mkdir -p "$FAKE/scripts" && cp -R "$(dirname "$HOOK")/../scripts/." "$FAKE/scripts/"
+printf 'if (process.argv[2] === "scope") { console.error("boom"); process.exit(1); }\nconsole.log("x: 1 done; ready b");\n' >"$FAKE/scripts/plan.mjs"
+REAL_HOOK="$HOOK" HOOK="$FAKE/hooks/review-before-stop.sh"
+sed -i.bak '1,20s/$/x/' "$REPO/src/c.ts" && rm "$REPO/src/c.ts.bak"
+run_case "pass: mid-job, plan.mjs scope fails: today's pass" pass - "$(edit src/c.ts)" "$named"
+HOOK="$REAL_HOOK"
+git -C "$REPO" checkout -q -- src/c.ts
 git -C "$REPO" commit -qam "a" -m "Batch: a" -m "Job: $J"
 seq 1 40 | sed 's/$/z/' >"$REPO/src/b.ts"
 git -C "$REPO" commit -qam "b" -m "Batch: b" -m "Job: $J"

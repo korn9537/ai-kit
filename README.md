@@ -165,8 +165,11 @@ every change); `review.always` (a JS-style regex) to migration, schema, auth, pe
 `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its re-check.
 The Stop hook asks for one reviewer over the whole job's range (`git diff <base>..HEAD`), launched once at the
 job's last commit, not one per commit. A stop while the job's `plan.mjs` plan still has batches left (the last
-commit's job, named by this session's own commit, committer brief or Workflow run) passes with no review; until that
-plan is finished or closed, so does an unrelated edit.
+commit's job, named by this session's own commit, committer brief or Workflow run) passes with no review while every
+changed code path is one the plan names (`plan.mjs scope <job>`: paths, root files, directories, globs and
+`<placeholder>` paths in its briefs, accept, risks, tests and alsoInScope) or a file the job's commits touched; an
+edit outside that set is reviewed as usual, and the ask names it. After a Bash edit the changed paths are everything
+changed in the checkout since the snapshot, so another session's file counts as outside.
 
 `usage.enabled` (default `true`) turns the token records off with `false`; `usage.money` (default `true`)
 set to `false` (a subscription, where dollars are not billed) shows the round and session summary in

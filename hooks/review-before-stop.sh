@@ -209,7 +209,11 @@ fi
 # → the job's one review comes after its last batch, not at this stop. Named = one of its own tool calls: a Bash
 # `git commit` carrying the trailer, a committer brief carrying it, or a Workflow run of that job; the exact id, so
 # `git log` output in a tool result or a job sharing its prefix does not count, and another session's plan never does.
-# Gap: until that plan is finished or closed, every stop with that job at HEAD passes, unrelated edits included
+# Only while every path changed since the snapshot is one the plan names (its briefs, accept, tests, alsoInScope) or a
+# file the job's commits touched (plan.mjs scope): an edit outside it goes to the normal review, naming the paths.
+# After a Bash edit the paths are everything changed since the snapshot, another session's file included: that cannot
+# be told apart, so such a file asks for review. A kit error (no node, scope failing) passes, as before
+outside=""
 read -r -d '' named_jq <<'JQ' || true
   ("(^|[\\n\\t \"'`])Job: " + $job + "($|[\\n\\t \"'`])") as $re
   | select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | (.input // {}) as $i
@@ -224,7 +228,14 @@ if command -v node >/dev/null 2>&1 && compgen -G "$project/ai/plans/*.md" >/dev/
   if [[ -n "$job" && -f "$project/ai/plans/$job.md" ]] &&
     [[ -n "$(jq -R --arg job "$job" "fromjson? // empty | $named_jq" "$transcript" 2>/dev/null | head -n 1 || true)" ]]; then
     left="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" status "$job" --quick 2>/dev/null || true)"
-    [[ "$left" == *"; ready "* || "$left" == *"; waiting "* ]] && exit 0
+    if [[ "$left" == *"; ready "* || "$left" == *"; waiting "* ]]; then
+      if outside="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" scope "$job" --outside <<<"$paths" 2>&1)"; then
+        [[ -z "$outside" ]] && exit 0
+      else
+        echo "ai-kit: plan.mjs scope failed, mid-plan stop passes: $(head -n 1 <<<"$outside")" >&2
+        exit 0
+      fi
+    fi
   fi
 fi
 skip_lines="$(kit_conf '.review.skip_lines' 10)"
@@ -259,5 +270,6 @@ Review closed: re-checked once, no third pass. Then stop. New work instead: $lau
   *) reason="Code changed with no review yet: $launch" ;;
 esac
 reason+=$'\n'"Files:"$'\n'"$files"
+[[ -n "$outside" ]] && reason+=$'\n'"Paths outside the open plan of job $job (so the plan's pass did not apply):"$'\n'"$outside"
 
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'

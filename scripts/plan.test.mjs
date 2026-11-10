@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, sharedFiles, status, write } from "./plan.mjs";
+import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -148,6 +148,38 @@ try {
   ok("sharedFiles names a path two briefs hold", JSON.stringify(sharedFiles(briefs)) === JSON.stringify([{ file: "src/x/a.ts", batches: ["a", "b"] }]));
   ok("sharedFiles: one brief naming a path twice is no share", sharedFiles([{ id: "a", brief: "src/a.ts src/a.ts" }]).length === 0);
   ok("a plan with no shared file has no shared key", !("shared" in write(repo, args())));
+
+  // scope: what the batches name, loosely, plus the files of the job's commits
+  const named = scopePaths([
+    { id: "a", brief: "Edit `src/x/a.ts`, README.md and the evals/ dir; also evals/<case>/prompt.md", accept: ["conventions/*.md pass"], tests: ["e.g. no path here v1.2"], alsoInScope: ["notes.txt"] },
+  ]);
+  ok("scopePaths reads a file, a root file, a directory, a glob and a placeholder path",
+    ["src/x/a.ts", "README.md", "evals/", "evals/<case>/prompt.md", "conventions/*.md", "notes.txt"].every((e) => named.includes(e)), named);
+  ok("scopePaths ignores words and versions", !named.some((e) => /^(e\.g|v1\.2|no|path)$/.test(e)), named);
+  ok("a file, basename, directory, glob and placeholder each cover a path",
+    inScope("src/x/a.ts", named) && inScope("lib/README.md", named) && inScope("evals/x/y.json", named) && inScope("conventions/go.md", named)
+    && inScope("evals/c1/prompt.md", named) && inScope("notes.txt", named), named);
+  ok("a path the entries do not name is outside",
+    !inScope("src/x/b.ts", named) && !inScope("conventions/sub/go.md", named) && !inScope("evals/c1/other.md", ["evals/<case>/prompt.md"]) && !inScope("hooks/a.sh", named), named);
+  const fixture = parse(readFileSync(join(import.meta.dirname, "fixtures", "plan-gaps-and-measurement.md"), "utf8"));
+  const fromPlan = scopePaths(fixture.batches);
+  ok("scopePaths on a real plan finds its files, directories, globs and placeholders",
+    ["hooks/review-before-stop.sh", "scripts/plan.mjs", "README.md", "docs/spec.md", "evals/", "evals/<case>/prompt.md", "evals/<case>/graders/*.md", "ai/plans/<job>.md"].every((e) => fromPlan.includes(e)), fromPlan);
+  ok("the real plan's scope covers its files and not an unrelated one",
+    inScope("scripts/plan.mjs", fromPlan) && inScope("evals/case1/prompt.md", fromPlan) && inScope("evals/case1/graders/a.md", fromPlan)
+    && inScope("ai/plans/2026-01-01-x.md", fromPlan) && !inScope("src/unrelated/thing.go", fromPlan), fromPlan);
+  const srepo = repoAt("scope");
+  write(srepo, args());
+  batchCommit(srepo, "a", "extra.ts");
+  const sc = scope(srepo, JOB);
+  ok("scope adds the files of the job's commits", sc.includes("extra.ts") && inScope("extra.ts", sc), sc);
+  writeFileSync(join(srepo, "other.ts"), "x\n");
+  git(srepo, "add", "other.ts");
+  git(srepo, "commit", "-q", "-m", "y");
+  ok("a commit of no job adds nothing", !scope(srepo, JOB).includes("other.ts"));
+  const runScope = (a, input = "") => spawnSync("node", [SCRIPT, ...a], { cwd: srepo, input, encoding: "utf8" });
+  ok("plan.mjs scope --outside prints only the paths the plan does not cover", runScope(["scope", JOB, "--outside"], "extra.ts\nzzz/q.ts\n").stdout === "zzz/q.ts\n");
+  ok("plan.mjs scope of a job with no plan fails", runScope(["scope", "2030-01-01-none"]).status === 1);
   const spell = [{ id: "a", brief: "/r/src/a.ts [app/(auth)/p.tsx]" }, { id: "b", brief: "./src/a.ts files:app/(auth)/p.tsx" }];
   ok("sharedFiles: absolute, ./ and bracketed spellings pair", sharedFiles(spell, "/r").map((x) => x.file).join() === "src/a.ts,app/(auth)/p.tsx");
   const link = [{ id: "a", brief: "(see src/a.ts)" }, { id: "b", brief: "[src/a.ts](src/a.ts), x" }];
