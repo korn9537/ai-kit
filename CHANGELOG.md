@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.45.0
+
+The Stop hook no longer asks for a review mid-job: when the last commit's job has a `plan.mjs` plan with batches left
+and the session named that job (a commit or a committer brief carries its `Job:` trailer), the stop passes, and the
+job's one review comes after its last batch. Another session's open plan does not count. A job with no plan file is
+reviewed at each stop with new code, as before. No project needs to edit anything.
+
 ## 2.44.0
 
 `plan.mjs write` refuses a batch whose `accept` is missing or empty: the job's one review checks every batch against

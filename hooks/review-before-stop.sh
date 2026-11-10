@@ -13,6 +13,8 @@
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
 # Escape hatch: a user message starting with "ไม่ต้อง review" or "skip review" after the last edit.
+# Mid-job: the last commit's job has a plan.mjs plan with batches left and this transcript names that job → no review
+# until its last batch (the job's one review).
 # Comment-only: nothing but //, one-line /* */ or blank lines changed since the snapshot (review-snapshot.sh: the
 # last review's tree, else the one session-start.sh took), or since the commit before the session began without one → no
 # review. A Bash write is judged by those changed lines, not by the files its command names. Small: at most config
@@ -201,6 +203,16 @@ else
     [[ -z "$new_files" && -z "$changed" ]] && exit 0
     new_files+=$'\n'"$(git -C "$project" diff --name-only --diff-filter=A "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
     paths="$(git -C "$project" diff --name-only "$base" -- "${specs[@]}" ':(exclude)*.md' ':(exclude)ai/usage' || true)"
+  fi
+fi
+# mid-job: the job of the last commit has a plan.mjs plan with batches left, and this session named that job (a commit
+# or a committer brief carries its trailer) → the job's one review comes after its last batch, not at this stop.
+# Another session's plan does not count: this transcript never names its job
+if command -v node >/dev/null 2>&1 && compgen -G "$project/ai/plans/*.md" >/dev/null; then
+  job="$(git -C "$project" log -1 --format=%B 2>/dev/null | sed -n 's/^Job: \([0-9a-z-]*\)$/\1/p' | tail -n 1 || true)"
+  if [[ -n "$job" && -f "$project/ai/plans/$job.md" ]] && grep -qF "Job: $job" "$transcript"; then
+    left="$(cd "$project" && node "$kit_plugin/scripts/plan.mjs" status "$job" --quick 2>/dev/null || true)"
+    [[ "$left" == *"; ready "* || "$left" == *"; waiting "* ]] && exit 0
   fi
 fi
 skip_lines="$(kit_conf '.review.skip_lines' 10)"

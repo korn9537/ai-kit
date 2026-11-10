@@ -396,6 +396,24 @@ run_case "block: the brief asks one reviewer for the whole job" block "one for t
 run_case "block: the brief reads the job's range" block "<first>^..HEAD" "$(edit src/a.ts)"
 reset
 
+# mid-job: a plan.mjs plan of the last commit's job with batches left, named in this transcript → no review yet
+J=2026-11-10-midjob
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+printf '{"job":"%s","batches":[{"id":"a","title":"A","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]},{"id":"b","title":"B","brief":"B","accept":["ok"],"risks":["r"],"tests":["t"]}]}' "$J" >"$REPO/.git/args.json"
+(cd "$REPO" && node "$(dirname "$HOOK")/../scripts/plan.mjs" write .git/args.json >/dev/null)
+named="$(line Bash "$(jq -cn --arg c "git commit -m x -m 'Batch: a' -m 'Job: $J'" '{command: $c}')")"
+sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "pass: mid-job, batches left in this session's plan" pass - "$(edit src/a.ts)" "$named"
+run_case "block: another session's plan (its job never named here)" block "no review yet" "$(edit src/a.ts)"
+git -C "$REPO" commit -qam "a" -m "Batch: a" -m "Job: $J"
+seq 1 40 | sed 's/$/z/' >"$REPO/src/b.ts"
+git -C "$REPO" commit -qam "b" -m "Batch: b" -m "Job: $J"
+sed -i.bak '1,20s/$/y/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "block: the plan's last batch committed: the job review is due" block "one for the whole job" "$(edit src/a.ts)" "$(edit src/b.ts)" "$named"
+git -C "$REPO" reset -q --hard HEAD~3 && rm -rf "$REPO/ai/plans"
+unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL
+reset
+
 # regex characters in the repo path
 REPO="$REPO/p(2" && mkdir -p "$REPO/ai/kit" "$REPO/src" && seq 1 40 >"$REPO/src/a.ts"
 git -C "$REPO" init -q && git -C "$REPO" add -A
