@@ -2,7 +2,8 @@
 // Usage: node scripts/spec.test.mjs
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = join(import.meta.dirname, "..");
 const spec = readFileSync(join(root, "docs/spec.md"), "utf8");
@@ -57,13 +58,29 @@ for (const t of new Set(tokens)) {
 // a prose line over 120 characters (tables and code fences are exempt, as in the wrap check)
 spec.split("\n").forEach((l, i) => ok(`docs/spec.md:${i + 1} fits 120 characters`, l.startsWith("|") || l.length <= 120));
 
-// every scripts/kit/ module stays under the 40 KB rule and loads on its own (an import cycle fails here, not in one command)
-for (const f of readdirSync(join(root, "scripts/kit")).filter((n) => n.endsWith(".mjs"))) {
-  const p = join(root, "scripts/kit", f);
+// every scripts/kit/ module stays under the 40 KB rule, loads on its own, and the import graph has no cycle
+const modDir = join(root, "scripts/kit");
+const mods = readdirSync(modDir).filter((n) => n.endsWith(".mjs"));
+const graph = new Map();
+for (const f of mods) {
+  const p = join(modDir, f);
   ok(`scripts/kit/${f} is at most 40 KB`, statSync(p).size <= 40960);
-  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(p)})`], { encoding: "utf8" });
-  ok(`scripts/kit/${f} imports on its own`, r.status === 0);
+  const href = pathToFileURL(p).href;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(href)})`], { encoding: "utf8" });
+  ok(`scripts/kit/${f} imports on its own${r.status === 0 ? "" : `: ${r.stderr}`}`, r.status === 0);
+  const deps = [...readFileSync(p, "utf8").matchAll(/from\s+"(\.\.?\/[^"]+\.mjs)"/g)].map((m) => resolve(modDir, m[1]));
+  graph.set(p, deps);
 }
+const state = new Map();
+function cyclic(n) {
+  if (state.get(n) === 1) return true;
+  if (state.get(n) === 2) return false;
+  state.set(n, 1);
+  const hit = (graph.get(n) ?? []).some(cyclic);
+  state.set(n, 2);
+  return hit;
+}
+ok("scripts/kit/ modules have no import cycle", ![...graph.keys()].some(cyclic));
 
 console.log(`${passed} passed, ${failed} failed`);
 process.exitCode = failed ? 1 : 0;
