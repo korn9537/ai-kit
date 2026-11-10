@@ -1,6 +1,6 @@
 ---
 type: tool_used
-tool: Task
+tool: Agent
 input_match: '"subagent_type"\s*:\s*"(?:[\w-]+:)?change-reviewer"'
 min: 1
 ---

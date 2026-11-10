@@ -2,7 +2,7 @@
 name: ba-summary
 tags: [business-analyst]
 runs: 1
-allowed_tools: [Read, Grep, Glob, Task]
+allowed_tools: [Read, Grep, Glob, Agent]
 max_turns: 15
 ---
 Launch the business-analyst subagent (ai-kit:business-analyst) with the request below and reply with its report

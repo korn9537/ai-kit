@@ -325,7 +325,8 @@ the model and costs money, so `node scripts/test-all.mjs` does not run them. Run
 `claude plugin eval . --ablation none --runs 1 --case 'decider-*'`. CI form: add `--no-publish --max-cost-usd 5
 --threshold 0.9`. Cost: one session per case per run (cases x runs: the full suite at `--runs 1` is 5 sessions, the
 decider and business-analyst ones on opus). Results go to `evals/results/` (git-ignored). The cases carry their
-context inline, so they need no `--allow-tools` or `--scaffold`.
+context inline, so they need no `--allow-tools` or `--scaffold`. The `tool_used` graders name the `Agent` tool; the
+first paid run confirms that is the name in the trace. `node scripts/evals.test.mjs` checks the case files offline.
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected

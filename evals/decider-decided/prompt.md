@@ -2,7 +2,7 @@
 name: decider-decided
 tags: [decider, deterministic]
 runs: 1
-allowed_tools: [Read, Grep, Glob, Task]
+allowed_tools: [Read, Grep, Glob, Agent]
 max_turns: 12
 ---
 Launch the decider subagent (ai-kit:decider) with the question below and reply with its verdict block unchanged.

@@ -2,7 +2,7 @@
 name: reviewer-finds-bug
 tags: [reviewer]
 runs: 1
-allowed_tools: [Read, Grep, Glob, Task]
+allowed_tools: [Read, Grep, Glob, Agent]
 max_turns: 12
 ---
 Launch the change-reviewer subagent (ai-kit:change-reviewer) on the diff below and reply with its findings unchanged.

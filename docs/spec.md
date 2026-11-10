@@ -136,6 +136,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 |---|---|
 | `evals/<case>/prompt.md`, `evals/<case>/graders/*.md` | one case each: `decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`; regex, tool_used and llm graders; every run costs model calls |
 | `evals/results/` | run output, git-ignored |
+| `scripts/evals.test.mjs` | offline test of the grader files: known match modes, each regex on a valid and a broken sample |
 
 ### conventions/ and templates/
 
