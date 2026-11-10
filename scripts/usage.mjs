@@ -261,8 +261,8 @@ function record(input, quiet = false, lockWait = {}) {
   if (conf.enabled === false) return;
   if (!statSync(transcript, { throwIfNoEntry: false })?.isFile()) throw new Error(`cannot read transcript ${transcript}`);
 
-  const cacheDir = usageCacheDir(root);
-  const bufDir = usageBufDir(root);
+  const cacheDir = usageCacheDir(root, { timeout: 5000 });
+  const bufDir = usageBufDir(root, { timeout: 5000 });
   if (!cacheDir || !bufDir) throw new Error("not a git repository, usage not recorded");
   const cachePath = join(cacheDir, `${session}.json`);
   const cache = loadCache(cachePath);
@@ -300,7 +300,7 @@ function record(input, quiet = false, lockWait = {}) {
 function flushCmd(args, deadline) {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!existsSync(join(root, "ai", "kit")) || readConfig(root).usage?.enabled === false) return;
-  const bufDir = usageBufDir(root);
+  const bufDir = usageBufDir(root, { timeout: 5000 });
   if (!bufDir) return;
   const val = (flag) => (args.includes(flag) ? (args[args.indexOf(flag) + 1] ?? "") : "");
   if (args[0] === "--session" && val("--session")) flushSession(root, bufDir, val("--session"), { deadline });

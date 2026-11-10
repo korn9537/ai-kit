@@ -29,7 +29,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | File | Event | What it does |
 |---|---|---|
 | `hooks/hooks.json` | n/a | wires every script below to its event and matcher |
-| `hooks/lib.sh` | sourced | `kit_enabled`, `kit_conf` (reads `ai/kit/config.json`), project root, path spelling, `kit_core` and `kit_inject` (the core text), `kit_memory_dir`, `kit_split_cmd` (splits a Bash line into simple commands; quote characters removed, a quoted text stays one word; heredoc bodies and comments dropped), `kit_code_lines`, `kit_review_skippable`, `KIT_REVIEWER_JQ` (the reviewer test shared by `review-snapshot.sh` and `review-before-stop.sh`) |
+| `hooks/lib.sh` | sourced | `kit_enabled`, `kit_conf` (reads `ai/kit/config.json`), project root, path spelling, `kit_core` and `kit_inject` (the core text), `kit_memory_dir`, `kit_state_dir` (the review, usage-cache, usage and decider state folders; twin of `scripts/lib/state-dirs.mjs`), `kit_split_cmd` (splits a Bash line into simple commands; quote characters removed, a quoted text stays one word; heredoc bodies and comments dropped), `kit_code_lines`, `kit_review_skippable`, `KIT_REVIEWER_JQ` (the reviewer test shared by `review-snapshot.sh` and `review-before-stop.sh`) |
 | `hooks/session-context.sh` | SessionStart | injects the first half of `CLAUDE.core.md` |
 | `hooks/session-start.sh` | SessionStart | injects the second half plus notes (unfiled proposals, open plans, auto-memory files, stale unattended copies); writes `<git-common-dir>/ai-kit-root`; records the work tree as the review snapshot; flushes idle usage buffers |
 | `hooks/bash-guard.sh` | PreToolUse Bash | blocks a sweeping `git add`/`git commit -a`, and a build command while `build_guard.port` listens |

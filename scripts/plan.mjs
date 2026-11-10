@@ -431,7 +431,7 @@ function pickPlan(root, job) {
 }
 
 const reviewDir = (root) => {
-  const dir = reviewDirOf(root);
+  const dir = reviewDirOf(root, { throws: true });
   if (!dir) throw new Error("not a git repository");
   return dir;
 };
