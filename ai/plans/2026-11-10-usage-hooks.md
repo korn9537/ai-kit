@@ -25,11 +25,10 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
           "commits seen in this project's records. In asw-sales-flow (2026-10-26..11-09) that read $0.85 (2.22.0) to ",
           "$2.60 (2.36.0) while cost per commit over rounds that HAD commits went $0.83 (2.22.0) to $0.70 (2.36.0) ",
           "and $0.30 (2.34.0): 73-84% of the newer kits' cost sat in rounds with no seen commit (86 of 137 Job ",
-          "commits of 11-08..09 live in the sibling clone's records, 27 in none). So the figure cannot say ",
-          "whether the per-commit pipeline got dearer. Change, in scripts/lib/usage-digest.mjs digest(): ",
-          "(1) after the `## per commit` block add `## by commits per round`, skipped in baseline mode ",
-          "(1 record = 1 session), fixed size: ",
-          "one line per bucket `0`, `1`, `2-3`, `4-7`, `8+` commits in the round (a round = the records sharing ",
+          "commits of 11-08..09 live in the sibling clone's records, 27 in none). So the figure cannot say whether ",
+          "the per-commit pipeline got dearer. Change, in scripts/lib/usage-digest.mjs digest(): (1) after the `## ",
+          "per commit` block add `## by commits per round`, skipped in baseline mode (1 record = 1 session), fixed ",
+          "size: one line per bucket `0`, `1`, `2-3`, `4-7`, `8+` commits in the round (a round = the records sharing ",
           "session#round, commits counted with uniqueCommits :63, cost = sum of weight(agent) like the existing ",
           "rows): `<bucket> commits: <rounds> rounds · <cost> · <commits> commits · cost/commit <x> · reviewer a% · ",
           "coordinator b% · commit c%`; the `0` bucket line has no cost/commit and says its share of total cost ",
@@ -63,8 +62,8 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
         {
           "lines": [
             "running `node scripts/usage.mjs digest --since 2026-10-26` in /Users/palakorn/Work/asw-sales-flow shows ",
-            "the 1-commit bucket at $2.81 per commit (71 rounds) and the 0 bucket at 40% of cost (all ",
-            "kits together; the per-kit lines show the split: commit rounds $0.83 for 2.22.0, $0.70 for 2.36.0)"
+            "the 1-commit bucket at $2.81 per commit (71 rounds) and the 0 bucket at 40% of cost (all kits together; ",
+            "the per-kit lines show the split: commit rounds $0.83 for 2.22.0, $0.70 for 2.36.0)"
           ]
         },
         "commands/usage.md tells the analyst to use the new section, and node scripts/test-all.mjs passes"
@@ -137,20 +136,35 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
           "\"prompt\"|\"command\"}`: `stop.skip-review-escape` (a user prompt starting with `skip review` or `ไม่ต้อง ",
           "review`), `stop.review-closed-phrase` (an assistant text with plain `Review closed: re-checked once`), and ",
           "Bash commands using `ALLOW_BUILD_WHILE_DEV=1`, `ALLOW_LARGE_EDIT=1` or `git commit --no-verify`. Add ",
-          "`usage.mjs hooks [--since YYYY-MM-DD]` (scripts/usage.mjs dispatcher near :340; usage text of digestCmd ",
-          ":313-319 as a model): reads the project's transcripts, prints a fixed-size text, writes nothing: header ",
-          "`files N · sessions N · since <date>`, then one line per event with a count, most first, capped at 40: ",
-          "`<id>: <n> (main <a>, sub <b>) in <s> sessions`, then `no firing: <ids>` (ids capped, `+k more`). It ",
-          "prints only counts, never message text or paths. Read each file as a stream by lines (a project's ",
-          "transcripts are hundreds of MB: no whole-directory readFileSync of everything at once) and skip a ",
-          "transcript whose mtime is before --since. Tests: scripts/usage-hooks.test.mjs builds a temp ",
+          "`usage.mjs hooks [--since YYYY-MM-DD]` (scripts/usage.mjs main() :335-392 (synchronous: await the async ",
+          "scan with a .catch that prints one line and sets the exit code; add `hooks [--since]` to its usage line at ",
+          ":390); usage text of digestCmd :313-319 as a model): reads the project's transcripts, prints a fixed-size ",
+          "text, writes nothing: header `files N · sessions N · since <date>`, then one line per event with a count, ",
+          "most first, capped at 40: `<id>: <n> (main <a>, sub <b>) in <s> sessions`, then `no firing: <ids>` (ids ",
+          "capped, `+k more`). It prints only counts, never message text or paths. Read each file as a stream by ",
+          "lines (a project's transcripts are hundreds of MB: no whole-directory readFileSync of everything at once) ",
+          "and skip a transcript whose mtime is before --since. Tests: scripts/usage-hooks.test.mjs builds a temp ",
           "CLAUDE_CONFIG_DIR with a transcript dir (main file plus a subagent file) holding one line per event type, ",
           "a repeated uuid and an old line, and asserts the counts, the main/sub split, the dedup, the `--since` cut, ",
           "`no firing`, and that unrelated text matches nothing; plus a DRIFT test: for every table entry with an ",
           "`anchor`, the anchor string is found in the entry's `file` (hooks/*.sh, githooks/*, scripts/*.mjs), so ",
           "renaming a hook message fails the suite. Name scripts/lib/hook-events.mjs and scripts/usage-hooks.test.mjs ",
           "in docs/spec.md and README Layout; add `usage.mjs hooks` to README §Commands and to commands/usage.md (one ",
-          "line: use it before judging that a hook or rule can go). Verify once: node scripts/test-all.mjs."
+          "line: use it before judging that a hook or rule can go). Verify once: node scripts/test-all.mjs. MATCHING ",
+          "RULES from the plan review (all required): (a) map tool_use_id to tool name; match pre-commit, commit-msg ",
+          "and other git-hook events only in Bash tool_results, and PreToolUse/PostToolUse/Stop guard events only in ",
+          "hook-block results or `attachment` records or the harness's `Stop hook feedback:` user text; never in an ",
+          "Agent/Task result, a Read/Grep result or a typed prompt (a committer report quoting a hook message, or a ",
+          "hook file read aloud, must count 0; a pre-commit failure inside a subagent must count once, not again in ",
+          "the main Agent result that quotes it); (b) copy the hook's own regexes exactly for the prompt and phrase ",
+          "events: hooks/review-before-stop.sh:126 accepts `^\\s*(ไม่ต้อง ?review|skip review)` case-insensitively, ",
+          "also inside content arrays, and skips text starting with `<`; hooks/review-before-stop.sh:103 excludes a ",
+          "closed phrase preceded by a backtick, a quote or the curly quote; give these entries an `anchor` in that ",
+          "file so the drift test covers them; (c) the drift test also asserts each entry's `re` matches a sample ",
+          "message built from its anchor; (d) print the kit version per line as a capped part `kits 2.34.0:n 2.36.0:m ",
+          "?:k` (`?` for a session with no usage record) and test it; (e) --since cuts a transcript by file mtime AND ",
+          "each line by its `timestamp`; a line with no uuid or no timestamp is skipped; the last line of a file may ",
+          "be cut off (the live session is being appended): skip a line that does not parse."
         ]
       },
       "accept": [
@@ -216,9 +230,7 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
       "verify": [
         "node scripts/test-all.mjs"
       ],
-      "waitsFor": [
-        "digest-commit-rounds"
-      ],
+      "waitsFor": [],
       "alsoInScope": []
     },
     {
@@ -227,14 +239,17 @@ status: the commits of this job, by their Batch trailer (`plan.mjs status`); nev
       "brief": {
         "lines": [
           "Bump version in .claude-plugin/plugin.json from 2.39.0 to 2.40.0 (minor: a new digest section and a new ",
-          "subcommand) and add a `## 2.40.0` entry at the top of CHANGELOG.md: the digest gains `## by commits per ",
-          "round` and per-kit cost/commit over commit rounds only, because `all cost / commits` divided all cost by ",
-          "the commits seen in one project's transcripts and read $0.85 to $2.60 across kits while the same figure ",
-          "over commit rounds fell from $0.67 to $0.26 (asw-sales-flow, 2026-10-26..11-09, kit <=2.27 against ",
-          ">=2.34); `usage.mjs hooks [--since]` counts each kit hook's firings from the local transcripts (no hook ",
-          "changed; the table is scripts/lib/hook-events.mjs and a test fails when a hook message it matches is ",
-          "renamed). No project needs to edit anything. Wrap lines at 120. Check docs/spec.md P5 mentions both and ",
-          "fix only what is wrong. Verify once: node scripts/test-all.mjs."
+          "subcommand) and add a `## 2.40.0` entry at the top of CHANGELOG.md. Take the figures from the real output ",
+          "of `node scripts/usage.mjs digest --since 2026-10-26` run in /Users/palakorn/Work/asw-sales-flow, not from ",
+          "this text: the digest gains `## by commits per round` and, per kit, cost/commit over commit rounds only ",
+          "and the share of cost in rounds with no seen commit, because `all cost / commits` divided all cost by the ",
+          "commits seen in one project's transcripts (asw-sales-flow: $0.85 for 2.22.0 against $2.60 for 2.36.0) ",
+          "while the share of cost in no-commit rounds rose from 40% to 73% and the commit-round figure showed no ",
+          "rise ($0.83 to $0.70); a commit counts in the earliest round that saw it. `usage.mjs hooks [--since]` ",
+          "counts each kit hook's firings from the local transcripts (no hook changed; the table is ",
+          "scripts/lib/hook-events.mjs and a test fails when a hook message it matches is renamed). No project needs ",
+          "to edit anything. Wrap lines at 120. Check docs/spec.md P5 mentions both and fix only what is wrong. ",
+          "Verify once: node scripts/test-all.mjs."
         ]
       },
       "accept": [
