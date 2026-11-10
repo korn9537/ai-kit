@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { LOCK_STALE_MS, breakLock, flushIdle, seedBuffer, withLock } from "./usage.mjs";
-import { loadRecords } from "./usage-digest.mjs";
+import { loadRecords } from "./lib/usage-digest.mjs";
 
 let passed = 0;
 let failed = 0;

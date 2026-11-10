@@ -180,7 +180,7 @@ function readNew(path, cache, isMain) {
 }
 
 // Effort of a subagent: the `effort` its launching Agent/Task call carried, else the effort: line of an ai-kit agent's frontmatter.
-const AGENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "agents");
+const AGENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "agents");
 
 export function frontmatterEffort(type, dir = AGENTS_DIR) {
   const m = /^ai-kit:([\w-]+)$/.exec(type ?? "");

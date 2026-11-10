@@ -3,7 +3,7 @@
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectSession, loadCache, mergeCommits, frontmatterEffort, roleOf, saveCache, toolKey, transcriptsDir } from "./usage-collect.mjs";
+import { collectSession, loadCache, mergeCommits, frontmatterEffort, roleOf, saveCache, toolKey, transcriptsDir } from "./lib/usage-collect.mjs";
 
 let passed = 0;
 let failed = 0;
@@ -203,6 +203,7 @@ eq("commits: no git log output keeps the transcript ones", mergeCommits([{ ts: "
 eq("roleOf: decider by type, by description, before reviewer",
   [roleOf("x", "ai-kit:decider"), roleOf("Decide owner questions", ""), roleOf("decider: review options", ""), roleOf("Undecided review", "")],
   ["decider", "decider", "decider", "reviewer"]);
+eq("frontmatterEffort: default agents dir resolves to the plugin agents/", frontmatterEffort("ai-kit:decider") !== "" && /^effort:/m.test(readFileSync(join(import.meta.dirname, "..", "agents", "decider.md"), "utf8")), true);
 eq("frontmatterEffort: ai-kit agent reads its effort line", [frontmatterEffort("ai-kit:decider"), frontmatterEffort("general-purpose"), frontmatterEffort("ai-kit:nope")], ["medium", "", ""]);
 {
   const d2 = mkdtempSync(join(tmpdir(), "usage-effort-"));

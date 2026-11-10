@@ -94,15 +94,16 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index; warnings only |
 | `scripts/usage.mjs` | `record`, `end`, `flush`, `digest`: token records |
-| `scripts/usage-collect.mjs` | reads session transcripts into per-agent token totals |
-| `scripts/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
+| `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
+| `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
 | `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
 | `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders; twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
-| `scripts/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
+| `scripts/lib/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
+| `scripts/lib/` | note: modules with no CLI; every CLI entry point stays in `scripts/` (commands, hooks and project copies name those paths) |
 | `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
 | `scripts/*.test.mjs` | fixture tests, one per module (`handoffs.test.mjs` checks `docs/handoffs.md` against prompts, `spec.test.mjs` this file) |
 
@@ -160,7 +161,7 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `ai/kit/conventions/`, `checks/`, `check.sh`, `review-prompt.md`, `requires.txt` | `kit.mjs sync` (also run by `init` and `unattended`), only with `unattended: true` | runs without the plugin |
 | `<git-common-dir>/ai-kit-root` | `init`, `session-start.sh` | the shims, to find the plugin |
 | `<git-common-dir>/claude-usage/<session>.jsonl` | `usage.mjs record` | `usage.mjs end`, `flush` |
-| `<git-dir>/claude-usage/<session>.json` | `usage.mjs record` (through `usage-collect.mjs`) | `usage.mjs` (transcript read cache) |
+| `<git-dir>/claude-usage/<session>.json` | `usage.mjs record` (through `scripts/lib/usage-collect.mjs`) | `usage.mjs` (transcript read cache) |
 | `<git-common-dir>/claude-usage/<session>.flushed`, lock files | `usage.mjs` | `usage.mjs` (flush marker, locks) |
 | `<git-common-dir>/claude-decider/<session>.json` | `decider.mjs guard` | `decider.mjs guard` (which OWNER verdicts an ask already used) |
 | `<git-dir>/claude-review/<session>` | `review-snapshot.sh`, `session-start.sh` (the review snapshot tree) | `review-before-stop.sh` |
@@ -222,11 +223,11 @@ Each step names the file that does it.
 
 ### P5 Usage records
 
-1. `kit-log.sh stop` runs `usage.mjs record`: it reads the session transcripts (`usage-collect.mjs`) and appends the
-   round's tokens to the buffer in the git common dir.
+1. `kit-log.sh stop` runs `usage.mjs record`: it reads the session transcripts
+   (`scripts/lib/usage-collect.mjs`) and appends the round's tokens to the buffer in the git common dir.
 2. `kit-log.sh session-end` runs `usage.mjs end`: records the rest, writes new files under `ai/usage/`. A crashed
    session's buffer is written by `usage.mjs flush --idle` from `session-start.sh`. The next commit stages them.
-3. `usage.mjs digest` (`usage-digest.mjs`) reads them; `/ai-kit:usage` names the largest driver.
+3. `usage.mjs digest` (`scripts/lib/usage-digest.mjs`) reads them; `/ai-kit:usage` names the largest driver.
 
 ### P6 Decisions
 

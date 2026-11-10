@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, rmdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { isMain } from "./is-main.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import {
   PLUGIN,
   allWarnings,

@@ -9,7 +9,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { isMain } from "./is-main.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import { deciderDir } from "./lib/state-dirs.mjs";
 
 const FIELDS = ["verdict", "kind", "question", "choice", "reason", "confidence", "undo", "sources"];

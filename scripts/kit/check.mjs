@@ -7,7 +7,7 @@ import {
 } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { planWarnings } from "../plan.mjs";
-import { transcriptsDir } from "../usage-collect.mjs";
+import { transcriptsDir } from "../lib/usage-collect.mjs";
 import { IMPORT, MSG_SHIM, OLD_SHIM, PLUGIN, SHIM, at, claudeDir, isImportLine, isKitHook, isObj, isShim, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, shimPath, tryGit, tryGitIn } from "./shared.mjs";
 import { snapshotWarnings } from "./sync.mjs";
 

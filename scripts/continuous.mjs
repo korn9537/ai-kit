@@ -4,7 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { isMain } from "./is-main.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import { JOB, checkBatch, readRepo } from "./plan.mjs";
 
 export const MAX_TRIES = 6;

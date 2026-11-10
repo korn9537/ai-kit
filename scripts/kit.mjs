@@ -1,6 +1,6 @@
 // Wires the ai-kit plugin into a project, cwd in the project: node <plugin>/scripts/kit.mjs <command>
 // Commands: README.md §Commands; migrate is in kit-migrate.mjs; `unattended`: docs/ai-layout.md §Runs without the plugin.
-import { isMain } from "./is-main.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import { allWarnings } from "./kit/check.mjs";
 import { init, initFiles } from "./kit/init.mjs";
 import { inventory } from "./kit/inventory.mjs";

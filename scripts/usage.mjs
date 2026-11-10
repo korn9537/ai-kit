@@ -10,10 +10,10 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renam
 import { hostname } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isMain } from "./is-main.mjs";
+import { isMain } from "./lib/is-main.mjs";
 import { usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
-import { collectSession, loadCache, mergeCommits, saveCache } from "./usage-collect.mjs";
-import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./usage-digest.mjs";
+import { collectSession, loadCache, mergeCommits, saveCache } from "./lib/usage-collect.mjs";
+import { DEFAULT_PRICES, baselineRecords, buildRecord, digest, loadRecords, summaryLine } from "./lib/usage-digest.mjs";
 
 const IDLE_MS = 6 * 3600 * 1000;
 

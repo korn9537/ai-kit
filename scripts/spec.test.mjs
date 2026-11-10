@@ -19,7 +19,8 @@ function ok(desc, cond) {
 }
 
 const isTest = (f) => /\.test\.(sh|mjs)$/.test(f);
-const named = (path) => spec.includes(path) || spec.includes(`\`${path.split("/").pop()}\``);
+// a file in a sub-folder (scripts/lib, scripts/kit) must be named by its full path, not its basename
+const named = (path) => spec.includes(path) || (!/^scripts\/(kit|lib)\//.test(path) && spec.includes(`\`${path.split("/").pop()}\``));
 // folders named as a whole; their files are not listed one by one
 const byFolder = new Set(["docs/superpowers"]);
 

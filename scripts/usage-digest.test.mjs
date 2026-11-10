@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   baselineRecords, buildRecord, dec, digest, enc, loadRecords, modelShort, sameCommit, summaryLine, uniqueCommits, validRecord, weight,
-} from "./usage-digest.mjs";
+} from "./lib/usage-digest.mjs";
 
 let passed = 0;
 let failed = 0;
