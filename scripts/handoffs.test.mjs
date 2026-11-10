@@ -33,7 +33,8 @@ async function run(reviews, commits = {}) {
     { plugin: "/p", job: "2026-11-08-x", request: "REQUEST", batches },
     async (prompt, o) => {
       seen.push({ label: o.label, prompt });
-      if (/^review/.test(o.label)) return /\[a/.test(o.label) ? review(reviews[n++] ?? []) : review([]);
+      if (o.label === "review: plan") return review([]);
+      if (/^review/.test(o.label)) return review(reviews[n++] ?? []);
       if (/ fix\]/.test(o.label)) return commit(`f${++f}`, commits.fix);
       return /\[a\]/.test(o.label) ? commit("c1", commits.a) : commit("c2");
     },
@@ -45,26 +46,28 @@ const role = (seen, re) => seen.filter((s) => re.test(s.label)).map((s) => s.pro
 const all = (ps, ...res) => ps.length > 0 && ps.every((p) => res.every((r) => r.test(p)));
 const DONE = /Done when:\n- CHECK-A/;
 const SHOW = (h) => new RegExp(`git show ${h} -- \\. ':\\(exclude\\)ai/usage'`);
+const DIFF = (a, b) => new RegExp(`git diff ${a}\\^\\.\\.${b} -- ':\\(literal\\)a' ':\\(exclude\\)ai/usage'`);
+const ONLY_JOB = /Only this job's commits are in scope \(`git log --format=%h --grep '\^Job: 2026-11-08-x\$'/;
 
 let { seen } = await run([[finding("bug", true)], [finding("narrow", false)], []]);
 const commitA = role(seen, /^commit: \[a\]/);
 ok("committer: brief, Done when, verify, Job, Batch, later batches",
   all(commitA, /BRIEF-A/, DONE, /Verify: make test/, /Job: 2026-11-08-x/, /Batch: a/, /Later batches[\s\S]*- b: feat\(x\): z/));
-const firstReview = role(seen, /^review: \[a\]/);
-ok("first reviewer: request, batch, also in scope, Done when, the excluded show",
-  all(firstReview, /REQUEST/, /batch a: feat\(x\): y/, /also in scope: SCOPE-A/, DONE, SHOW("c1")));
-const fixes = role(seen, /^commit: \[a fix\]/);
-ok("fix committer: findings, brief, Done when, later batches, Job, no Batch trailer",
-  fixes.length === 2 && all(fixes, /a\.ts:1/, /BRIEF-A/, DONE, /- b: feat\(x\): z/, /Job: 2026-11-08-x/) && fixes.every((p) => !/Batch: a/.test(p)));
+const firstReview = role(seen, /^review: \[job\]/);
+ok("job reviewer: one, request, every batch, also in scope, Done when, the excluded range",
+  firstReview.length === 1 && all(firstReview, /REQUEST/, /a: feat\(x\): y; b: feat\(x\): z/, /also in scope: SCOPE-A/, DONE, DIFF("c1", "c2"), ONLY_JOB));
+const fixes = role(seen, /^commit: \[job fix\]/);
+ok("fix committer: findings, brief, Done when, Job, no Batch trailer",
+  fixes.length === 2 && all(fixes, /a\.ts:1/, /BRIEF-A/, DONE, /Job: 2026-11-08-x/) && fixes.every((p) => !/Batch: /.test(p)));
 ok("fix committer: reads only the rule a finding names, and verifies", all(fixes, /read only the rule a finding names/, /Verify: make test/));
-const rechecks = role(seen, /^review: \[a recheck\]/);
-ok("fresh re-check: request, scope, Done when, both commits", /REQUEST/.test(rechecks[0]) && /also in scope: SCOPE-A/.test(rechecks[0]) && DONE.test(rechecks[0]) && /git show c1 f1/.test(rechecks[0]));
+const rechecks = role(seen, /^review: \[job recheck\]/);
+ok("fresh re-check: request, scope, Done when, the whole range", /REQUEST/.test(rechecks[0]) && /also in scope: SCOPE-A/.test(rechecks[0]) && DONE.test(rechecks[0]) && DIFF("c1", "f1").test(rechecks[0]));
 ok("narrow re-check: the fix commit, the findings, Done when", /Re-check of a fix/.test(rechecks[1]) && SHOW("f2").test(rechecks[1]) && /narrow/.test(rechecks[1]) && DONE.test(rechecks[1]));
 
 ({ seen } = await run([[finding("bug")], [finding("data", true)], []]));
-const second = role(seen, /^review: \[a recheck\]/)[1];
-ok("second-round fresh re-check: request, scope, Done when, all three commits",
-  /REQUEST/.test(second) && /also in scope: SCOPE-A/.test(second) && DONE.test(second) && /git show c1 f1 f2/.test(second));
+const second = role(seen, /^review: \[job recheck\]/)[1];
+ok("second-round fresh re-check: request, scope, Done when, the whole range",
+  /REQUEST/.test(second) && /also in scope: SCOPE-A/.test(second) && DONE.test(second) && DIFF("c1", "f2").test(second));
 
 let { res } = await run([[]], { a: { unmet: ["CHECK-A not met"] } });
 ok("committer unmet: batch partial, the batch that waits on it skipped",
@@ -74,9 +77,9 @@ for (const k of ["owner", "blockers"]) {
   ok(`committer ${k}: batch partial, the batch that waits on it skipped`, res.batches[0].status === "partial" && res.batches[1].status === "skipped");
 }
 ({ res } = await run([[finding("bug")], []], { fix: { unmet: ["CHECK-A broken by the fix"] } }));
-ok("fix committer unmet: batch partial", res.batches[0].status === "partial" && res.batches[0].unmet.includes("CHECK-A broken by the fix"));
+ok("fix committer unmet: the job review partial", res.review.status === "partial" && res.review.unmet.includes("CHECK-A broken by the fix"));
 ({ res } = await run([[finding("bug")]], { fix: { hash: "" } }));
-ok("a fix that made no commit keeps its findings in confirmed", res.batches[0].review === "CONFIRMED findings left unfixed" && res.batches[0].confirmed.length === 1);
+ok("a fix that made no commit keeps its findings in confirmed", res.review.review === "CONFIRMED findings left unfixed" && res.review.confirmed.length === 1);
 
 const pr = seen.find((x) => x.label === "review: plan")?.prompt ?? "";
 ok("plan reviewer: request, per batch brief, Done when, risks, tests, also in scope, waits for",
@@ -95,8 +98,8 @@ const okPlan = { findings: [{ batches: ["a"], kind: "claim", what: "CLAIM-X", fi
   ok("plan findings reach each batch they name; one naming no batch reaches all", /CLAIM-X/.test(ca) && !/CLAIM-X/.test(cb) && /BOTH/.test(ca) && /BOTH/.test(cb) && /LOST/.test(ca) && /LOST/.test(cb));
   ok("the committer is told to report an unmet CONFIRMED finding in unmet", /goes in `unmet`/.test(ca));
   ok("first reviewer and re-checks get the tests and CONFIRMED findings owed",
-    all(role(seen2, /^review: \[a/), /Also owed by this batch/, /test: TEST-A/, /plan review: CLAIM-X/));
-  ok("fix committer gets risks, tests and the plan findings", all(role(seen2, /^commit: \[a fix\]/), /- RISK-A/, /- TEST-A/, /CLAIM-X/));
+    all(role(seen2, /^review: \[job/), /Also owed by this batch/, /test: TEST-A/, /plan review: CLAIM-X/));
+  ok("fix committer gets risks, tests and the plan findings", all(role(seen2, /^commit: \[job fix\]/), /- RISK-A/, /- TEST-A/, /CLAIM-X/));
 }
 ok("committer: the plan's risks and tests", all(commitA, /- RISK-A/, /- TEST-A/));
 ok("plan-batching names the plan review: risks, tests, claims, findings into the briefs",
@@ -119,24 +122,30 @@ const brief = para(pb, "- The brief (", "- It returns only");
 ok("coordinator committer brief: batch, Done when, verify, job, Batch trailer, later batches, path:start-end",
   has(brief, /what to change/, /Done when/, /`risks` and `tests`/, /plan\s+review's findings/, /verify commands/, /job id/, /`Batch: <id>`/, /later batches/, /path:start-end/));
 const rev = para(pb, "Reviewer brief:", "- CONFIRMED fixes");
-ok("coordinator first reviewer: request, batch id and title, excluded show, Done when, also in scope",
-  has(rev, /request/, /batch id and title/, /:\(exclude\)ai\/usage'`/, /Done when/, /also in scope/));
+ok("coordinator job reviewer: request, batch ids and titles, excluded range, Done when, also in scope",
+  has(rev, /request/, /batches' ids and titles/, /:\(exclude\)ai\/usage'`/, /Done when/, /also in scope/));
 const fixes2 = para(pb, "- CONFIRMED fixes", "- The coordinator reads");
 ok("coordinator fix: by SendMessage to the batch's committer, which holds the brief", has(fixes2, /SendMessage \(it holds the context/));
 ok("coordinator narrow re-check: same reviewer, fix commit, findings, Done when",
-  has(fixes2, /same reviewer \(SendMessage\)/, /fix commit only, with the findings and the batch's Done when checks/));
+  has(fixes2, /same\s+reviewer \(SendMessage\)/, /fix commit only, with the findings and the Done\s+when checks/));
 ok("coordinator fresh re-check: both commits, request, also in scope, Done when, findings",
-  has(fixes2, /both commits whole with the first review's brief \(request, `also in scope`,\s+Done when\) and its findings/));
-ok("fresh fix committer: findings, brief, Done when, later batches", has(fixes2, /fresh fix committer gets the findings, the batch's brief, Done when and the later\s+batches/));
+  has(fixes2, /the whole job range\s+again with the first review's brief \(request, `also in scope`, Done when\) and its findings/));
+ok("fresh fix committer: findings, every brief, Done when, no later batches", has(fixes2, /fresh fix committer\s+gets the findings, every batch's brief and Done when \(no later batches/));
 const stop = para(read("hooks/review-before-stop.sh"), "Brief:", "Fix every CONFIRMED");
-ok("Stop-hook reviewer: request, Done when, the excluded diff or show", has(stop, /the user's request in their\s+words/, /Done when checks/, /git diff -- \. ':\(exclude\)ai\/usage'/));
+ok("Stop-hook reviewer: request, Done when, the job's commits, its range by file, uncommitted diff",
+  has(stop, /the user's request in their\s+words/, /Done when checks/, /--grep '\^Job: <id>\$'/, /git diff <first>\^\.\.HEAD -- <files> ':\(exclude\)ai\/usage'/, /not in scope/, /git diff -- <files>/));
+// per-commit review is gone: no route still names a single commit's show as the review read, or one review per commit
+const routes = ["CLAUDE.core.md", "agents/change-reviewer.md", "commands/run-plan.md", "commands/continuous.md", "docs/plan-batching.md",
+  "docs/handoffs.md", "docs/spec.md", "hooks/review-before-stop.sh", "workflows/run-plan.js", "README.md"];
+const left = routes.filter((p) => /git show <hash> -- \.|reviewer per commit|one per commit,|review per commit|its review is clean/.test(read(p).replace(/not one per\s+commit/g, "")));
+ok(`no per-commit review wording left: ${left.join(", ") || "none"}`, !left.length);
 const rp = read("commands/run-plan.md");
 const resume = rp.slice(rp.indexOf("4. `committed`"), rp.indexOf("5. `heldBy`"));
 ok("resume reviewer: request, also in scope, accept as Done when, the excluded show",
   /request/.test(resume) && /alsoInScope/.test(resume) && /`accept` as `Done when`/.test(resume) && /:\(exclude\)ai\/usage'/.test(resume));
 ok("report routes choices, notes, unmet, PLAUSIBLE, reasons and a failed fix's confirmed",
-  /Done: follow-ups among the `notes`/.test(rp) && /verify results among the `notes`/.test(rp) &&
-  /`blocked` or `skipped` batch with its\s+`reason`/.test(rp) && /Decided: each `choices` item/.test(rp) && /`unmet` item/.test(rp) && /each PLAUSIBLE finding with/.test(rp) && /`confirmed` where `review` is `CONFIRMED findings left unfixed`/.test(rp));
+  /Done: follow-ups among the `notes`/.test(rp) && /verify\s+results among the `notes`/.test(rp) &&
+  /`blocked` or `skipped` batch with its\s+`reason`/.test(rp) && /Decided: each `choices` item/.test(rp) && /`unmet` item/.test(rp) && /each PLAUSIBLE finding with/.test(rp) && /its `confirmed` where its `review` is `CONFIRMED findings left unfixed`/.test(rp));
 ok("one way on after an owner answers", !/run this command again/.test(rp));
 const cm = read("agents/committer.md");
 ok("committer: the schema's unmet field, and the fix brief's narrow reads", /`unmet`/.test(cm) && /A fix brief \(review findings\) skips these reads/.test(cm));

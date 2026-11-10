@@ -37,7 +37,7 @@ The reviewer reads the plan and the code the batches touch, and reports per batc
 In the workflow its findings go into the brief of the batch they name (a CONFIRMED one is part of the batch, a
 PLAUSIBLE one is judged and reported in `choices`) and into the result's `planReview`; the run does not stop for them.
 A finding names every batch it concerns (a conflict names two); one naming none goes to every batch. The committer
-reports a CONFIRMED finding it did not meet in `unmet`, and the commit's reviewer and re-checks check it and the batch's
+reports a CONFIRMED finding it did not meet in `unmet`, and the job's reviewer and re-checks check it and the batch's
 `tests` like Done when. A plan of one batch gets no review. A resume or a continuous retry reviews only the batches
 left, again: the findings of an earlier run live in its result (`/ai-kit:continuous` keeps each run's in its state),
 not in the plan file.
@@ -112,24 +112,24 @@ left to run.
   the main session to ask.
 - One commit subagent edits the repo at a time. The main session keeps talking with the user but does not edit the
   repo while one runs.
-- When it returns, send in one message: that commit's background reviewer and, unless the next batch waits on this
-  one, the next batch's commit subagent. A commit that changes no code line (only moved blocks, comments, docs or
-  `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for it, as the run-plan
-  workflow calls it). Reviewer brief: the user's request in their words, the batch id and title, the batch's `tests`
-  and CONFIRMED plan
-  review findings as items it owes beyond Done when, read
-  `git show <hash> -- . ':(exclude)ai/usage'`, not the work tree; pass the batch's Done when checks; name each item
-  the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
-- CONFIRMED fixes for a reviewed commit go back to that commit's subagent by SendMessage (it holds the context;
+- When it returns, launch the next batch's commit subagent; review waits for the job's last commit. One background
+  reviewer reads the whole job, not one per commit. A job whose commits change no code line (only moved blocks,
+  comments, docs or `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for such a commit,
+  as the run-plan workflow calls it). Reviewer brief: the user's request in their words, the batches' ids and titles,
+  the batches' `tests` and CONFIRMED plan review findings as items it owes beyond Done when, read
+  `git diff <first commit>^..<last commit> -- <the job's files> ':(exclude)ai/usage'`, not the work tree, only the
+  hunks of this job's commits (another session may commit in between); pass every batch's Done when
+  checks; name each item the main session added beyond the user's request, `also in scope: <item> (coordinator)`.
+- CONFIRMED fixes go back to the subagent of the commit they concern by SendMessage (it holds the context;
   summary `commit: fix <batch>`; "review" appears nowhere in the summary, <batch> included) once no commit subagent
   runs, then the one re-check. The workflow cannot message an agent again: a fresh committer gets the commit and
-  its findings and makes a fix commit (`feat(x): y` → `fix(x): y`, `T-12a: y` → `T-12a: fix y`, an untyped
-  title → `fix: <batch>`). The re-check, by the same reviewer (SendMessage) or a fresh one in the workflow, reads the
-  fix commit only, with the findings and the batch's Done when checks; when a finding was about data or rule
-  correctness, a fresh reviewer reviews both commits whole with the first review's brief (request, `also in scope`,
-  Done when) and its findings. A fresh fix committer gets the findings, the batch's brief, Done when and the later
-  batches. In the workflow, CONFIRMED findings that re-check leaves get one more
-  fix and re-check, unless an owner decision is open; what is left then goes under Open.
+  its findings and makes one fix commit for the job, `fix: review findings of <job>`. The re-check, by the same
+  reviewer (SendMessage) or a fresh one in the workflow, reads the fix commit only, with the findings and the Done
+  when checks; when a finding was about data or rule correctness, a fresh reviewer reviews the whole job range
+  again with the first review's brief (request, `also in scope`, Done when) and its findings. A fresh fix committer
+  gets the findings, every batch's brief and Done when (no later batches: the plan is committed). In the workflow,
+  CONFIRMED findings that re-check leaves get one more fix and re-check, unless an owner decision is open; what is
+  left then goes under Open.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.

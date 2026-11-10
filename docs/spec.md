@@ -110,7 +110,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `workflows/run-plan.js` | Workflow script: plan review, a committer per batch, a reviewer per commit with a code line, CONFIRMED fixes, a re-check, one more round |
+| `workflows/run-plan.js` | Workflow script: plan review, a committer per batch, one reviewer for the whole job, CONFIRMED fixes, a re-check, one more round |
 
 ### docs/ (read by agents on demand)
 
@@ -208,10 +208,12 @@ Each step names the file that does it.
 2. Two batches or more: `/ai-kit:run-plan` runs `workflows/run-plan.js`. One batch, or no Workflow tool: the main
    session coordinates by the same rules. `/ai-kit:continuous` runs the same at any size for a user who leaves.
 3. Per batch: a `committer` implements, verifies once and commits with the `Job:` and `Batch:` trailers;
-   `review-needed.sh` says whether the commit has a code line; a fresh `change-reviewer` reviews it.
+   `review-needed.sh` says whether the commit has a code line. After the last commit one fresh `change-reviewer`
+   reviews the whole job (the files its commits touched, first commit's parent to the last), none when no commit
+   has a code line.
 4. CONFIRMED findings go to a fix committer, then a narrow re-check; the workflow does one more round for what is left.
 5. A batch counts as committed by its `Batch:` trailer (`plan.mjs status`, `resume`). The main session writes the
-   one report from the batch reports (`docs/handoffs.md` §Back).
+   one report from the batch reports and the job review (`docs/handoffs.md` §Back).
 
 ### P4 Commit
 

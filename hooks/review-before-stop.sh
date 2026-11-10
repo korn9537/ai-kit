@@ -214,13 +214,16 @@ if [[ "$state" == none && -n "$changed" && "$changed" != *"(git diff failed)"* &
   exit 0
 fi
 
-launch="launch a fresh Agent with subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one per commit,
-never an earlier commit's reviewer (opus, medium effort from its
+launch="launch a fresh Agent with subagent_type \"ai-kit:change-reviewer\", run_in_background: true, one for the whole job, launched once when the job's last
+commit is made (a stop before it, the job going on in a later turn: review what is there so far, and a later stop
+reviews only what came after), never an earlier review's reviewer (opus, medium effort from its
 frontmatter; pass no model or effort). Agent type not loaded (plugin
 enabled mid-session): general-purpose with model \"opus\", effort \"medium\", description containing \"review\", told to follow
 $kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
-words, the summary's Done when checks if one was shown, the changed files and their \`git diff -- . ':(exclude)ai/usage'\` (or this session's commits, read with
-\`git show <hash> -- . ':(exclude)ai/usage'\`). Fix every CONFIRMED finding, judge each
+words, the summary's Done when checks if one was shown, the job's commits (\`git log --format=%h --grep '^Job: <id>$'\`), the files listed below and their
+\`git diff <first>^..HEAD -- <files> ':(exclude)ai/usage'\` (first = the job's first commit; other sessions share
+the checkout, so a hunk no commit of this job made is not in scope) and \`git diff -- <files>\` for what is not
+committed yet. Fix every CONFIRMED finding, judge each
 PLAUSIBLE one. Until it reports, end the turn with one line saying the review is running; the final report comes
 after. Report the review under \"Checked\"."
 case "$state" in

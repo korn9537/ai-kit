@@ -1,4 +1,4 @@
-// Runs workflows/run-plan.js with a fake agent(): how many fix rounds a batch gets, and how it ends.
+// Runs workflows/run-plan.js with a fake agent(): one review for the whole job, how many fix rounds it gets, how it ends.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -68,45 +68,65 @@ const fixes = (s) => s.log.filter((l) => /fix$/.test(l)).length;
 }
 
 let s = script([[]]);
-let r = (await run(one, s)).batches[0];
+let r = (await run(one, s)).review;
 ok("a clean review: committed, no fix", r.status === "committed" && fixes(s) === 0);
 
 s = script([[finding("bug")], []]);
-r = (await run(one, s)).batches[0];
+r = (await run(one, s)).review;
 ok("a fix the re-check accepts: one fix", r.status === "committed" && fixes(s) === 1 && !r.fix2);
 
 s = script([[finding("bug")], [finding("x", false, "PLAUSIBLE")]]);
-r = (await run(one, s)).batches[0];
+r = (await run(one, s)).review;
 ok("only a PLAUSIBLE left: no second fix", fixes(s) === 1);
 
 s = script([[finding("bug", true)], [finding("new bug")], []]);
-r = (await run(one, s)).batches[0];
+r = (await run(one, s)).review;
 ok("a finding the re-check leaves: a second fix, clean", r.status === "committed" && fixes(s) === 2 && r.fix2?.hash === "f2");
 ok("the batch ends with no blocker and no third-pass wording", r.blockers.length === 0 && !/no third pass/.test(r.review));
 
 s = script([[finding("bug")], [finding("b2")], [finding("b3")]]);
-r = (await run(one, s)).batches[0];
+r = (await run(one, s)).review;
 ok("still left after the second fix: partial, no third fix", r.status === "partial" && fixes(s) === 2 && /1 CONFIRMED/.test(r.review));
 ok("it says no third pass nowhere", !/no third pass/.test(r.review) && r.blockers.length === 1);
 
 s = script([[finding("bug")], [finding("b2")]], (n) => (n === 1 ? commit("f1") : { ...commit(""), notes: ["stuck"] }));
-r = (await run(one, s)).batches[0];
+r = (await run(one, s)).review;
 ok("a second fix that fails: partial, findings left", r.status === "partial" && /CONFIRMED finding/.test(r.review) && !r.fix2);
 ok("a failed second fix keeps its reason", r.notes.includes("stuck"));
 
 s = script([[finding("bug")], [finding("b2")]], (n) => (n === 1 ? commit("f1") : { ...commit("f2"), owner: ["price?"] }));
 const lost = (label) => (/recheck/.test(label) && fixes(s) === 2 ? null : s(label));
-r = (await run(one, lost)).batches[0];
+r = (await run(one, lost)).review;
 ok("a second re-check that fails keeps the fix's owner decision", r.status === "partial" && r.owner.includes("price?") && /not re-checked/.test(r.review));
 
 s = script([[finding("bug")], [finding("b2", true)], []]);
 const prompts = [];
-r = (await run(one, (l, p) => (prompts.push(p), s(l)))).batches[0];
-ok("a data finding left: the last re-check reads all three commits", /git show c1 f1 f2/.test(prompts.at(-1)));
+r = (await run(one, (l, p) => (prompts.push(p), s(l)))).review;
+ok("a data finding left: the last re-check reads all three commits", /git diff c1\^\.\.f2/.test(prompts.at(-1)));
 
 s = script([[finding("bug")], [finding("b2")]], (n) => commit(`f${n}`), { ...commit("c1"), owner: ["pick a price"] });
-r = (await run(one, s)).batches[0];
-ok("an owner decision open: no second fix", r.status === "partial" && fixes(s) === 1);
+const held = await run(one, s);
+ok("an owner decision open on a batch: no second fix", held.batches[0].status === "partial" && fixes(s) === 1);
+
+// one review for the whole job, however many batches: after the last commit, over the first commit's parent to the last
+{
+  const labels = [];
+  const prompts = [];
+  let h = 0;
+  const res = await run(two, (label, prompt) => {
+    labels.push(label);
+    prompts.push(prompt);
+    if (/^review: plan/.test(label)) return review([]);
+    if (/^review/.test(label)) return review([]);
+    return commit(`c${++h}`);
+  });
+  const reviewers = labels.filter((l) => /^review/.test(l) && l !== "review: plan");
+  ok("two batches: one review, after both commits", reviewers.length === 1 && labels.indexOf(reviewers[0]) > labels.lastIndexOf("commit: [b] feat(x): z"));
+  ok("the review reads the whole range", /git diff c1\^\.\.c2 /.test(prompts.at(-1)) && /a: feat\(x\): y; b: feat\(x\): z/.test(prompts.at(-1)));
+  ok("the result holds the job review apart from the batches", res.review.status === "committed" && res.batches.every((b) => b.review === undefined));
+  const mover = await run(one, (l) => (/^review/.test(l) ? review([]) : { ...commit("c1"), review: "skip" }));
+  ok("every commit skippable: no review", /skipped/.test(mover.review.review));
+}
 
 const seen = [];
 s = script([[]]);

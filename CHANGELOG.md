@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.43.0
+
+Review is once per job (issue #51): the Stop hook asks for one fresh `ai-kit:change-reviewer` over the whole job's
+range (`git diff <base>..HEAD`), launched when the job's last commit is made, not one per commit. The BA's Done when
+checks give the reviewer the intended result, so one end-of-job review costs less wall time than several overlapping
+ones. The run-plan workflow does the same: it commits every batch, then one reviewer reads
+`git diff <first commit>^..HEAD` of the job, with one fix and re-check round as before and one more for what is left;
+the result holds it as `review`, no longer per batch. `/ai-kit:continuous` keeps each run's as `reviews`; a retry run
+reviews the commits it made, and a commit no agent reported is listed as not reviewed. The range is limited to the
+files the job's commits touched and to their hunks, since other sessions commit to the same checkout. A batch id
+`job` is refused (it names the job review). No config, no project edit.
+
 ## 2.42.0
 
 `CLAUDE.core.md` gains **Read, do not guess**: a fact the code, docs or git history can settle is checked and cited

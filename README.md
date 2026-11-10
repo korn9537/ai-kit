@@ -33,7 +33,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
 | `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
-| `workflows/run-plan.js`       | Workflow script: a committer per batch, a reviewer per commit with a code line, fixes, one re-check, a second fix for what it leaves; `scripts/run-plan.test.mjs` |
+| `workflows/run-plan.js`       | Workflow script: a committer per batch, one reviewer for the whole job, fixes, one re-check, a second fix for what it leaves; `scripts/run-plan.test.mjs` |
 | `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
 | `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`); test `scripts/state-dirs.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
@@ -150,6 +150,8 @@ the plugin read from the repo: `docs/ai-layout.md` §Runs without the plugin. `s
 plugin's `docs/shared-checkout.md`. `review.skip_lines` defaults to 10 changed lines, + and − counted apart (0 reviews
 every change); `review.always` (a JS-style regex) to migration, schema, auth, permission and policy paths and
 `.sql`/`.prisma`. The skip applies only before the first review: a fix after a review always goes to its re-check.
+The Stop hook asks for one reviewer over the whole job's range (`git diff <base>..HEAD`), launched once at the
+job's last commit, not one per commit.
 
 `usage.enabled` (default `true`) turns the token records off with `false`; `usage.money` (default `true`)
 set to `false` (a subscription, where dollars are not billed) shows the round and session summary in

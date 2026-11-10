@@ -84,7 +84,8 @@ export function next(state, run, repo, now = Date.now()) {
       return { state: s, step: { action: "running" } };
     }
     for (const r of run.result.batches) s.batches[r.id] = r;
-    // each run reviews the batches it has left: the report reads every run's findings
+    // each run reviews the job's commits it made once: the report reads every run's review beside the plan reviews
+    if (run.result.review) (s.reviews ||= []).push(run.result.review);
     if (run.result.planReview !== undefined) (s.planReviews ||= []).push(run.result.planReview);
     s.running = false;
     s.lastEnd = now;
@@ -100,7 +101,8 @@ export function next(state, run, repo, now = Date.now()) {
   const done = (id) => s.batches[id]?.status === "committed";
   const retry = [];
   const again = new Set();
-  const known = Object.values(s.batches).flatMap((r) => [r.hash, r.fix?.hash, r.fix2?.hash]).filter(Boolean);
+  // fix commits: the job review's (2.43.0 on), or a batch's in a state an older kit wrote
+  const known = [...Object.values(s.batches), ...(s.reviews || [])].flatMap((r) => [r.hash, r.fix?.hash, r.fix2?.hash]).filter(Boolean);
   // a resumed job holds the fix commits of its lost run: none of them is this run's lost batch
   const loose = repo.loose
     .filter((h) => !(s.baseLoose || []).some((k) => k.startsWith(h) || h.startsWith(k)))

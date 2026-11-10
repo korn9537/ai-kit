@@ -53,7 +53,7 @@ sed -i.bak '1,2s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "pass: 2 changed lines, no review" pass - "$(edit src/a.ts)"
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "block: 20 changed lines, no review yet" block "no review yet" "$(edit src/a.ts)"
-run_case "block: the brief reads the diff and the commits without the token records" block "-- . ':(exclude)ai/usage'" "$(edit src/a.ts)"
+run_case "block: the brief reads the diff and the commits without the token records" block "<files> ':(exclude)ai/usage'" "$(edit src/a.ts)"
 run_case "block: an Explore agent named review is not a review" block "no review yet" \
   "$(edit src/a.ts)" "$(line Agent '{"subagent_type": "Explore", "description": "review folders"}')"
 run_case "pass: change-reviewer after the edit" pass - \
@@ -388,6 +388,12 @@ reset
 mkdir -p "$REPO/.git/claude-review" && echo 0123456789abcdef0123456789abcdef01234567 >"$REPO/.git/claude-review/s1"
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "block: a snapshot tree gc has pruned" block "no review yet" "$(edit src/a.ts)"
+reset
+
+# one reviewer for the whole job, over its range
+sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
+run_case "block: the brief asks one reviewer for the whole job" block "one for the whole job" "$(edit src/a.ts)"
+run_case "block: the brief reads the job's range" block "<first>^..HEAD" "$(edit src/a.ts)"
 reset
 
 # regex characters in the repo path

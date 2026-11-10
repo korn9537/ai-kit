@@ -49,6 +49,16 @@ ok("init clears the abandoned mark", !init({ job: "2026-11-05-x", plugin: "p", b
 const resumed = started(next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }, undefined, [], ["fix1"]), none, clean, 0).state, "dir", "t", T);
 const retried = next(resumed, finished(failedAgent("a")), { ...clean, loose: ["fix1"] }, T + RETRY_GAP);
 ok("a fix commit from before the resume stops no retry", retried.step.action === "wait" && retried.step.open.join() === "a", retried);
+// the job review: kept per run, and its fix commits are this job's own, not a lost batch's
+{
+  const one = () => started(next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, clean, 0).state, "dir", "t", T);
+  const withReview = { status: "completed", idle: 0, result: { batches: [failedAgent("a")], review: { id: "job", fix: { hash: "jf1" }, fix2: { hash: "jf2" } } } };
+  const kept = next(one(), withReview, { ...clean, loose: ["jf1", "jf2"] }, T + RETRY_GAP);
+  ok("a run's job review is kept in the state for the report", kept.state.reviews?.length === 1 && kept.state.reviews[0].fix.hash === "jf1", kept);
+  ok("the job review's fix commits are not loose: the failed batch is retried", kept.step.action === "wait" && kept.step.open.join() === "a", kept);
+  const lostRun = next(one(), finished(failedAgent("a")), { ...clean, commits: new Map([["a", "c9"]]) }, T + RETRY_GAP);
+  ok("a commit no agent reported is marked not reviewed", /not reviewed/.test(lostRun.state.batches.a.review) && lostRun.state.batches.a.hash === "c9", lostRun);
+}
 const sibling = next(started(next(init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }), none, clean, 0).state, "dir", "t", T), finished(failedAgent("a")), { ...clean, loose: ["new1"] }, T + RETRY_GAP);
 ok("a new commit with no batch still stops the retry", sibling.step.action === "done", sibling);
 

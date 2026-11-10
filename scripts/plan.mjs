@@ -98,6 +98,8 @@ export function ordered(batches) {
 // the fields of one batch that run-plan.js reads; continuous.mjs init checks args with it too
 export function checkBatch(b) {
   if (typeof b?.id !== "string" || !b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b?.id}`);
+  // run-plan.js and plan.mjs live name the job review `job`
+  if (b.id === "job") throw new Error("batch id job is the job review's, pick another");
   if (!b.title || !b.brief) throw new Error(`batch ${b.id} needs a title and a brief`);
   if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
     throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
@@ -127,7 +129,7 @@ export function merge(old, args, commits = new Map(), replace = false) {
     for (const w of b.waitsFor || []) {
       if (seen.has(w)) continue;
       if (args.batches.some((x) => x.id === w)) throw new Error(`${b.id} waits for ${w}, planned after it`);
-      if (commits.has(w)) throw new Error(`${b.id} waits for ${w}, committed: drop it from waitsFor once its review is clean`);
+      if (commits.has(w)) throw new Error(`${b.id} waits for ${w}, committed: drop it from waitsFor once the job review is clean`);
       // run-plan.js counts an id outside the run as not committed and would skip this batch
       throw new Error(`${b.id} waits for ${w}, not in this run`);
     }
@@ -533,8 +535,8 @@ function agentDone(step, raw) {
   return `${step} done`;
 }
 
-// live: one line per batch id, from the agent labels run-plan.js sets (`commit: [<id>]`, `commit: [<id> fix]`,
-// `review: [<id>]`, `review: [<id> recheck]`); a batch not started yet, or skipped, has no agent and so no line.
+// live: one line per batch id (`commit: [<id>]`) and one `job` line for the job review (`review: [job]`,
+// `commit: [job fix]`, `review: [job recheck]`), from the agent labels run-plan.js sets; a batch not started yet, or skipped, has no agent and so no line.
 // dir: the workflow transcript dir (journal.jsonl, agent-<id>.jsonl); now: ms, for the idle time of running agents
 export function liveStatus(where, now) {
   const dir = resolve(where);

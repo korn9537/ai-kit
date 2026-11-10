@@ -26,9 +26,9 @@ with one function (`checkBatch`); `resumeArgs` and `continuous next` keep every 
 | To | Carries | Routes |
 |---|---|---|
 | committer | brief, Done when, risks, tests, plan review findings, verify, Job and Batch trailers, later batches | workflow `commitPrompt`; coordinator brief (`plan-batching.md`) |
-| first reviewer | request, batch id and title, also in scope, Done when, tests and CONFIRMED plan findings owed, `git show <hash> -- . ':(exclude)ai/usage'` | workflow `reviewPrompt`; coordinator; resume step 4 (`run-plan.md`); Stop hook (request, Done when, diff) |
-| fix committer | the CONFIRMED findings, brief, Done when, risks, tests, plan findings, later batches, verify, Job trailer (no Batch) | workflow `fixPrompt`; coordinator: SendMessage to the batch's own committer, which holds the brief |
-| fresh re-check | request, also in scope, Done when, both commits whole, the first findings | workflow `recheckPrompt` fresh; coordinator |
+| job reviewer | request, batch ids and titles, also in scope, Done when, tests and CONFIRMED plan findings owed, `git diff <first>^..<last> -- <job files> ':(exclude)ai/usage'`, this job's commits only | workflow `reviewPrompt`; coordinator; resume step 4 (`run-plan.md`); Stop hook (request, Done when, diff) |
+| fix committer | the CONFIRMED findings, every batch's brief, Done when, risks, tests, plan findings, verify, Job trailer (no Batch) | workflow `fixPrompt`; coordinator: SendMessage to the batch's own committer, which holds the brief |
+| fresh re-check | request, also in scope, Done when, the whole job range, the first findings | workflow `recheckPrompt` fresh; coordinator |
 | narrow re-check | the fix commit, the findings, Done when | workflow `recheckPrompt`; coordinator (same reviewer by SendMessage) |
 
 What each reads on its own: the committer reads the rules the reviewer checks (checklist, conventions the batch
@@ -49,6 +49,6 @@ touches) once; a fix committer and a narrow re-check read only the rule a findin
 ## Report
 
 Open holds only owner decisions and blocked work (CLAUDE.core.md report item 7): `owner`, `blockers`, `unmet`;
-`blocked`, `skipped` and `partial` batches with why; a commit not reviewed or not re-checked; CONFIRMED findings
+`blocked`, `skipped` and `partial` batches with why; the job review not done or not re-checked; CONFIRMED findings
 left (`recheck`, `recheck2`, or `confirmed` when the fix agent made no commit); a CONFIRMED plan review finding a batch
 did not meet (its `unmet`).

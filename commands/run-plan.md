@@ -1,5 +1,5 @@
 ---
-description: Run a multi-commit plan as a workflow: a committer per batch, a reviewer per commit, fixes, one report
+description: Run a multi-commit plan as a workflow: a committer per batch, one reviewer for the whole job, fixes, one report
 ---
 
 Run the plan through the Workflow tool, so the main session's context does not grow with each batch. Invoking this
@@ -16,40 +16,41 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
    - `repo`: only when the repo is not the session's working directory.
    - `batches`, in plan order: `{id, title, brief, accept, risks, tests, verify, waitsFor, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (`path:start-end` already found), the
-     decisions and requirements it follows. `accept` lists the checks of the summary's Done when that this batch
-     must meet, one string each; the committer builds to them and the reviewer checks them first. `verify` holds the
-     project's verify commands for it, leaving out what CLAUDE.md says the pre-commit runs. `risks` and `tests`
-     are set per `plan-batching.md` §Plan review, never empty. `waitsFor` lists the ids
-     it needs. `alsoInScope` lists each item the main session added beyond the request.
+     decisions and requirements it follows. `accept` lists the checks of the summary's Done when that this batch must
+     meet, one string each; the committer builds to them and the job's one reviewer checks them first. `verify` holds
+     the project's verify commands for it, leaving out what CLAUDE.md says the pre-commit runs. `risks` and `tests`
+     are set per `plan-batching.md` §Plan review, never empty. `waitsFor` lists the ids it needs. `alsoInScope` lists
+     each item the main session added beyond the request.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
    project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
    two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath`
    `${CLAUDE_PLUGIN_ROOT}/workflows/run-plan.js` and those `args`. While it runs, do not edit the repo; keep answering
-   the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from
-   the Workflow result>` and answer from its lines (one per batch id). A batch of `args` with no line is not started
-   yet, or skipped because a batch it waits for was not committed in full. Tell the user a `⚠` line (an owner
-   decision, a blocker, an agent with no transcript write for 15 minutes) before the run ends; the final report still
-   comes from the result.
+   the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from the
+   Workflow result>` and answer from its lines (one per batch id, and a `job` line for the review). A batch of `args`
+   with no line is not started yet, or skipped because a batch it waits for was not committed in full. Tell the user
+   a `⚠` line (an owner decision, a blocker, an agent with no transcript write for 15 minutes) before the run ends;
+   the final report still comes from the result.
 4. **Report** from its result, one final report (CLAUDE.core.md). First, when every batch has a commit and none would
    go under Open, run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs close <job>` and list that commit under Git. A plan
    left open: Open says what §Plan file (Left work) needs, then `/ai-kit:run-plan resume <job>`.
    Each field of the result has one place (CLAUDE.core.md report items; `docs/handoffs.md` §Report):
-   - Done: follow-ups among the `notes` (of the batch, `fix` and `fix2`).
-   - Checked, per batch: a skipped review as `review skipped, move-only or comment-only`; the CONFIRMED findings
-     fixed and the re-check's findings, `fix2` and `recheck2` when a second fix ran; each PLAUSIBLE finding with
-     your judgement (applied → Decided too); verify results among the `notes`;
-     `Review closed: re-checked once, no third pass` only where `review` says
-     re-checked once (plain text).
+   - Done: follow-ups among the `notes` (of the batch, and of the job review's `fix` and `fix2`).
+   - Checked: the `review` of the result is the one review of the whole job (not per batch; `null` when no batch
+     was committed): a skipped review as
+     `review skipped, move-only or comment-only`; the CONFIRMED findings fixed and the re-check's findings, `fix2` and
+     `recheck2` when a second fix ran; each PLAUSIBLE finding with your judgement (applied → Decided too); verify
+     results among the `notes` of the batches; `Review closed: re-checked once, no third pass` only where its
+     `review` says re-checked once (plain text).
    - Plan review: each `planReview` finding with the batch it named; a CONFIRMED one the batch did not
      meet (its `unmet`) is Open,
      a PLAUSIBLE one is judged by you (applied → Decided too), under Checked. `not reviewed` → say so under Checked.
    - Git: every commit, fixes included.
-   - Decided: each `choices` item (of the batch, `fix` and `fix2`).
+   - Decided: each `choices` item (of the batch, and of the job review's `fix` and `fix2`).
    - Open: each `owner` decision, each `blockers` and `unmet` item; each `blocked` or `skipped` batch with its
-     `reason`; each `partial` batch with what made it so (`review`, `owner`, `blockers`, `unmet`); each commit
-     `not reviewed` or `not re-checked`; the CONFIRMED findings left: those of the last of `recheck` and
-     `recheck2`, or `confirmed` where `review` is `CONFIRMED findings left unfixed`. `waitsFor` sees the commit,
-     not its review: name each batch that ran on one its review left `partial`.
+     `reason`; each `partial` batch with what made it so (`owner`, `blockers`, `unmet`, or a `review` of
+     `not reviewed: no agent reported this commit`); the job review when
+     `not reviewed` or `not re-checked`, or `partial`; the CONFIRMED findings left: those of the last of `recheck`
+     and `recheck2` of the job review, or its `confirmed` where its `review` is `CONFIRMED findings left unfixed`.
    - After the owner answers: §Resume, with the answer in the batch's brief per `plan-batching.md` §Plan file
      (Left work).
 5. No Workflow tool, the call is refused, or it fails to start (for example the script cannot be read) → run the plan as
@@ -68,10 +69,11 @@ plan with batches left), then clear what it prints, in this order:
    batch.
 3. `loose`: commits of the job with no `Batch` trailer. Review fixes are normal here; one that holds a batch's work
    means that batch would run twice, so read them against `left`.
-4. `committed`: no review is recorded. A batch whose review this session did not see gets one `ai-kit:change-reviewer`
-   with the brief the workflow's first review gets (`docs/handoffs.md`), from the plan file's batch: the request, the
-   batch id and title, its `alsoInScope` items and `accept` as `Done when`, and `git show <hash> -- .
-   ':(exclude)ai/usage'`. Findings as in **Report**.
+4. `committed`: no review is recorded. The job's commits whose review this session did not see get one
+   `ai-kit:change-reviewer` over all of them, with the brief the workflow's review gets (`docs/handoffs.md`), from the
+   plan file: the request, the batches' ids and titles, their `alsoInScope` items and `accept` as `Done when`, and
+   `git diff <first commit>^..<last commit> -- <the files those commits touched> ':(exclude)ai/usage'`, only
+   the hunks of this job's commits. Findings as in **Report**.
 5. `heldBy`: a left batch and the commits it waits on, whose end is not known. A blocker or owner decision the lost
    run reported is gone with it and a review cannot see one, so a clean review is not enough: show the user these
    batches and go on with them only on their word. A commit that is not clean gets a new batch per

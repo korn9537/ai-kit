@@ -70,6 +70,7 @@ ok("a plan written with one long line still parses", parse(`\`\`\`json\n${JSON.s
 throws("a bad job is refused", () => merge(null, { ...args(), job: "x" }), /yyyy-mm-dd/);
 throws("no batches are refused", () => merge(null, args([])), /batches/);
 throws("a spaced id is refused", () => merge(null, args([{ id: "a b" }])), /space/);
+throws("the id job is refused: it names the job review", () => merge(null, args([{ id: "job" }])), /job review/);
 throws("a repeated id is refused", () => merge(null, args([{ id: "a" }, { id: "a" }])), /twice/);
 throws("an unknown wait is refused", () => merge(null, args([{ id: "a", waitsFor: ["z"] }])), /not in this run/);
 throws("a wait on a planned batch outside the run is refused: the workflow would skip it", () =>
