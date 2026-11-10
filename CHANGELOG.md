@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.37.1
+
+`docs/why.md`: the 1.x history in asw-sales-flow and solo-training was searched for the reasons git here lacks
+(`asw <hash>`, `solo <hash>`). 4 problem cells filled from a quoted source (review-closed phrase, push only when
+asked, re-check by the same reviewer, build escape), 62 of 153 still "not recorded"; 34 rows gain a `1.x first
+seen` commit. Most 1.x commits state no reason. No project needs to edit anything.
+
 ## 2.37.0
 
 New `docs/why.md`: one row per hook behavior, rule of `CLAUDE.core.md` and agent, with the problem it answered, the
