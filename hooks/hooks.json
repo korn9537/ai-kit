@@ -36,6 +36,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/bash-guard.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-check.sh\" mark",
+            "timeout": 5
           }
         ]
       },
@@ -93,7 +98,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|Bash",
         "hooks": [
           {
             "type": "command",
@@ -119,6 +124,18 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/review-snapshot.sh\"",
             "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/post-edit-check.sh\"",
+            "timeout": 30
           }
         ]
       }

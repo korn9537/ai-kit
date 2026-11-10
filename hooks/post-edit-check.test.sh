@@ -93,6 +93,78 @@ check "block: without node_modules the comment check still runs" 2 src/c.ts 'com
 check "pass: without node_modules post-edit.sh is skipped" 0 src/a.ts - 'run "a" - false'
 rm "$REPO/package.json"
 
+# Bash calls: PreToolUse `mark` touches a marker, the post run checks files newer than it
+: >"$REPO/ai/kit/post-edit.sh"
+echo '{"comments": {"include": "^src/.*\\.ts$"}, "docs": {"include": "^$"}}' >"$REPO/ai/kit/config.json"
+BAD=$'// one\n// two\n// three\nconst c = 1;\n'
+git -C "$REPO" add -A >/dev/null 2>&1
+git -C "$REPO" -c user.email=t@t -c user.name=t commit -qm init >/dev/null 2>&1
+
+# bash_hook <mode> <id> <command> [extra json]: runs the hook as a Bash tool event; sets $err and $rc
+bash_hook() {
+  local mode="$1" id="$2" cmd="$3" extra="${4:-}" arg="post"
+  [[ -n "$extra" ]] || extra='{}'
+  [[ "$mode" == mark ]] && arg=mark
+  err="$(jq -n --arg id "$id" --arg c "$cmd" --arg cwd "$REPO" --argjson x "$extra" \
+    '{tool_name: "Bash", tool_use_id: $id, cwd: $cwd, tool_input: ({command: $c} + $x)}' | "$HOOK" "$arg" 2>&1 >/dev/null)"
+  rc=$?
+}
+# expect <desc> <expected exit> <stderr regex|->
+expect() {
+  if [[ "$rc" == "$2" ]] && { [[ "$3" == "-" && -z "$err" ]] || [[ "$3" != "-" && "$err" =~ $3 ]]; }; then
+    echo "ok   - $1"
+    pass=$((pass + 1))
+  else
+    echo "FAIL - $1 (expected exit $2, got $rc)"
+    echo "       stderr: $err"
+    fail=$((fail + 1))
+  fi
+}
+MARKS="$(git -C "$REPO" rev-parse --absolute-git-dir)/claude-review"
+
+printf '%s' "$BAD" >"$REPO/src/old.ts"
+sleep 1.1
+bash_hook mark b1 "sed -i x y"
+expect "mark: silent" 0 -
+[[ -f "$MARKS/bash-b1" ]] && { echo "ok   - mark: marker written"; pass=$((pass + 1)); } || { echo "FAIL - mark: no marker"; fail=$((fail + 1)); }
+sleep 1.1
+printf '%s' "$BAD" >"$REPO/src/new.ts"
+bash_hook post b1 "sed -i x y"
+expect "bash: a bad file written during the call is reported, naming it" 2 \
+  '^Checks failing on src/new.ts, changed during this Bash call \(pre-commit will block these\):'
+[[ "$err" != *src/old.ts* ]] && { echo "ok   - bash: a file older than the marker is not checked"; pass=$((pass + 1)); } || { echo "FAIL - old file checked"; fail=$((fail + 1)); }
+[[ ! -f "$MARKS/bash-b1" ]] && { echo "ok   - bash: marker removed"; pass=$((pass + 1)); } || { echo "FAIL - marker kept"; fail=$((fail + 1)); }
+
+bash_hook post nomark "sed -i x y"
+expect "bash: no marker (Pre never ran) is silent" 0 -
+
+bash_hook mark b2 "true"
+bash_hook post b2 "true"
+expect "bash: a call that writes nothing is silent" 0 -
+
+bash_hook mark b3 "git checkout main"
+sleep 1.1
+printf '%s' "$BAD" >"$REPO/src/new.ts"
+bash_hook post b3 "cd x && git -C y checkout main"
+expect "bash: a work-tree-rewriting git command is not checked" 0 -
+bash_hook mark b4 "sleep 5 &"
+printf '%s' "$BAD" >"$REPO/src/new.ts"
+bash_hook post b4 "sleep 5 &" '{"run_in_background": true}'
+expect "bash: a background call is not checked" 0 -
+[[ ! -f "$MARKS/bash-b4" ]] && { echo "ok   - bash: background call drops its marker"; pass=$((pass + 1)); } || { echo "FAIL - marker kept"; fail=$((fail + 1)); }
+
+bash_hook mark b5 "gen"
+sleep 1.1
+for i in $(seq 23); do printf '%s' "$BAD" >"$REPO/src/g$i.ts"; done
+bash_hook post b5 "gen"
+expect "bash: more than 20 files says only 20 were checked" 2 'Only the first 20 of 2[3-5] changed files were checked'
+rm -f "$REPO"/src/g*.ts "$REPO/src/new.ts" "$REPO/src/old.ts"
+
+mkdir -p "$REPO/other"
+bash_hook mark b6 "x"
+err="$(jq -n --arg id b6 --arg cwd "$LINKS" '{tool_name: "Bash", tool_use_id: $id, cwd: $cwd, tool_input: {command: "x"}}' | "$HOOK" mark 2>&1)"
+[[ -z "$err" && ! -e "$LINKS/ai" ]] && { echo "ok   - mark: outside a repo writes nothing"; pass=$((pass + 1)); } || { echo "FAIL - mark outside a repo"; fail=$((fail + 1)); }
+
 echo
 echo "$pass passed, $fail failed"
 [[ "$fail" == "0" ]]

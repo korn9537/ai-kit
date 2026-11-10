@@ -85,9 +85,14 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   search to a subagent. A subagent's reads and Bash lines that do not start as a read do not count. A `Read` with no
   range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a note to read a line
   range, once per prompt in the main session and once per subagent.
-- `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
-  and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
-  without `node_modules` (a fresh worktree) only the project's checks are skipped.
+- `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit/Bash) runs the comment and doc checks whose scope holds
+  the file and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a
+  Node project without `node_modules` (a fresh worktree) only the project's checks are skipped. It also runs after a
+  Bash call (PostToolUse and PostToolUseFailure): a PreToolUse run of the same script touches a marker in the git
+  dir's `claude-review/`, and the files `git status` lists as changed, added or untracked with a newer mtime (at most
+  20, none under `ai/usage`) are checked and reported as changed during that call. Not checked after a call that ran
+  in the background (the hook fires at launch, before the command writes) or that starts with a git command rewriting
+  the work tree (checkout, switch, stash, pull, merge, rebase, reset, restore, cherry-pick, revert).
 - `kit-log.sh stop` (Stop) appends each round's token use to a buffer in the git common dir
   (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
   summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks (the buffer
