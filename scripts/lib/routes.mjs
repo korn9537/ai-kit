@@ -57,8 +57,9 @@ export function extractRoutes(file, text) {
     return out;
   }
   if (/\.[cm]?[jt]s$/.test(file)) {
+    if (/(?:from\s*|require\(\s*|import\s*)["'](?:axios|ky|ofetch)["']/.test(text)) return out;
     const re = new RegExp(
-      `\\b(?:app|router|server|fastify|api|\\w+Router)\\.(${METHOD_RE})\\(\\s*["'\`](/[^"'\`]*)["'\`]`,
+      `\\b(?:app|router|server|fastify|\\w+Router)\\.(${METHOD_RE})\\(\\s*["'\`](/[^"'\`]*)["'\`]`,
       "g",
     );
     while ((m = re.exec(text))) add(m[1], m[2], m.index);

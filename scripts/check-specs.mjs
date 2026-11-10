@@ -196,7 +196,7 @@ if (api === null) {
 
 if (routesOn && api && (flag("staged") || flag("all"))) {
   const files = flag("all") ? list("ls-files") : list("diff", "--cached", "--name-only", "--diff-filter=ACMR");
-  for (const f of files.filter(isRouteCandidate)) {
+  for (const f of files.filter((x) => isRouteCandidate(x) && !INCLUDE?.test(x))) {
     let text;
     try {
       text = readFileSync(f, "utf8");

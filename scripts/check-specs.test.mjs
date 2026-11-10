@@ -218,6 +218,9 @@ CASES.push(
   route("route: pages/api any method covered by any entry", "pages/api/users/[id].ts", "export default function h() {}\n", ["PUT /api/users/{id}"], []),
   route("route: Next catch-all spellings", "app/docs/[...slug]/route.ts", NEXT, ["GET /docs/{slug}"], []),
   route("route: Next optional catch-all", "app/docs/[[...slug]]/route.ts", NEXT, ["GET /docs/{x}"], []),
+  route("route: client file with api.get and an axios import → no route", "src/client.ts", "import axios from 'axios';\nconst api = axios.create();\napi.get('/orders');\n", ["GET /x"], []),
+  route("route: api.get is not a server receiver even without axios", "src/client.ts", "api.get('/orders');\n", ["GET /x"], []),
+  route("route: ui.include screen file is skipped", "app/o/page.tsx", "router.get('/orders');\n", ["GET /x"], ["@: new screen file listed in no spec's files (add it to its ai/screens/S-<n> spec, the plugin's docs/screen-specs.md)"], conf({ platforms: ["web"], include: "^app/.*/page\\.tsx$", api: "ai/api/" })),
   route("route: test files are skipped", "src/a.test.ts", "app.get('/zzz', h);\n", ["GET /x"], []),
   {
     desc: "route: not staged and no --all → not checked; --all checks tracked files",
