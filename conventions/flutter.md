@@ -20,5 +20,6 @@ Reader: agents writing or reviewing Flutter widgets. Adds to `general.md` and `d
 6. **Lists** — a list of unknown or large length uses `ListView.builder` (or `.separated`), not a `ListView` with
    `children: items.map(...)`, which builds every row at once. Rows in a reorderable or changing list carry a `Key`
    from the item's id.
-7. **Themes** — colors and text styles come from `Theme.of(context)` (`ColorScheme`, `TextTheme`), never
-   `Color(0xFF...)` or a `TextStyle(fontSize: ...)` literal in a widget, so dark mode and the design tokens apply.
+7. **Themes** — rule: `general.md` item 5. The token source is `Theme.of(context)` (`ColorScheme`, `TextTheme`, or a
+   `ThemeExtension` for app tokens), so dark mode follows. Wrong: `Color(0xFF1A73E8)`. Right:
+   `Theme.of(context).colorScheme.primary`.
