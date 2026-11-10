@@ -65,13 +65,14 @@ COUNT="$REPO/.git/claude-review/s2.reads"
 counted() { [[ "$(($(wc -c <"$COUNT")))" == "$1" ]]; }
 
 ctx 120000
-for i in 1 2 3 4; do read_tool Bash "grep -n x src/a.ts"; done
-check "four reads: no note yet" "$(t test -z "$OUT")" "$OUT"
+for i in 1 2 3; do read_tool Bash "grep -n x src/a.ts"; done
+check "three reads: no note yet" "$(t test -z "$OUT")" "$OUT"
 read_tool Read
-check "the fifth read past reads_from: the subagent note" \
+check "the fourth read: the subagent note" \
   "$(t jq -e '.hookSpecificOutput.hookEventName == "PostToolUse" and (.hookSpecificOutput.additionalContext | test("Send the rest of this search"))' <<<"$OUT")" "$OUT"
 read_tool Grep
-check "the sixth: no repeat until the next five" "$(t test -z "$OUT")" "$OUT"
+check "the fifth: no repeat until the next four" "$(t test -z "$OUT")" "$OUT"
+read_tool Grep
 for cmd in "git status" "cat > a.txt" "sed -i s/a/b/ f" "pnpm test" "cat <<X"; do read_tool Bash "$cmd"; done
 check "a Bash line that is no read is not counted" "$(t counted 6)"
 read_tool Bash "cd src && sed -n '1,9p' a.ts"
@@ -88,14 +89,17 @@ done
 prompt2
 check "a new prompt starts the count again" "$(t test ! -e "$COUNT" -a ! -e "$COUNT.1")"
 ctx 60000
+echo '{"handoff": {"reads_from": 100000}}' >"$REPO/ai/kit/config.json"
 for i in 1 2 3 4 5; do read_tool Read; done
-check "below reads_from: counted, no note" "$(t test -z "$OUT")" "$OUT"
+check "below a set reads_from: counted, no note" "$(t test -z "$OUT")" "$OUT"
+rm -f "$REPO/ai/kit/config.json"
 prompt2
 ctx 120000
 echo '{"handoff": {"max_reads": 0}}' >"$REPO/ai/kit/config.json"
 for i in 1 2 3 4 5; do read_tool Read; done
 check "max_reads 0: off" "$(t test -z "$OUT")" "$OUT"
-rm -f "$REPO/ai/kit/config.json"
+# the whole-file note alone: the read count stays below its note at this context
+echo '{"handoff": {"reads_from": 100000}}' >"$REPO/ai/kit/config.json"
 
 # big <tool> <path or command> [cwd] [agent]: a whole read of a file, stdout in $OUT
 big() {
@@ -146,7 +150,7 @@ OUT="$(jq -n --arg t "$T" --arg p "$REPO/big.ts" '{transcript_path: $t, session_
   env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" 2>&1)"
 check "a read with a range: no note" "$(t test -z "$OUT")" "$OUT"
 prompt3
-echo '{"handoff": {"big_read": 0}}' >"$REPO/ai/kit/config.json"
+echo '{"handoff": {"big_read": 0, "reads_from": 100000}}' >"$REPO/ai/kit/config.json"
 big Read "$REPO/big.ts"
 check "big_read 0: off" "$(t test -z "$OUT")" "$OUT"
 rm -f "$REPO/ai/kit/config.json"

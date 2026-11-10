@@ -79,7 +79,7 @@ if [[ -n "$reading" ]]; then
   fi
 
   [[ -z "$agent" ]] || exit 0
-  limit="$(kit_conf '.handoff.max_reads' 5)"
+  limit="$(kit_conf '.handoff.max_reads' 4)"
   ((limit > 0)) || exit 0
   count=$(($(wc -c <"$reads")))
   # a step is claimed, not tested by modulo: parallel hooks may all see one total, or skip a multiple
@@ -87,7 +87,7 @@ if [[ -n "$reading" ]]; then
   ((step > 0)) || exit 0
   mkdir "$reads.$step" 2>/dev/null || exit 0
   used="$(context_used)"
-  [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 100000))) || exit 0
+  [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 0))) || exit 0
   note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to a subagent (Explore or general-purpose, with model \"sonnet\") that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here."
   jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $n}}'
   exit 0

@@ -80,11 +80,11 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   for the reviewer, business-analyst and decider, `sonnet` medium for the committer).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends. It never
-  blocks and never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every
-  `handoff.max_reads` (5; 0 is off) reads or searches since the last prompt, past `handoff.reads_from` (100k) tokens of
-  context, a note to send the search to a subagent. A subagent's reads and Bash lines that do not start as a read do not
-  count. A `Read` with no range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a
-  note to read a line range, once per prompt in the main session and once per subagent.
+  blocks and never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every `handoff.max_reads` (4; 0 is off)
+  reads or searches since the last prompt, once the context passes `handoff.reads_from` (0) tokens, a note to send the
+  search to a subagent. A subagent's reads and Bash lines that do not start as a read do not count. A `Read` with no
+  range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a note to read a line
+  range, once per prompt in the main session and once per subagent.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit) runs the comment and doc checks whose scope holds the file
   and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a Node project
   without `node_modules` (a fresh worktree) only the project's checks are skipped.

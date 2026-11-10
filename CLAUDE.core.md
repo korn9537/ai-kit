@@ -96,7 +96,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 ## Delegation and report
 
 - **Heavy reads go to a subagent** (hook-nudged), plan or not: a browser check (screenshots, page reads, clicking
-  through a flow) or a search likely to need more than about five reads or greps. The brief names what to check or
+  through a flow) or a search likely to need more than about three reads or greps. Finding what a summary, plan or
+  brief needs (where the code is, what it does today, which files a change touches) is such a search: one Explore
+  subagent per question, sent together when independent, returns the `file:line` list and facts the brief carries;
+  the main session coordinates, it does not explore. The brief names what to check or
   find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads that report,
   never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one `grep -n` the next
   edit needs stays. A general-purpose or Explore subagent gets `model: "sonnet"` (hook-guarded; a kit-agent fallback

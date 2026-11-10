@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.46.0
+
+The main session coordinates and does not explore: finding what a summary, plan or brief needs (where the code is,
+what it does, which files a change touches) goes to an Explore subagent (sonnet) that returns a `file:line` list, one
+per question, sent together when independent (`CLAUDE.core.md`, heavy reads: about three reads, was five). The read
+nudge comes sooner: `handoff.max_reads` 4 (was 5), `handoff.reads_from` 0 (was 100k; the base context alone is about
+57k). In 5 days the main session's context peaked at 165k to 210k on average and handed off 43 and 45 times in
+brieflane and asw-sales-flow, with most of its reads its own greps and file reads. Set either key in
+`ai/kit/config.json` to keep the old pace.
+
 ## 2.45.1
 
 `githooks/commit-msg` reads the `Job:` line from any paragraph made only of `Key: value` lines, as `scripts/jobs.mjs`
