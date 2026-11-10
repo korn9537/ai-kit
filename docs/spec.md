@@ -66,7 +66,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 |---|---|
 | `commands/init.md` | `kit.mjs init`, then check |
 | `commands/check.md` | `kit.mjs check` |
-| `commands/migrate.md` | `kit.mjs migrate` for a 1.x repo, then init and check |
 | `commands/uninstall.md` | `kit.mjs uninstall` |
 | `commands/retrofit.md` | fills the `ai/` layout from code and existing docs, one category per commit, from `kit.mjs inventory` |
 | `commands/memory-export.md` | moves auto-memory files into repo files |
@@ -81,7 +80,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `scripts/kit.mjs` | dispatcher for `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`, `migrate`; re-exports what `kit-migrate.mjs` and the tests import |
+| `scripts/kit.mjs` | dispatcher for `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`; re-exports `HELPERS` for the tests |
 | `scripts/kit/shared.mjs` | constants and helpers more than one command uses: `kit` (plugin root), `root` (git top of cwd), git and file readers, the hook shim texts |
 | `scripts/kit/sync.mjs` | `sync`: writes the generated copies in `ai/kit/`, `check.sh` (`CHECK_SH`) and `requires.txt`; `snapshotWarnings`, their drift check |
 | `scripts/kit/check.mjs` | `check`: every warning and problem (`allWarnings`), also run by `init` |
@@ -89,7 +88,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/kit/uninstall.mjs` | `uninstall [--purge]`: reverses `initFiles` |
 | `scripts/kit/unattended.mjs` | `unattended`: rewrites `ai/kit/pre-commit.sh` to `$AI_KIT_RANGE`, then runs sync, which writes `requires.txt` |
 | `scripts/kit/inventory.mjs` | `inventory`: read-only list of what a retrofit starts from |
-| `scripts/kit-migrate.mjs` | 1.x repo to plugin |
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index; warnings only |
@@ -246,7 +244,7 @@ Each step names the file that does it.
 1. `/ai-kit:init`: creates missing `ai/kit/` files, writes the two shims, sets `core.hooksPath`, sets
    `autoMemoryEnabled: false` in `.claude/settings.json`, adds the LF rules to `.gitattributes`, then `check`.
 2. `kit.mjs check` verifies the wiring; the pre-commit runs it when kit files are staged.
-3. `/ai-kit:migrate`: a clean 1.x repo to the plugin. `/ai-kit:uninstall`: reverses `init`; `ai/kit/` stays unless
+3. `/ai-kit:uninstall`: reverses `init`; `ai/kit/` stays unless
    `--purge`. `/ai-kit:retrofit`: fills the `ai/` layout.
 4. `kit.mjs unattended` turns a repo on (sets `unattended: true`, rewrites `ai/kit/pre-commit.sh`, writes
    `requires.txt`, runs `sync`); `kit.mjs sync` writes the generated copies a run without the plugin reads.

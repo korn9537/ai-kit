@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { syncSnapshot } from "./sync.mjs";
-import { MARK, MSG_SHIM, OLD_SHIM, SHIM, at, eolOf, isObj, isShim, jsonText, kit, lfMissing, msgShimPath, notExecutable, ownHooksPath, read, readConf, root, shimPath, tryGit } from "./shared.mjs";
+import { MARK, MSG_SHIM, SHIM, at, eolOf, isObj, isShim, jsonText, kit, lfMissing, msgShimPath, notExecutable, ownHooksPath, read, readConf, root, shimPath, tryGit } from "./shared.mjs";
 import { allWarnings } from "./check.mjs";
 
 // created collects the root-relative paths of files this run adds
@@ -29,7 +29,7 @@ function initFiles(created = []) {
     writeFileSync(shimPath, SHIM, { mode: 0o755 });
     created.push(".githooks/pre-commit");
     console.log("+ .githooks/pre-commit");
-  } else if (!isShim(shim) && !shim.includes(OLD_SHIM))
+  } else if (!isShim(shim))
     console.log(
       "! .githooks/pre-commit exists and does not run the kit: move its checks into ai/kit/pre-commit.sh, delete it, then rerun init",
     );

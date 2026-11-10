@@ -8,7 +8,7 @@ import {
 import { isAbsolute, join } from "node:path";
 import { planWarnings } from "../plan.mjs";
 import { transcriptsDir } from "../lib/usage-collect.mjs";
-import { IMPORT, MSG_SHIM, OLD_SHIM, PLUGIN, SHIM, at, claudeDir, isImportLine, isKitHook, isObj, isShim, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, shimPath, tryGit, tryGitIn } from "./shared.mjs";
+import { MSG_SHIM, PLUGIN, SHIM, at, claudeDir, isObj, isShim, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, shimPath, tryGit, tryGitIn } from "./shared.mjs";
 import { snapshotWarnings } from "./sync.mjs";
 
 // Claude Code's auto-memory dir: main worktree path, non-alphanumerics -> '-' (hooks/lib.sh too); a long path's
@@ -182,7 +182,7 @@ function shimWarnings(conf) {
   const old = [];
   const pre = readLF(shimPath);
   const named = conf?.unattended === true && !pre?.includes("AI_KIT_RANGE=");
-  if (pre !== null && isShim(pre) && !pre.includes(OLD_SHIM) && pre !== SHIM && !named) old.push("pre-commit");
+  if (pre !== null && isShim(pre) && pre !== SHIM && !named) old.push("pre-commit");
   const msg = readLF(msgShimPath);
   if (msg !== null && isShim(msg) && msg !== MSG_SHIM) old.push("commit-msg");
   return old.map((h) => `.githooks/${h} is an older ai-kit shim (fix: node <plugin>/scripts/kit.mjs init rewrites it)`);
@@ -239,10 +239,6 @@ function problems({ text, conf, error }) {
               out.push(
                 `ai/kit/config.json conventions lists ${c}, but the plugin has no conventions/${c}.md (fix: remove it, or add the file in the ai-kit repo)`,
               );
-        if (Array.isArray(conf.code_dirs) && conf.code_dirs.includes("ai-kit"))
-          out.push(
-            'ai/kit/config.json code_dirs lists "ai-kit", a 1.x in-repo copy (fix: remove it from code_dirs)',
-          );
         if (conf.ui !== undefined) {
           const ui = conf.ui;
           if (!isObj(ui))
@@ -279,10 +275,6 @@ function problems({ text, conf, error }) {
   if (shim === null)
     out.push(
       ".githooks/pre-commit is missing (fix: node <plugin>/scripts/kit.mjs init)",
-    );
-  else if (shim.includes(OLD_SHIM))
-    out.push(
-      ".githooks/pre-commit runs the 1.x in-repo kit (fix: node <plugin>/scripts/kit.mjs init rewrites it)",
     );
   else if (!isShim(shim))
     out.push(
@@ -325,36 +317,15 @@ function problems({ text, conf, error }) {
     out.push(
       `${setIn.p} disables the plugin ("enabledPlugins": {"${PLUGIN}": ${JSON.stringify(setIn.v)}}) and overrides lower scopes (fix: set it to true or remove that entry)`,
     );
-  for (const f of ["settings.json", "settings.local.json"]) {
-    let s;
-    try {
-      s = JSON.parse(read(at(".claude", f)) ?? "{}") ?? {};
-    } catch {
-      continue;
-    }
-    const old = Object.values(s.hooks ?? {})
-      .flatMap((gs) => (Array.isArray(gs) ? gs : []))
-      .flatMap((g) => g?.hooks ?? [])
-      .filter(isKitHook)
-      .map((h) => h.command);
-    for (const c of old)
-      out.push(
-        `.claude/${f} still runs a hook from an in-repo ai-kit/ copy (fix: delete that entry; the plugin runs it): ${c}`,
-      );
-  }
   for (const a of ["business-analyst.md", "change-reviewer.md"])
     if (existsSync(at(".claude", "agents", a)))
       out.push(
         `.claude/agents/${a} is an old kit copy that shadows the plugin agent (fix: delete it)`,
       );
-  if (read(at("CLAUDE.md"))?.split(/\r?\n/).some(isImportLine))
-    out.push(
-      `CLAUDE.md still imports ${IMPORT} (fix: delete that line; the plugin injects it at session start)`,
-    );
   return out;
 }
 
-// every problem and warning of check, in one place so init, migrate and check cannot drift apart; c is the config
+// every problem and warning of check, in one place so init and check cannot drift apart; c is the config
 // read by readConf, taken once per run
 function allWarnings(c = readConf()) {
   const conf = c.conf ?? null;

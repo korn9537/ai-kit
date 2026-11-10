@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.39.0
+
+`/ai-kit:migrate`, `kit.mjs migrate` and the 1.x checks of `check` and `init` are removed because no repo is on 1.x:
+`check` no longer reports `code_dirs` listing `ai-kit`, a 1.x shim, in-repo `ai-kit/hooks/` entries in settings or a
+`@ai-kit/CLAUDE.core.md` import, and `init` no longer rewrites a 1.x shim. A repo still on 1.x migrates with an
+earlier plugin (2.38.1) or by deleting `ai-kit/`, its hooks in settings and the `@ai-kit` import by hand. No project
+needs to edit anything.
+
 ## 2.38.1
 
 Refactor, no behavior change. One helper for the `claude-review`, `claude-usage` and `claude-decider` folders

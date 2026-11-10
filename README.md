@@ -16,7 +16,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
 | `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`      |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
-| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
+| `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
 | `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `kit-log.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
@@ -25,7 +25,6 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
 | `scripts/kit.mjs`             | dispatcher for `init` / `check` / `sync` / `unattended` / `uninstall` / `inventory` (§Commands)  |
 | `scripts/kit/*.mjs`           | one module per command (`init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`) and `shared.mjs` |
-| `scripts/kit-migrate.mjs`     | `kit.mjs migrate`: a clean 1.x repo to the plugin; test `scripts/kit-migrate.test.mjs`         |
 | `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
 | `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `digest` (§Commands), over `scripts/lib/usage-collect.mjs` and `scripts/lib/usage-digest.mjs` |
@@ -175,10 +174,10 @@ when the key is absent in a repo that looks like web or mobile, and when it is s
 
 ## Commands
 
-Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate` inside Claude Code).
+Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude Code).
 
 - `node <plugin>/scripts/kit.mjs init` creates the missing `ai/kit/` files from the templates (never overwrites),
-  writes the `.githooks/pre-commit` and `.githooks/commit-msg` shims when missing (rewrites a 1.x shim; warns about
+  writes the `.githooks/pre-commit` and `.githooks/commit-msg` shims when missing (warns about
   any other hook there) and sets `core.hooksPath` to `.githooks` unless another path is set (warns), writes
   `<git-common-dir>/ai-kit-root` for the shim, adds `"autoMemoryEnabled": false` to `.claude/settings.json` when
   the key is absent, and appends `.githooks/* text eol=lf` and `ai/kit/*.sh text eol=lf` to `.gitattributes` when
@@ -187,10 +186,8 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   when `conventions` is not an array or names a file `conventions/` lacks, when the `.githooks/pre-commit` shim is
   missing or not the kit shim, when `core.hooksPath` is not `.githooks`, when none of `.claude/settings.json`,
   `.claude/settings.local.json` or `~/.claude/settings.json` enables `ai-kit@korn9537` (the project file is
-  recommended, so teammates get it), when `code_dirs` lists `ai-kit` or `shared_checkout_doc` names a missing file
-  (1.x leftovers), when settings still
-  run a hook from an in-repo `ai-kit/hooks/` copy, when `.claude/agents/` holds an old copy of a kit agent, or when
-  `CLAUDE.md` still imports `@ai-kit/CLAUDE.core.md`. Each line names its fix. It warns (`!`, exit unchanged)
+  recommended, so teammates get it), when `shared_checkout_doc` names a missing file or
+  `.claude/agents/` holds an old copy of a kit agent. Each line names its fix. It warns (`!`, exit unchanged)
   when auto-memory is not off (no `autoMemoryEnabled: false` in the highest scope that sets it, or
   `CLAUDE_CODE_DISABLE_AUTO_MEMORY=0`) or the repo's auto-memory dir holds files (`/ai-kit:memory-export`), and
   when the shim or `ai/kit/*.sh` has no `eol=lf` attribute, and when `.githooks/commit-msg` is missing or not the
@@ -214,8 +211,6 @@ Run from the project root (or `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:migrate`
   the layout, schema sources, screen files with a `ui.include` suggestion, API spec and route files, decision docs
   and other `.md` outside `ai/`, grouped by folder. `/ai-kit:retrofit` (`commands/retrofit.md`) uses it to plan,
   then fills the `ai/` layout one category per commit, only from the code and existing docs.
-- `node <plugin>/scripts/kit.mjs migrate` turns a clean 1.x repo into a plugin one, then runs `init` and `check`
-  (§Migrating a repo from 1.x).
 
 - `node <plugin>/scripts/usage.mjs digest [--since YYYY-MM-DD] [--baseline]` (read-only) prints a fixed-size text
   digest of `ai/usage/**`: cost per model, role and kit version, driver signals, reviewer findings, the costliest
@@ -292,37 +287,6 @@ session files one when it sets a standard that passes the cross-repo test, sees 
 by the user in a way that holds in any repo, or hits a kit gap. Run `/ai-kit:harvest` in this clone: it shows one
 table to accept, merge, reject or leave each for the owner, and edits after your go; accepted ones land in one
 commit that closes them on push, and reach every project through `autoUpdate`.
-
-## Migrating a repo from 1.x
-
-Clone this repo, then from a clean working tree in the project run:
-
-```sh
-node <clone>/scripts/kit.mjs migrate
-```
-
-A 1.x repo does not enable the plugin yet, so `/ai-kit:migrate` works there only when the plugin is enabled at
-user scope (`~/.claude/settings.json`). `migrate` refuses on a dirty tree, or when nothing 1.x is left (run `init`
-then). What it does, which is also the manual route:
-
-1. Deletes the files git tracks in `ai-kit/` (only when it is the tracked 1.x copy: a tracked `sync.mjs`, no
-   `.git`, not a symlink or submodule; otherwise it refuses), and `.claude/agents/business-analyst.md` and
-   `.claude/agents/change-reviewer.md` when tracked (and empty folders). An agent copy that differs from
-   `ai-kit/agents/`, or any `ai-kit/` file the plugin lacks, is listed to review by hand with
-   `git show HEAD:<path>` to recover it. Deletes run last, after every write.
-2. Removes every hook in `.claude/settings.json` and `.claude/settings.local.json` that runs the in-repo
-   `ai-kit/hooks/...` (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...` or relative), and adds the
-   settings from §Install to `.claude/settings.json` where absent; other keys and hooks, an existing `korn9537`
-   marketplace and an explicit `false` for the plugin stay.
-3. Removes each `@ai-kit/CLAUDE.core.md` line (bulleted too) in `CLAUDE.md`; an emptied `## Working conventions`
-   section gets a one-line pointer to the plugin. Line endings (LF or CRLF) are kept.
-4. In `ai/kit/config.json` drops `ai-kit` from `code_dirs`, and `shared_checkout_doc` if it named `ai-kit/...`;
-   rewrites the 1.x header lines of `ai/kit/` files to the template wording and lists any other line citing
-   `ai-kit/` to review by hand.
-5. Runs `init` (rewrites the shim) and `check`, and prints what it deleted and changed.
-
-Then review `git diff`, commit the deletions and changes together, staged by name, open Claude Code, trust the
-folder and restart the session.
 
 Recommended skill, installed separately: `impeccable` (UI review; a project's `review-checklist.md` can call it).
 
@@ -418,34 +382,6 @@ Claude Code ใหม่
 `ai/kit/review-checklist.md` ของโปรเจกต์แทน) จากนั้นสั่ง `/ai-kit:harvest` ใน clone นี้ agent จะแสดงตาราง
 ว่ารับ รวม ปฏิเสธ หรือส่งให้เจ้าของตัดสินแต่ละข้อ แล้วรอให้สั่งก่อนแก้ไฟล์
 ข้อที่รับจะอยู่ใน commit เดียวที่ปิด issue ตอน push แล้วไปถึงทุกโปรเจกต์ผ่าน `autoUpdate`
-
-### ย้าย repo จาก 1.x
-
-clone repo นี้ แล้วในโปรเจกต์ที่ working tree สะอาด สั่ง
-
-```sh
-node <clone>/scripts/kit.mjs migrate
-```
-
-repo 1.x ยังไม่ได้เปิด plugin ดังนั้น `/ai-kit:migrate` ใช้ได้เฉพาะเมื่อเปิด plugin ไว้ที่ระดับ user
-(`~/.claude/settings.json`) — `migrate` จะไม่ทำถ้า working tree มีของค้าง หรือไม่มีอะไรของ 1.x เหลือ (ให้ใช้ `init`
-แทน) สิ่งที่มันทำ ซึ่งทำมือตามนี้ก็ได้
-
-1. ลบไฟล์ที่ git track ใน `ai-kit/` (เฉพาะเมื่อเป็นสำเนา 1.x ที่ track: มี `sync.mjs` ที่ track, ไม่มี `.git`, ไม่ใช่
-   symlink หรือ submodule ไม่งั้นจะไม่ทำ), `.claude/agents/business-analyst.md`, `.claude/agents/change-reviewer.md`
-   ถ้า track (และโฟลเดอร์ที่ว่าง) agent ที่ต่างจาก `ai-kit/agents/` หรือไฟล์ใน `ai-kit/` ที่ plugin ไม่มี
-   จะแสดงให้ตรวจเอง พร้อม `git show HEAD:<path>` ไว้กู้คืน การลบทำหลังสุด หลังเขียนไฟล์ทั้งหมด
-2. เอา hook ที่เรียก `ai-kit/hooks/...` ในโปรเจกต์ (`${CLAUDE_PROJECT_DIR}/ai-kit/hooks/`, `$CLAUDE_PROJECT_DIR/...`
-   หรือ path สัมพัทธ์) ออกจาก `.claude/settings.json` และ `.claude/settings.local.json` แล้วใส่ settings ตาม
-   §Install in a project ลงใน `.claude/settings.json` ถ้ายังไม่มี — key และ hook อื่น, marketplace `korn9537`
-   ที่มีอยู่ และค่า `false` ของ plugin คงไว้
-3. ลบทุกบรรทัด `@ai-kit/CLAUDE.core.md` (รวมแบบ bullet) ใน `CLAUDE.md` ถ้า section `## Working conventions` ว่าง จะใส่บรรทัดเดียวที่ชี้ไป plugin
-   line ending (LF หรือ CRLF) คงเดิม
-4. ใน `ai/kit/config.json` เอา `ai-kit` ออกจาก `code_dirs` และเอา `shared_checkout_doc` ออกถ้าชี้ไปที่ `ai-kit/...`
-   เขียนบรรทัดหัวไฟล์แบบ 1.x ใน `ai/kit/` ใหม่ตาม template บรรทัดอื่นที่ยังอ้าง `ai-kit/` จะแสดงให้แก้เอง
-5. รัน `init` (เขียน shim ใหม่) และ `check` แล้วสรุปว่าลบและแก้อะไร
-
-จากนั้นดู `git diff`, commit ทั้งหมดพร้อมกันโดย stage ทีละชื่อ, เปิด Claude Code, trust โฟลเดอร์ แล้วเปิด session ใหม่
 
 ### กฎข้อเดียวที่ต้องจำ
 

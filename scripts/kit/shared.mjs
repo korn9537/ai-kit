@@ -49,12 +49,7 @@ const kit = join(import.meta.dirname, "..", "..");
 
 const PLUGIN = "ai-kit@korn9537";
 
-const IMPORT = "@ai-kit/CLAUDE.core.md";
-
 const MARK = "ai-kit-root";
-
-// what a 1.x shim ran; init replaces such a shim
-const OLD_SHIM = "ai-kit/githooks/pre-commit";
 
 // the recorded path, or when a plugin update removed that version, the newest x.y.z beside it
 const RESOLVE = (hook) => `kit="$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${MARK}" 2>/dev/null)"
@@ -151,14 +146,6 @@ const isShim = (s) => s?.includes(MARK) ?? false;
 // a hook git cannot run is skipped silently; Windows has no execute bit to read
 const notExecutable = (p) => process.platform !== "win32" && (statSync(p).mode & 0o111) === 0;
 
-// only the 1.x wiring: ${CLAUDE_PROJECT_DIR}/ai-kit/hooks/, $CLAUDE_PROJECT_DIR/..., or a relative ai-kit/hooks/
-const KIT_HOOK =
-  /(^|["'\s])(\$\{CLAUDE_PROJECT_DIR\}["']?\/|\$CLAUDE_PROJECT_DIR["']?\/|\.\/)?ai-kit\/hooks\//;
-
-const isKitHook = (h) => KIT_HOOK.test(h?.command ?? "");
-
-const isImportLine = (l) => l.trim().replace(/^[-*]\s+/, "") === IMPORT;
-
 const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 
 // warnings, not problems: this machine's state, and a project before 2.7.0 must keep committing
@@ -190,4 +177,4 @@ const isObj = (o) => o !== null && typeof o === "object" && !Array.isArray(o);
 const lsFiles = (...a) =>
   (tryGit("ls-files", "-z", ...a) ?? "").split("\0").filter(Boolean);
 
-export { HEAD, IMPORT, LINE, MARK, MSG_SHIM, OLD_SHIM, PLUGIN, SHIM, STAGED, SYNC, at, claudeDir, codeLines, dropEcho, eolOf, isImportLine, isKitHook, isObj, isShim, jsonText, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, sha, shimPath, toolsIn, tryGit, tryGitIn };
+export { HEAD, LINE, MARK, MSG_SHIM, PLUGIN, SHIM, STAGED, SYNC, at, claudeDir, codeLines, dropEcho, eolOf, isObj, isShim, jsonText, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, sha, shimPath, toolsIn, tryGit, tryGitIn };
