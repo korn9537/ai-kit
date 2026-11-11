@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.47.2
+
+`githooks/commit-msg` checks the `Job:` trailer only on commits made under Claude Code (`CLAUDECODE=1`, which it sets
+in the shells of sessions and subagents). A person committing by hand from VS Code or a terminal is no longer refused:
+since 2.23 every manual commit in a project with the shim needed a `Job:` line. A manual commit without one is not
+listed by `/ai-kit:jobs`. No project needs to edit anything; the shim calls the updated runner.
+
 ## 2.47.1
 
 README's evals paragraph says what a run costs on each sign-in: on a subscription (Pro, Max) a `claude plugin eval`

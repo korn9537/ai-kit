@@ -14,6 +14,8 @@ git -C "$REPO" config user.name tester
 git -C "$REPO" config user.email t@t
 git -C "$REPO" config core.hooksPath "$TMP/hooks"
 
+# the runner checks only commits made under Claude Code; every case below runs as one
+export CLAUDECODE=1
 pass=0
 fail=0
 # check <desc> <actual> <expected>
@@ -56,6 +58,8 @@ check "lowercase job: → blocked" "$(msg 'feat: x\n\njob: 2026-01-05-a\n')" 1
 check "Job in the body, not the trailer block → blocked" \
   "$(msg 'feat: x\n\nJob: 2026-01-05-a\nmore text here\n')" 1
 check "fixup! → passes" "$(msg 'fixup! feat: x\n')" 0
+check "a person's commit (no CLAUDECODE) without Job → passes" "$(CLAUDECODE= msg 'feat: x\n\nbody\n')" 0
+check "CLAUDECODE=0 without Job → passes" "$(CLAUDECODE=0 msg 'feat: x\n')" 0
 
 echo a >"$REPO/a.txt"
 git -C "$REPO" add a.txt

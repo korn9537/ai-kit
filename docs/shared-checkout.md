@@ -28,7 +28,9 @@ push triggers, is in the project's CLAUDE.md (branch and deploy).
 A job is one user request, however many batches and commits it takes. Every commit carries one trailer
 `Job: <yyyy-mm-dd>-<slug>`, so a later session finds the whole job without guessing from subjects. The plugin's
 `githooks/commit-msg`, run by the project's `.githooks/commit-msg` shim (`kit.mjs init` writes it), blocks a commit
-without exactly one valid trailer; merges and `fixup!`/`squash!`/`amend!` commits pass. The shim skips the check
+made under Claude Code (`CLAUDECODE=1`) without exactly one valid trailer; merges, `fixup!`/`squash!`/`amend!` commits
+and a person's own commits (VS Code, a terminal) pass. A person may add the trailer by hand so `/ai-kit:jobs` lists
+the commit with its job. The shim skips the check
 until a session or `init` has recorded the plugin path (a fresh clone, an old plugin version).
 
 - The main session picks the id once, at the first commit of the request: that day's date and a 2–5 word slug naming

@@ -1,7 +1,10 @@
 #!/usr/bin/env sh
-# commit-msg runner, called by the project's .githooks/commit-msg shim: every commit names the job (one user request)
-# it belongs to, so scripts/jobs.mjs finds all of its commits to revert. Rule: docs/shared-checkout.md §Jobs.
+# commit-msg runner, called by the project's .githooks/commit-msg shim: every commit Claude Code makes names the job (one
+# user request) it belongs to, so scripts/jobs.mjs finds all of its commits to revert. Rule: docs/shared-checkout.md §Jobs.
 msg="$1"
+# a person committing by hand (VS Code, a terminal) is not held to it: Claude Code sets CLAUDECODE=1 in the shells it
+# runs, sessions and subagents alike, so the rule binds the agent's commits only
+[ "${CLAUDECODE:-}" = 1 ] || exit 0
 [ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
 head -n 1 "$msg" | grep -qE '^(fixup|squash|amend)! ' && exit 0
 

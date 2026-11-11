@@ -48,7 +48,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | File | Role |
 |---|---|
 | `githooks/pre-commit` | runs in order: stage `ai/usage/` records, backslash path, `check-docs`, `eslint-disable ... moved verbatim`, 40 KB size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
-| `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer; a merge and a `fixup!`, `squash!` or `amend!` commit pass |
+| `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer on a commit made under Claude Code (`CLAUDECODE=1`); a merge, a `fixup!`, `squash!` or `amend!` commit and a person's own commit pass |
 | `githooks/*.test.sh` | fixture tests |
 
 ### agents/ (subagents)

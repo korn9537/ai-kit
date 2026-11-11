@@ -14,7 +14,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 - **Every commit carries one `Job: <yyyy-mm-dd>-<slug>` trailer**: one id per user request, picked by the main
   session at its first commit and named in every committer brief; a review-fix commit copies the job of the commit
   it fixes. Finding or reverting a request's commits starts from `/ai-kit:jobs` (`ai-kit/docs/shared-checkout.md`
-  §Jobs; `.githooks/commit-msg` enforces).
+  §Jobs; `.githooks/commit-msg` enforces it on Claude Code's commits, not on a person's own).
 
 ## Language
 
