@@ -112,12 +112,13 @@ left to run.
 - The Agent call carries the batch's size: `light` → `model: "sonnet"`, `effort: "low"`; `normal` → no model or
   effort (the committer's frontmatter holds: sonnet, medium); `heavy` → `model: "opus"`, `effort: "high"`. Never
   `xhigh` or `max` automatically. `maxSize` (args, from `ai/kit/config.json` `committer.maxSize`) clamps every
-  committer call down to it. A fix in the workflow runs at the highest size of the job's batches (`heavy` for a
-  `dataRule` finding), its second fix one tier up, nothing above `heavy`; the clamp applies last. The main-session
-  coordinator passes the same model and effort on the first launch of each batch's committer, at its size. A fix
-  there goes by SendMessage, which cannot change model or effort, so it runs at the batch's own size: fix escalation
-  is the workflow's, where each fix is a fresh agent. `/ai-kit:continuous` retries keep the size: a retry runs only
-  an agent that died, and its fixes escalate as above.
+  committer call down to it. A fix in the workflow runs at the highest size of the job's committed batches,
+  partial included (`heavy` for a `dataRule` finding), its second fix one tier up, nothing above
+  `heavy`; the clamp applies last. The main-session coordinator passes the same model and effort on the first launch
+  of each batch's committer, at its size. A fix there goes by SendMessage,
+  which cannot change model or effort, so it runs at the batch's own size: fix escalation is the workflow's, where
+  each fix is a fresh agent. `/ai-kit:continuous` retries keep the size: a retry runs only an agent that died, and
+  its fixes escalate as above.
 - The brief (`docs/handoffs.md` §Per batch): the batch (what to change, where, the decisions and requirements it
   follows), its Done when checks (the summary's checks this batch must meet), its `risks` and `tests` and the plan
   review's findings for it (§Plan review), its verify commands (not what CLAUDE.md

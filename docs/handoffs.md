@@ -14,7 +14,7 @@ row here and its test together.
 | main → user | the summary, item 6 Done when (CLAUDE.core.md, Summarize) |
 | main → `decider` | the question, options, request, what is known; when BA ran, its Owner decisions item with sources |
 | main → plan file | per batch `id, title, brief, accept, risks, tests, verify, waitsFor, alsoInScope, size` (`commands/run-plan.md` Args) |
-| plan → plan reviewer | the request, per batch id, title, brief, Done when, risks, tests, also in scope, waits for (`plan-batching.md` §Plan review) |
+| plan → plan reviewer | the request, per batch id, title, size (normal when absent), brief, Done when, risks, tests, also in scope, waits for (`plan-batching.md` §Plan review) |
 | plan reviewer → committer | findings per batch id, in that batch's brief; CONFIRMED is part of the batch, PLAUSIBLE judged into `choices` |
 
 `accept` is the summary's Done when checks for that batch; `risks` and `tests` are the plan's failure modes and the

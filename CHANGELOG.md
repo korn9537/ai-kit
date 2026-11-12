@@ -5,10 +5,10 @@
 A batch has an optional `size`, `light`, `normal` (default) or `heavy`, and `/ai-kit:run-plan` runs its committer at it:
 `light` on sonnet at low effort, `normal` as before (sonnet, medium), `heavy` on opus at high effort; never xhigh or
 max. Heavy is for code-level difficulty only (live data, transactions, concurrency, idempotency): a business rule that
-the BA report settles stays normal. A fix after review runs at the highest size of the job's batches (heavy for a data
-or rule finding), a second fix one tier up. `committer.maxSize` in `ai/kit/config.json` clamps every committer call.
-The plan review checks each size. Plans and configs with no size or `maxSize` run as before. In the main session a fix
-sent by SendMessage keeps the batch's size.
+the BA report settles stays normal. A fix after review runs at the highest size of the job's committed batches,
+partial included (heavy for a data or rule finding), a second fix one tier up. `committer.maxSize` in
+`ai/kit/config.json` clamps every committer call. The plan review checks each size. Plans and configs with no size or
+`maxSize` run as before. In the main session a fix sent by SendMessage keeps the batch's size.
 
 ## 2.47.2
 
