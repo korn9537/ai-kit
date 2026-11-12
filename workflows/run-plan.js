@@ -18,6 +18,27 @@ if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan need
 // the same format githooks/commit-msg accepts: a bad id would fail every committer's commit
 if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(args.job)) throw new Error(`run-plan args.job is not <yyyy-mm-dd>-<slug>: ${args.job}`)
 
+// the committer's size per batch (docs/plan-batching.md): normal passes no keys, so the agent's frontmatter holds
+// (sonnet, medium); never xhigh or max
+const SIZES = ['light', 'normal', 'heavy']
+const TIERS = { light: { model: 'sonnet', effort: 'low' }, normal: {}, heavy: { model: 'opus', effort: 'high' } }
+// a size the workflow does not know (args written by hand) runs as normal
+const sizeOf = (s) => (SIZES.includes(s) ? s : 'normal')
+const rank = (s) => SIZES.indexOf(sizeOf(s))
+// args.maxSize clamps every committer call down to it; an unknown one is ignored, not used as an index
+const cap = args.maxSize === undefined ? null : SIZES.includes(args.maxSize) ? args.maxSize : null
+if (args.maxSize !== undefined && !cap) log(`maxSize ${JSON.stringify(args.maxSize)} is not light, normal or heavy: ignored, no clamp`)
+if (cap) log(`maxSize ${cap}: every committer call runs at ${cap} or below`)
+// one tier above, stopping at heavy
+const raise = (s) => SIZES[Math.min(rank(s) + 1, SIZES.length - 1)]
+const higher = (a, b) => (rank(a) >= rank(b) ? sizeOf(a) : sizeOf(b))
+const sized = (planned) => {
+  const p = sizeOf(planned)
+  const ran = cap && rank(p) > rank(cap) ? cap : p
+  return { size: { planned: p, ran }, opts: { ...TIERS[ran] } }
+}
+const tag = (z) => (z.size.ran === 'normal' ? '' : ` [${z.size.ran}]`)
+
 const COMMIT = {
   type: 'object',
   properties: {
@@ -214,8 +235,9 @@ const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
       ].join('\n')
 
 const results = {}
-const pick = (c) => ({
+const pick = (c, z) => ({
   hash: c.hash, files: c.files, choices: c.choices, owner: c.owner, blockers: c.blockers, unmet: c.unmet || [], notes: c.notes,
+  ...(z ? { size: z.size } : {}),
 })
 
 // what a fix agent left open (owner decisions, blockers, unmet Done when checks) marks the batch partial, not only its
@@ -249,10 +271,13 @@ async function reviewChain(b, r, need) {
     r.review = `no CONFIRMED finding (${rv.checked})`
     return
   }
-  log(`${b.title}: ${confirmed.length} CONFIRMED → fix`)
+  // the highest planned size of the commits, heavy when a fix is about data or a rule; fix2 one tier above; clamped last
+  const z1 = sized(confirmed.some((f) => f.dataRule) ? 'heavy' : b.baseSize)
+  const z2 = sized(raise(z1.size.planned))
+  log(`${b.title}: ${confirmed.length} CONFIRMED → fix${tag(z1)}`)
   const fx = await exclusive(() =>
     agent(fixPrompt(b, r.hash, confirmed), {
-      label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT,
+      label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT, ...z1.opts,
     }),
   )
   if (!fx || !fx.hash) {
@@ -263,7 +288,7 @@ async function reviewChain(b, r, need) {
     r.notes.push(...((fx && fx.notes) || []))
     return
   }
-  r.fix = pick(fx)
+  r.fix = pick(fx, z1)
   jobFiles = [...new Set([...jobFiles, ...(fx.files || [])])]
   leftOpen(r, fx)
   const fresh = confirmed.some((f) => f.dataRule)
@@ -282,13 +307,13 @@ async function reviewChain(b, r, need) {
   if (left.length && !(r.owner || []).length && !r.held) {
     const fx2 = await exclusive(() =>
       agent(fixPrompt(b, fx.hash, left), {
-        label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT,
+        label: `commit: [${b.id} fix] ${b.title}`, phase: 'Fix', agentType: 'ai-kit:committer', schema: COMMIT, ...z2.opts,
       }),
     )
     // what the fix agent left open counts before its re-check, which may fail
     leftOpen(r, fx2)
     if (fx2 && fx2.hash) {
-      r.fix2 = pick(fx2)
+      r.fix2 = pick(fx2, z2)
       jobFiles = [...new Set([...jobFiles, ...(fx2.files || [])])]
       const fresh2 = left.some((f) => f.dataRule)
       const rc2 = await agent(recheckPrompt(b, `${r.hash} ${fx.hash}`, fx2.hash, left, fresh2), {
@@ -322,8 +347,12 @@ const planPrompt = [
   `The user's request: ${args.request || batches[0].title}`,
   where,
   'Plan review: no code is written yet. Read this plan, not a commit, and read the code each batch touches.',
+  'Size check: each batch header names its size. heavy fits only code-level difficulty: a migration or data change on live',
+  'data; transactions, concurrency or idempotency. Business rules or calculations that a BA report and the brief already',
+  'settle stay normal. light fits docs-only, copy, config values, a codemod run, a rename or a move-only change. A size',
+  'that does not fit is a PLAUSIBLE finding (kind claim) naming the batch.',
   ...batches.flatMap((b) => [
-    '', `Batch ${b.id}: ${b.title}${(b.waitsFor || []).length ? ` (waits for ${b.waitsFor.join(', ')})` : ''}`,
+    '', `Batch ${b.id} (size ${sizeOf(b.size)}): ${b.title}${(b.waitsFor || []).length ? ` (waits for ${b.waitsFor.join(', ')})` : ''}`,
     b.brief, done(b), plan(b), scope(b),
   ]),
 ].join('\n')
@@ -346,14 +375,16 @@ for (const [i, b] of batches.entries()) {
     log(`${i + 1}/${batches.length} ${b.title}: skipped, waits for ${waiting.join(', ')}`)
     continue
   }
+  const z = sized(b.size)
+  if (z.size.ran !== 'normal') log(`${i + 1}/${batches.length} ${b.title}: runs at ${z.size.ran}`)
   const c = await exclusive(() =>
     agent(commitPrompt(b), {
-      label: `commit: [${b.id}] ${b.title}`, phase: 'Commit', agentType: 'ai-kit:committer', schema: COMMIT,
+      label: `commit: [${b.id}] ${b.title}`, phase: 'Commit', agentType: 'ai-kit:committer', schema: COMMIT, ...z.opts,
     }),
   )
   if (!c || !c.hash) {
     results[b.id] = {
-      ...head, status: 'blocked', owner: (c && c.owner) || [],
+      ...head, size: z.size, status: 'blocked', owner: (c && c.owner) || [],
       blockers: (c && c.blockers) || ['agent failed'], notes: (c && c.notes) || [],
     }
     log(`${i + 1}/${batches.length} ${b.title}: not committed`)
@@ -362,7 +393,7 @@ for (const [i, b] of batches.entries()) {
   // an owner decision, a blocker or an unmet Done when check left open: the commit stands, but no batch that waits on
   // it runs; notes never hold one
   const held = c.owner.length || c.blockers.length || (c.unmet || []).length
-  const r = { ...head, status: held ? 'partial' : 'committed', ...pick(c) }
+  const r = { ...head, status: held ? 'partial' : 'committed', ...pick(c, z) }
   results[b.id] = r
   log(`${i + 1}/${batches.length} ${b.title} → ${c.hash}${held ? ' (left open: see report)' : ''}`)
   needs[b.id] = c.review
@@ -379,6 +410,8 @@ if (made.length) {
     accept: batches.flatMap((b) => b.accept || []), tests: batches.flatMap((b) => b.tests || []),
     risks: batches.flatMap((b) => b.risks || []), verify: [...new Set(batches.map((b) => b.verify).filter(Boolean))].join(' && '),
     alsoInScope: batches.flatMap((b) => b.alsoInScope || []),
+    // the highest planned size over every batch with a hash, partial included
+    baseSize: batches.filter((b) => results[b.id] && results[b.id].hash).reduce((m, b) => higher(m, b.size), 'light'),
   }
   jobReview = { id: 'job', title: jb.title, status: 'committed', hash: made.at(-1).hash, owner: [], blockers: [], unmet: [], notes: [],
     held: made.some((r) => (r.owner || []).length) }

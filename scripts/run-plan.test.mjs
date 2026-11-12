@@ -144,5 +144,56 @@ s = script([[]]);
 await run(one, (l, p) => (seen.push(p), s(l)));
 ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
 
+// size tiers: the committer's model and effort per batch, the job fix, maxSize, labels
+{
+  const runOpts = (batches, fn, extra = {}) => {
+    const calls = [];
+    const logs = [];
+    return new AsyncFunction("args", "agent", "log", source)(
+      { plugin: "/p", job: "2026-11-07-x", request: "r", batches, ...extra },
+      async (prompt, o) => (calls.push({ label: o.label, prompt, o }), fn(o.label)),
+      (l) => logs.push(l),
+    ).then((res) => ({ res, calls, logs }));
+  };
+  const sz = (size) => ({ ...one[0], id: size || "none", title: `feat(x): ${size}`, ...(size === "none" ? {} : { size }) });
+  const keys = (c) => Object.keys(c.o).filter((k) => k === "model" || k === "effort");
+  const base = (label) => (label === "review: plan" || /^review/.test(label) ? review([]) : commit(label.replace(/\W+/g, "").slice(-6)));
+  const t = await runOpts([sz("light"), sz("normal"), sz("heavy"), { ...sz("none"), size: undefined }, { ...sz("odd"), size: "huge" }], base);
+  const cm = (id) => t.calls.find((c) => c.label.startsWith(`commit: [${id}]`));
+  ok("light: sonnet, low", cm("light").o.model === "sonnet" && cm("light").o.effort === "low");
+  ok("heavy: opus, high", cm("heavy").o.model === "opus" && cm("heavy").o.effort === "high");
+  ok("normal and absent: no keys", !keys(cm("normal")).length && !keys(cm("none")).length && !("model" in cm("none").o) && !("effort" in cm("none").o));
+  ok("unknown size runs as normal", !keys(cm("odd")).length && t.res.batches.at(-1).size.planned === "normal");
+  ok("labels keep the commit:/review: forms", t.calls.every((c) => /^(commit: \[\w+( fix)?\] .+|review: plan|review: \[(job)( recheck)?\] .+)$/.test(c.label)));
+  ok("plan review prompt names each batch's size", /Batch light \(size light\)/.test(t.calls[0].prompt) && /Batch none \(size normal\)/.test(t.calls[0].prompt) && /Batch heavy \(size heavy\)/.test(t.calls[0].prompt) && /code-level difficulty/.test(t.calls[0].prompt));
+  ok("result shows size", t.res.batches[0].size.planned === "light" && t.res.batches[0].size.ran === "light");
+
+  // job fix: highest committed size, heavy for a dataRule finding, fix2 one tier above, never past heavy
+  const fixOpts = async (batches, reviews, extra) => {
+    let n = 0;
+    const o = await runOpts(batches, (l) => (/^review/.test(l) ? review(l === "review: plan" ? [] : reviews[n++] ?? []) : commit(`h${n}${l.length}${Math.random()}`.slice(0, 8))), extra);
+    return { ...o, fixes: o.calls.filter((c) => / fix\]/.test(c.label)) };
+  };
+  const lightNormal = [sz("light"), sz("normal")];
+  let f = await fixOpts(lightNormal, [[finding("d", true)], []]);
+  ok("dataRule finding: first fix at heavy", f.fixes[0].o.model === "opus" && f.res.review.fix.size.planned === "heavy");
+  f = await fixOpts(lightNormal, [[finding("x")], []]);
+  ok("other finding: first fix at normal", !keys(f.fixes[0]).length && f.res.review.fix.size.planned === "normal");
+  f = await fixOpts(lightNormal, [[finding("x")], [finding("y")], []]);
+  ok("fix2 one tier above the first fix", f.fixes.length === 2 && f.fixes[1].o.model === "opus" && f.res.review.fix2.size.planned === "heavy");
+  f = await fixOpts(lightNormal, [[finding("x", true)], [finding("y")], []]);
+  ok("fix2 after a heavy fix stays heavy", f.fixes[1].o.model === "opus" && f.res.review.fix2.size.planned === "heavy");
+  f = await fixOpts([sz("light")], [[finding("x")], [finding("y")], []]);
+  ok("light job: fix light, fix2 normal", f.fixes[0].o.model === "sonnet" && !keys(f.fixes[1]).length);
+
+  // maxSize clamps every call; the raise comes first, the clamp last
+  const m = await fixOpts([sz("heavy")], [[finding("x")], [finding("y")], []], { maxSize: "normal" });
+  ok("maxSize normal: heavy batch call has no keys, result shows the clamp", !keys(m.calls.find((c) => /^commit: \[heavy\]/.test(c.label))).length && m.res.batches[0].size.planned === "heavy" && m.res.batches[0].size.ran === "normal");
+  ok("maxSize clamps fix and fix2 on the planned size", m.fixes.every((c) => !keys(c).length) && m.res.review.fix.size.planned === "heavy" && m.res.review.fix.size.ran === "normal" && m.res.review.fix2.size.planned === "heavy" && m.res.review.fix2.size.ran === "normal");
+  ok("a clamped run is logged", m.logs.some((l) => /maxSize normal/.test(l)));
+  const u = await runOpts([sz("heavy")], base, { maxSize: "bogus" });
+  ok("unknown maxSize: no clamp, logged", u.calls.find((c) => /^commit/.test(c.label)).o.model === "opus" && u.logs.some((l) => /maxSize "bogus"/.test(l)));
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -83,7 +83,7 @@ ok("a fix that made no commit keeps its findings in confirmed", res.review.revie
 
 const pr = seen.find((x) => x.label === "review: plan")?.prompt ?? "";
 ok("plan reviewer: request, per batch brief, Done when, risks, tests, also in scope, waits for",
-  all([pr], /REQUEST/, /Batch a: feat\(x\): y/, /BRIEF-A/, DONE, /- RISK-A/, /- TEST-A/, /also in scope: SCOPE-A/, /Batch b: feat\(x\): z \(waits for a\)/, /BRIEF-B/));
+  all([pr], /REQUEST/, /Batch a \(size normal\): feat\(x\): y/, /BRIEF-A/, DONE, /- RISK-A/, /- TEST-A/, /also in scope: SCOPE-A/, /Batch b \(size normal\): feat\(x\): z \(waits for a\)/, /BRIEF-B/));
 const okPlan = { findings: [{ batches: ["a"], kind: "claim", what: "CLAIM-X", fix: "FIX-X", verdict: "CONFIRMED" }, { batches: ["a", "b"], kind: "conflict", what: "BOTH", fix: "f", verdict: "PLAUSIBLE" }, { batches: ["zz"], kind: "test", what: "LOST", fix: "f", verdict: "CONFIRMED" }], reviewed: true, checked: "c" };
 {
   const seen2 = [];
