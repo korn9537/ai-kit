@@ -58,9 +58,10 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   docs) skip both, except that a BA request by the user is always run; unsure → summarize.
 - **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
   effort, `ai-kit:committer` on sonnet at medium effort, all from their agent frontmatter; the Agent call passes no
-  model or effort for them. A general-purpose fallback for a kit agent (type not loaded) passes that agent's
-  frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for committer); every other
-  general-purpose or Explore subagent gets `model: "sonnet"`.
+  model or effort for them, except a committer's batch size: `light` sonnet low, `heavy` opus high
+  (`ai-kit/docs/plan-batching.md` §Coordinator pipeline). A general-purpose fallback for a kit agent (type not
+  loaded) passes that agent's frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for
+  committer at size normal); every other general-purpose or Explore subagent gets `model: "sonnet"`.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for

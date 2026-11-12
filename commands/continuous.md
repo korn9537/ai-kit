@@ -8,7 +8,8 @@ In this file `<plugin>` is the plugin root (`${CLAUDE_PLUGIN_ROOT}` at the start
 
 ## Start
 
-1. **Plan** per `<plugin>/commands/run-plan.md` steps 1 and 2, for $ARGUMENTS, at any batch count. This is the last
+1. **Plan** per `<plugin>/commands/run-plan.md` steps 1 and 2, for $ARGUMENTS, at any batch count; the args carry
+   each batch's `size` and `maxSize` (from `ai/kit/config.json` `committer.maxSize`) as there. This is the last
    moment the user answers: ask every owner decision now, in one message, and wait. `waitsFor` holds only what a
    batch truly needs, so one stuck batch stops as little as possible. Going on with an earlier job: reuse its id,
    with batch ids new to that job.

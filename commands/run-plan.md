@@ -22,6 +22,10 @@ $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
      `verify` holds the project's verify commands for it, leaving out what CLAUDE.md says the pre-commit runs.
      `risks` and `tests` are set per `plan-batching.md` §Plan review, never empty. `waitsFor` lists the ids it needs.
      `alsoInScope` lists each item the main session added beyond the request.
+     Optional `size` (`light`, `normal` or `heavy`; absent is `normal`) is the committer's model and effort, set per
+     `plan-batching.md` §Before the first edit.
+   - `maxSize`: `light`, `normal` or `heavy`, only when `ai/kit/config.json` `committer.maxSize` is set; no committer
+     call runs above it.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
    project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
    two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath`

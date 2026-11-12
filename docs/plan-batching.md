@@ -12,6 +12,13 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
 3. **Batch**: items that touch the same file or function form one batch = one commit (one read, one verify, one
    review); the commit message names each item. A separate commit only for: a move-only split, a contract change
    (both sides in it), a migration or data change that may need its own revert.
+   **Size** each batch (`size`, optional, default `normal`), the model and effort its committer runs at (§Coordinator
+   pipeline):
+   - `light`: docs-only, copy, config values, a codemod run, a rename, a move-only change.
+   - `normal`: the default, including business rules or calculations that a business-analyst report and the brief
+     already settle.
+   - `heavy`: code-level difficulty only: a migration or data change on live data; transactions, concurrency,
+     idempotency. A business rule is never heavy for being a rule.
 4. **Order**: a batch waits for another only when it needs that batch's code, schema or output, or shares a file or
    resource with it. Show the plan (batches, their items, what waits for what). An owner decision open → wait
    for the owner's go; none → go on, the user may correct it.
@@ -30,6 +37,8 @@ anyway is found before the code exists. Each batch carries, set when the plan is
   be; a batch with none says `none: <why>`.
 - `tests`: each test the batch adds, one per risk and per Done when check that code can show; `none: <why>` for a
   doc-only batch.
+- `size`: the reviewer checks each batch's size against the criteria in §Before the first edit; one that does not fit
+  is a PLAUSIBLE finding (kind claim) naming the batch.
 - A statement a doc or brief makes about behavior is checked against the code when written, not after.
 
 The reviewer reads the plan and the code the batches touch, and reports per batch: a failure mode missing from
@@ -96,11 +105,19 @@ left to run.
 - Each batch goes to a fresh background `ai-kit:committer` subagent (description `commit: <batch>`) that
   implements, verifies and commits it. Its own prompt carries the commit-subagent rules, read and verify-output
   discipline and report shape, so the brief holds only the batch. When that type is not loaded (plugin enabled
-  mid-session), launch `general-purpose` (`model: "sonnet"`, `effort: "medium"`) with the same description, told first
-  to read and follow `<plugin root>/agents/committer.md`.
+  mid-session), launch `general-purpose` with the model and effort of the batch's size (below) and the same
+  description, told first to read and follow `<plugin root>/agents/committer.md`.
 - A batch is one commit. A sweep over many modules (one rule fixed everywhere, a lint backlog) is one batch per
   module or per about ten files, never one subagent for the whole sweep: its context grows with every file read.
-- The Agent call passes no model or effort (the committer runs sonnet, medium effort from its frontmatter).
+- The Agent call carries the batch's size: `light` → `model: "sonnet"`, `effort: "low"`; `normal` → no model or
+  effort (the committer's frontmatter holds: sonnet, medium); `heavy` → `model: "opus"`, `effort: "high"`. Never
+  `xhigh` or `max` automatically. `maxSize` (args, from `ai/kit/config.json` `committer.maxSize`) clamps every
+  committer call down to it. A fix in the workflow runs at the highest size of the job's batches (`heavy` for a
+  `dataRule` finding), its second fix one tier up, nothing above `heavy`; the clamp applies last. The main-session
+  coordinator passes the same model and effort on the first launch of each batch's committer, at its size. A fix
+  there goes by SendMessage, which cannot change model or effort, so it runs at the batch's own size: fix escalation
+  is the workflow's, where each fix is a fresh agent. `/ai-kit:continuous` retries keep the size: a retry runs only
+  an agent that died, and its fixes escalate as above.
 - The brief (`docs/handoffs.md` §Per batch): the batch (what to change, where, the decisions and requirements it
   follows), its Done when checks (the summary's checks this batch must meet), its `risks` and `tests` and the plan
   review's findings for it (§Plan review), its verify commands (not what CLAUDE.md

@@ -78,7 +78,8 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 - `agent-model-guard.sh` (PreToolUse on Agent and Task) blocks a general-purpose subagent (type `general-purpose`,
   `claude` or none) or an `Explore` launched without a `model`, which would inherit the main session's opus; pass
   `sonnet`, except a fallback for a kit agent, which passes that agent's frontmatter model and effort (`opus` medium
-  for the reviewer, business-analyst and decider, `sonnet` medium for the committer).
+  for the reviewer, business-analyst and decider, `sonnet` medium for the committer at size `normal`; `sonnet` low
+  for `light`, `opus` high for `heavy`).
 - `handoff-nudge.sh` (UserPromptSubmit) adds a
   note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends. It never
   blocks and never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every `handoff.max_reads` (4; 0 is off)
@@ -146,7 +147,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`max_reads`/`reads_from`/`big_read`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations` |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`max_reads`/`reads_from`/`big_read`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations`; `run-plan`: `committer.maxSize` (`light`, `normal`, `heavy`: no committer runs above it) |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`, `ai-kit:committer`                                                                                                                                                                                                |
