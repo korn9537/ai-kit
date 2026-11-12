@@ -5,7 +5,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { isMain } from "./lib/is-main.mjs";
-import { JOB, checkBatch, readRepo } from "./plan.mjs";
+import { JOB, checkBatch, checkMaxSize, readRepo } from "./plan.mjs";
 
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
@@ -22,6 +22,7 @@ export function init(args, old, base = [], baseLoose = []) {
   if (old?.running || old?.launching) throw new Error("a run of this job is still going");
   if (!JOB.test(args.job || "")) throw new Error(`bad job id: ${args.job}`);
   if (!args.plugin || !args.batches?.length) throw new Error("args need plugin and batches");
+  checkMaxSize(args);
   const kept = Object.fromEntries(Object.entries(old?.batches || {}).filter(([, r]) => r.hash));
   const ids = new Set(args.batches.map((b) => b.id));
   for (const b of args.batches) {

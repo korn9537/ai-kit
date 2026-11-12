@@ -43,6 +43,10 @@ const orphan = abandon({ ...plan(), running: true, launching: true, pending: ["a
 let untitled = "";
 try { initState({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a" }] }); } catch (e) { untitled = e.message; }
 ok("init refuses a batch with no title or brief, as write does", /needs a title and a brief/.test(untitled));
+const initErr = (args) => { try { init(args); return ""; } catch (e) { return e.message; } };
+ok("init refuses a batch with an invalid size", /size is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a", size: "opus" }] })));
+ok("init refuses an invalid maxSize", /maxSize is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "max", batches: [{ id: "a" }] })));
+ok("init takes a size and a maxSize", initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "normal", batches: [{ id: "a", size: "heavy" }] }) === "");
 ok("abandon lets init take the job again", init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).args.batches.length === 1, orphan);
 ok("an abandoned run launches nothing on a late tick", next(orphan, none, clean, T).step.action === "stopped", orphan);
 ok("init clears the abandoned mark", !init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).abandoned);

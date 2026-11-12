@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, status, write } from "./plan.mjs";
+import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -112,6 +112,16 @@ ok("a merge keeps the request when the args hold none", merge(plan, { ...args([{
 const swapped = merge(plan, args([{ id: "x" }]), new Map([["a", "h"]]), true);
 ok("replace drops batches with no commit and keeps those with one", swapped.batches.map((b) => b.id).join() === "a,x", swapped);
 
+const full = { id: "a", title: "A", brief: "b", risks: ["r"], tests: ["t"] };
+for (const size of ["light", "normal", "heavy"]) ok(`checkBatch takes size ${size}`, checkBatch({ ...full, size }) === undefined);
+ok("checkBatch takes no size", checkBatch(full) === undefined);
+throws("checkBatch refuses size opus", () => checkBatch({ ...full, size: "opus" }), /size is light, normal or heavy/);
+throws("a maxSize of max is refused", () => merge(null, { ...args(), maxSize: "max" }), /maxSize is light, normal or heavy/);
+ok("a maxSize of heavy is taken", merge(null, { ...args(), maxSize: "heavy" }).batches.length === 3);
+const sized = merge(null, args([{ id: "a", size: "light" }, { id: "b", size: "heavy" }, { id: "c" }]));
+ok("write then parse keeps size on each batch", parse(render(sized)).batches.map((b) => b.size).join() === "light,heavy,", sized);
+ok("resume args carry each size", resumeArgs(sized, new Map(), "/p", "normal").batches.map((b) => b.size).join() === "light,heavy," && resumeArgs(sized, new Map(), "/p", "normal").maxSize === "normal");
+ok("resume args without a maxSize hold none", !("maxSize" in resumeArgs(sized, new Map(), "/p")));
 const commits = new Map([["a", "h1"]]);
 const p = progress(plan, commits);
 ok("progress: committed, left and ready", p.done[0].hash === "h1" && p.left.join() === "b,c" && p.ready.join() === "b,c", p);
@@ -228,6 +238,15 @@ try {
   ok("resume finds the one open plan", out.job === JOB && out.left.join() === "b,c", out);
   ok("resume writes the args in the git dir, not the tree", left.batches.length === 2 && git(repo, "status", "--porcelain") === "", left);
   ok("resume names the committed batches for the reviewer", out.committed[0].id === "a", out);
+  ok("with no config resume adds no maxSize", !("maxSize" in left) && !out.warnings, left);
+  mkdirSync(join(repo, "ai", "kit"), { recursive: true });
+  writeFileSync(join(repo, "ai", "kit", "config.json"), '{"committer":{"maxSize":"normal"}}');
+  const sizedOut = resume(repo, JOB, "/p");
+  ok("config committer.maxSize goes in the args file", JSON.parse(readFileSync(sizedOut.argsFile, "utf8")).maxSize === "normal" && !sizedOut.warnings, sizedOut);
+  writeFileSync(join(repo, "ai", "kit", "config.json"), '{"committer":{"maxSize":"huge"}}');
+  const hugeOut = resume(repo, JOB, "/p");
+  ok("an invalid config maxSize is left out with a warning", !("maxSize" in JSON.parse(readFileSync(hugeOut.argsFile, "utf8"))) && /huge/.test(hugeOut.warnings?.[0]), hugeOut);
+  rmSync(join(repo, "ai", "kit"), { recursive: true });
   writeFileSync(join(repo, "left.txt"), "dead agent\n");
   ok("resume shows what a dead committer left", resume(repo, JOB, "/p").dirty.join() === "left.txt");
   rmSync(join(repo, "left.txt"));

@@ -95,6 +95,8 @@ export function ordered(batches) {
 
 // args are what the workflow will run, so a mistake here would surface as a skipped batch long after the start;
 // replace: old batches with no commit that the args leave out are gone, for a plan fixed after a refusal
+export const SIZES = ["light", "normal", "heavy"];
+
 // the fields of one batch that run-plan.js reads; continuous.mjs init checks args with it too
 export function checkBatch(b) {
   if (typeof b?.id !== "string" || !b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b?.id}`);
@@ -114,11 +116,19 @@ export function checkBatch(b) {
       throw new Error(`batch ${b.id}: a ${k} entry of "none" says why: "none: <why>"`);
     }
   }
+  // absent is normal: a plan or args file from before sizes stays valid
+  if (b.size !== undefined && !SIZES.includes(b.size)) throw new Error(`batch ${b.id}: size is light, normal or heavy`);
   for (const k of ["waitsFor", "alsoInScope"])
     if (b[k] !== undefined && !Array.isArray(b[k])) throw new Error(`batch ${b.id}: ${k} is a list`);
 }
 
+// the job-level cap on a committer's size; plan.mjs write and continuous.mjs init both refuse another value
+export function checkMaxSize(args) {
+  if (args.maxSize !== undefined && !SIZES.includes(args.maxSize)) throw new Error(`maxSize is light, normal or heavy: ${args.maxSize}`);
+}
+
 export function merge(old, args, commits = new Map(), replace = false) {
+  checkMaxSize(args);
   if (!JOB.test(args.job || "")) throw new Error(`job is not <yyyy-mm-dd>-<slug>: ${args.job}`);
   if (!args.batches?.length) throw new Error("args need batches");
   const seen = new Set();
@@ -166,11 +176,23 @@ export function progress(plan, commits) {
 }
 
 // run-plan.js counts a waitsFor id outside the run as not committed, so a committed one leaves the list
-export function resumeArgs(plan, commits, plugin) {
+export function resumeArgs(plan, commits, plugin, maxSize) {
   const batches = plan.batches
     .filter((b) => !commits.has(b.id))
     .map((b) => ({ ...b, waitsFor: (b.waitsFor || []).filter((w) => !commits.has(w)) }));
-  return { request: plan.request, plugin, job: plan.job, batches };
+  return { request: plan.request, plugin, job: plan.job, ...(maxSize ? { maxSize } : {}), batches };
+}
+
+// committer.maxSize of the project's config: missing file, bad JSON or no committer = none; a bad value is a warning
+function configMaxSize(root) {
+  let v;
+  try {
+    v = JSON.parse(readFileSync(join(root, "ai", "kit", "config.json"), "utf8"))?.committer?.maxSize;
+  } catch {
+    return {};
+  }
+  if (v === undefined) return {};
+  return SIZES.includes(v) ? { maxSize: v } : { warning: `ai/kit/config.json committer.maxSize is ${JSON.stringify(v)}, left out: use light, normal or heavy` };
 }
 
 function statusLine(plan, commits) {
@@ -520,8 +542,9 @@ export function resume(root, job, plugin) {
   const dir = reviewDir(root);
   mkdirSync(dir, { recursive: true });
   const argsFile = join(dir, `plan-${plan.job}.args.json`);
-  writeFileSync(argsFile, `${JSON.stringify(resumeArgs(plan, commits, plugin), null, 2)}\n`);
-  return { ...out, argsFile };
+  const { maxSize, warning } = configMaxSize(root);
+  writeFileSync(argsFile, `${JSON.stringify(resumeArgs(plan, commits, plugin, maxSize), null, 2)}\n`);
+  return { ...out, argsFile, ...(warning ? { warnings: [warning] } : {}) };
 }
 
 // budget in ms for all plans: the session-start hook shares a 10 s limit, and a kill there loses the whole injection
