@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.48.0
 
 A batch has an optional `size`, `light`, `normal` (default) or `heavy`, and `/ai-kit:run-plan` runs its committer at it:
 `light` on sonnet at low effort, `normal` as before (sonnet, medium), `heavy` on opus at high effort; never xhigh or
