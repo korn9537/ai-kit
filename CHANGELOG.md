@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.49.1
 
 `/ai-kit:run-plan` and `/ai-kit:continuous` start again: Workflow now refuses a `scriptPath` outside the folders the
 session can read, and the commands pointed it at the plugin cache. `plan.mjs write`, `plan.mjs resume` and the `run`
