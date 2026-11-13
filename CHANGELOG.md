@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.49.0
 
 New `conventions/ui.md`: UI rules for web, mobile and tablet screens (status and feedback, double submission,
 labels, validation on submit, error messages, destructive actions, contrast, accessible names, motion, Thai text and
