@@ -17,7 +17,7 @@ sections and the "Working conventions" bullets from "Screen specs" on; the rest 
 
 Before the first edit, read what the reviewer checks your commit against, so its findings are not news to you:
 `ai/kit/review-checklist.md`, `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and
-`${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each language or framework in `ai/kit/config.json` `conventions`
+`${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each file named in `ai/kit/config.json` `conventions`
 that the batch touches, with the files each of those says it adds to. Each is read once; a missing file is skipped.
 The brief's `Done when` list is the result the commit must reach: meet every item; one you could not meet is
 reported as unmet, with why. A fix brief (review findings) skips these reads: read only the rule each finding names.

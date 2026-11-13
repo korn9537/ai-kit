@@ -360,7 +360,8 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` หรือ framework เช่น `["typescript", "nestjs", "typeorm"]`
-(มีไฟล์ `python`, `java`, `flutter` ด้วย; `react` ต่อจาก `typescript`, `flutter` ต่อจาก `dart`)
+(มีไฟล์ `python`, `java`, `flutter` ด้วย; `react` ต่อจาก `typescript`, `flutter` ต่อจาก `dart`;
+`ui` กฎหน้าจอ web, mobile, tablet สำหรับโปรเจกต์ที่ตั้ง `ui.platforms`)
 ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
 `check` จะไม่ผ่าน)
 ข้อยกเว้นของโปรเจกต์เขียนใน `ai/kit/review-checklist.md` พร้อมเหตุผล

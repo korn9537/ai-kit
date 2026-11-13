@@ -11,7 +11,7 @@ Set up ai-kit in the current project.
 3. Help the user fill `ai/kit/` for this project: `config.json` (code folders, comment-check scope, dev port, the
    languages for `conventions`, from `${CLAUDE_PLUGIN_ROOT}/conventions/`; `ui` per
    `${CLAUDE_PLUGIN_ROOT}/docs/screen-specs.md`, platforms from the `check` warning, `{"platforms": []}` when the
-   repo has no screens), `pre-commit.sh` and `post-edit.sh`
+   repo has no screens; with platforms set, also `ui` in `conventions`), `pre-commit.sh` and `post-edit.sh`
    (the repo's own checks), `review-checklist.md`, `analysis-sources.md`. Read the code and docs to propose values.
 4. Help write the project part of `CLAUDE.md`: layout, commands, stack rules, branch and deploy, verify commands.
    The working conventions come from the plugin at session start; do not import or copy them by hand. A project

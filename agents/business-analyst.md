@@ -18,7 +18,7 @@ API spec at `ui.api` are specs: name the screens a change touches, the spec each
 needs a new or changed server read (`${CLAUDE_PLUGIN_ROOT}/docs/screen-specs.md`). Read the
 conventions after the decisions and requirements, before the code:
 `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each
-language or framework in `ai/kit/config.json` `conventions`.
+file named in `ai/kit/config.json` `conventions`.
 
 Read, do not guess. A fact the repo can settle is read there. A fact outside the repo (library or API behaviour, a
 standard, a law or tax rule, a store or platform policy, how comparable products handle the case) is looked up on

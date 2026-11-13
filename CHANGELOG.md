@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+New `conventions/ui.md`: UI rules for web, mobile and tablet screens (status and feedback, double submission,
+labels, validation on submit, error messages, destructive actions, contrast, accessible names, motion, Thai text and
+dates, keyboard and reflow on web, touch targets, safe areas and layout by window width), each with its WCAG,
+GOV.UK, NN/g, Apple or Android source. A project with screens adds `"ui"` to `conventions` in `ai/kit/config.json`
+(and runs `kit.mjs sync` when `unattended` is on); nothing changes for a project that does not.
+
 ## 2.48.0
 
 A batch has an optional `size`, `light`, `normal` (default) or `heavy`, and `/ai-kit:run-plan` runs its committer at it:

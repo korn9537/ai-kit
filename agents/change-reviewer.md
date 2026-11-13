@@ -16,7 +16,7 @@ Check, in this order:
    they did not ask for (an item the brief lists as `also in scope` counts as asked).
 2. **Project rules** — every item in `ai/kit/review-checklist.md` that the diff touches, and the hard rules in
    `CLAUDE.md`; every rule the diff touches in `${CLAUDE_PLUGIN_ROOT}/conventions/general.md` and in
-   `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each language or framework in `ai/kit/config.json` `conventions`
+   `${CLAUDE_PLUGIN_ROOT}/conventions/<name>.md` for each file named in `ai/kit/config.json` `conventions`
    that the diff touches, with the files each of those says it adds to; a doc under
    `ai/` in the diff against `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`. The repo checklist wins on a conflict.
 3. **Screens** — only when `ai/kit/config.json` sets `ui.platforms`: a changed screen matches its

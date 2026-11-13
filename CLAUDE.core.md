@@ -65,7 +65,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for
-  each language or framework in `ai/kit/config.json` `conventions` that the change touches, and the files each of
+  each file named in `ai/kit/config.json` `conventions` that the change touches, and the files each of
   those says it adds to (`nestjs.md` adds to `typescript.md`). When summary item 5 sets a standard: this repo only →
   a check in `ai/kit/pre-commit.sh` when a script can catch it, else a line in `ai/kit/review-checklist.md`, in the
   same commit; cross-repo → a `proposal` issue on

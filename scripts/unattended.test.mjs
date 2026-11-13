@@ -1,7 +1,7 @@
 // Tests for the unattended snapshot: kit.mjs sync and check, and ai/kit/check.sh, killed mid-run included.
 // Usage: node scripts/unattended.test.mjs
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
@@ -61,6 +61,10 @@ try {
   eq("check: python, react, flutter, java are accepted", kitCmd("check").includes("has no conventions/"), false);
   kitCmd("sync");
   eq("sync: react and flutter bring typescript and dart", ["python.md", "react.md", "flutter.md", "java.md", "typescript.md", "dart.md"].map((n) => existsSync(copy(n))), [true, true, true, true, true, true]);
+  rmSync(at("ai", "kit", "conventions"), { recursive: true, force: true });
+  config({ conventions: ["ui"], unattended: true });
+  kitCmd("sync");
+  eq("sync: ui brings no stack file", readdirSync(at("ai", "kit", "conventions")).sort(), ["general.md", "ui.md", "unattended.md"]);
   config({ conventions: ["nestjs"], unattended: true });
   kitCmd("sync");
   eq("sync: a language not asked for stays out", existsSync(copy("go.md")), false);
