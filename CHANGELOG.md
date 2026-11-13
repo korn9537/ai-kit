@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+`/ai-kit:run-plan` and `/ai-kit:continuous` start again: Workflow now refuses a `scriptPath` outside the folders the
+session can read, and the commands pointed it at the plugin cache. `plan.mjs write`, `plan.mjs resume` and the `run`
+step of `continuous.mjs next` copy `workflows/run-plan.js` to `.claude/ai-kit/run-plan.js` below the command's
+cwd, which the Bash tool keeps inside the session (a worktree's `.git` and a git top above the session lie outside it
+too), and print it as `script`; the commands pass that path. `**/.claude/ai-kit/` goes into `.git/info/exclude`,
+so git status and the kit's dirty checks do not see the copy. No project needs to edit anything.
+
 ## 2.49.0
 
 New `conventions/ui.md`: UI rules for web, mobile and tablet screens (status and feedback, double submission,

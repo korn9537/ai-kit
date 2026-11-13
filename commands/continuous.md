@@ -41,7 +41,7 @@ says the workflow did not complete, and act on the printed `action`:
 - `running`: end the turn.
 - `wait`: a failed batch waits out its hour, or for the printed `dirty` paths to clear. End the turn; with no cron, do
   §Close, the printed `open` and `dirty` under Open.
-- `run`: read the printed `argsFile`, Workflow with `scriptPath` `<plugin>/workflows/run-plan.js` and its content as
+- `run`: read the printed `argsFile`, Workflow with `scriptPath` the printed `script` and the file's content as
   `args`, unchanged, then run
   `node <plugin>/scripts/continuous.mjs started <state> <Transcript dir from the Workflow result> <its task id>`. End
   the turn. The

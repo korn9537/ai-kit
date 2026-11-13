@@ -3,7 +3,7 @@
 // Usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop]
 //        | live <workflow transcript dir>
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
@@ -547,6 +547,27 @@ export function resume(root, job, plugin) {
   return { ...out, argsFile, ...(warning ? { warnings: [warning] } : {}) };
 }
 
+// Workflow loads no scriptPath outside the session (plugin cache, a worktree's .git, a git top above it): the run uses
+// a copy below the cwd, refreshed each call to match the plugin, kept out of git status by info/exclude
+const STAGED_IGNORE = "**/.claude/ai-kit/";
+export function stageScript(root, plugin) {
+  const to = join(root, ".claude", "ai-kit", "run-plan.js");
+  mkdirSync(dirname(to), { recursive: true });
+  copyFileSync(join(plugin, "workflows", "run-plan.js"), to);
+  try {
+    // relative to root on every git version; --path-format=absolute needs 2.31
+    const exclude = resolve(root, gitIn(root)("rev-parse", "--git-path", "info/exclude").trim());
+    const have = existsSync(exclude) ? readFileSync(exclude, "utf8") : "";
+    if (!have.split("\n").includes(STAGED_IGNORE)) {
+      mkdirSync(dirname(exclude), { recursive: true });
+      writeFileSync(exclude, `${have}${have && !have.endsWith("\n") ? "\n" : ""}${STAGED_IGNORE}\n`);
+    }
+  } catch {
+    // not a git repo: no status to keep clean
+  }
+  return to;
+}
+
 // budget in ms for all plans: the session-start hook shares a 10 s limit, and a kill there loses the whole injection
 export function status(root, job, budget = 0) {
   const end = budget ? Date.now() + budget : 0;
@@ -658,11 +679,15 @@ if (isMain(import.meta.url)) {
   try {
     if (cmd === "write" && arg) {
       const args = JSON.parse(readFileSync(arg, "utf8"));
-      console.log(JSON.stringify(write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace"))));
+      // staged first: a copy that fails must not hide a plan already committed
+      const script = stageScript(process.cwd(), plugin);
+      console.log(JSON.stringify({ ...write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace")), script }));
     } else if (cmd === "status") {
       status(projectRoot(process.cwd()), arg, flags.includes("--quick") ? 2000 : 0).forEach((l) => console.log(l));
     } else if (cmd === "resume") {
-      console.log(JSON.stringify(resume(projectRoot(process.cwd()), arg, plugin)));
+      const root = projectRoot(process.cwd());
+      const out = resume(root, arg, plugin);
+      console.log(JSON.stringify(out.argsFile ? { ...out, script: stageScript(process.cwd(), plugin) } : out));
     } else if (cmd === "close" && arg) {
       console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
     } else if (cmd === "scope" && arg) {

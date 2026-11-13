@@ -3,9 +3,10 @@
 // Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task id> | abandon <state>
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
-import { JOB, checkBatch, checkMaxSize, readRepo } from "./plan.mjs";
+import { JOB, checkBatch, checkMaxSize, readRepo, stageScript } from "./plan.mjs";
 
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
@@ -216,6 +217,10 @@ if (isMain(import.meta.url)) {
       write(path, started(read(path), arg, process.argv[5]));
     } else if (cmd === "next" && path) {
       const old = read(path);
+      // staged before the stash and before the state saves the run as launching: a copy that fails then leaves no
+      // stash out of the state and no job stopped for good
+      const plugin = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+      const script = stageScript(process.cwd(), plugin);
       const run = { ...readRun(old.dir, old.startedAt), failed: arg === "failed" };
       const cwd = old.args.repo || process.cwd();
       let { state, step } = next(old, run, readRepo(cwd, old.args.job));
@@ -228,7 +233,7 @@ if (isMain(import.meta.url)) {
       // the plan with its briefs is too long for command output, which is cut
       if (step.args) write(`${path}.args.json`, step.args);
       const { args, ...shown } = step;
-      console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json` } : shown));
+      console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json`, script } : shown));
     } else {
       console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task> | abandon <state>");
       process.exit(2);

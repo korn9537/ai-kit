@@ -180,6 +180,7 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `<git-dir>/claude-review/bash-<tool_use_id>` | `post-edit-check.sh mark` (PreToolUse Bash) | `post-edit-check.sh` (PostToolUse and PostToolUseFailure Bash) lists files newer than it, then removes it; one older than a day is removed by the next `mark` |
 | `<git-dir>/claude-review/<session>.reads`, `.handoff` | `handoff-nudge.sh` | `handoff-nudge.sh` (read count, note marks) |
 | `<git-dir>/claude-review/continuous-<job>.json` | `continuous.mjs` | `continuous.mjs`, `/ai-kit:continuous` |
+| `<project>/.claude/ai-kit/run-plan.js` | `plan.mjs write` and `resume`, `continuous.mjs next` (a `run` step), below the command's cwd (inside the session; `projectRoot` can sit above it): a copy of `workflows/run-plan.js`, since Workflow loads no `scriptPath` outside the session's folders; `**/.claude/ai-kit/` in `info/exclude` keeps it out of git status | the main session, as the Workflow's `scriptPath` |
 | `<git-dir>/claude-review/plan-<job>.args.json` | `plan.mjs resume` | the main session, for the Workflow (`commands/run-plan.md`, `commands/continuous.md`) |
 | `<git-dir>/claude-review/continuous-<job>.json.args.json` | `continuous.mjs` | the main session, for the Workflow (`commands/continuous.md`) |
 

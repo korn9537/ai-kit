@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, status, write } from "./plan.mjs";
+import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, stageScript, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -376,9 +376,16 @@ try {
   const file = join(tmp, "args.json");
   writeFileSync(file, JSON.stringify(args()));
   const run = (...a) => spawnSync("node", [SCRIPT, ...a], { cwd: cli, encoding: "utf8" });
-  ok("cli: write", JSON.parse(run("write", file).stdout).committed === true);
+  const wrote = JSON.parse(run("write", file).stdout);
+  ok("cli: write", wrote.committed === true);
+  ok("cli: write prints the workflow copy in the project", wrote.script === join(cli, ".claude", "ai-kit", "run-plan.js") && existsSync(wrote.script), wrote);
   ok("cli: status", run("status").stdout.startsWith(JOB));
   const res = JSON.parse(run("resume").stdout);
+  ok("cli: resume with work left prints the workflow copy", res.argsFile && res.script === wrote.script, res);
+  mkdirSync(join(cli, "web"));
+  const fromSub = JSON.parse(spawnSync("node", [SCRIPT, "resume"], { cwd: join(cli, "web"), encoding: "utf8" }).stdout);
+  ok("cli: a session below the git top gets the copy under its own cwd, not the top",
+    fromSub.script === join(cli, "web", ".claude", "ai-kit", "run-plan.js") && existsSync(fromSub.script), fromSub);
   ok("cli: resume fills in the plugin root", JSON.parse(readFileSync(res.argsFile, "utf8")).plugin === join(import.meta.dirname, ".."), res);
   ok("cli: a refusal exits 1 with the reason", run("close", JOB).status === 1 && run("close", JOB).stderr.includes("batches left"));
   writeFileSync(file, JSON.stringify(args([{ id: "x" }])));
@@ -413,6 +420,27 @@ try {
   mkdirSync(join(deep, "src"));
   ok("projectRoot: a project below the top is found from its subdirectory", projectRoot(join(deep, "src")) === deep);
   ok("projectRoot: a subdirectory goes to the git top", projectRoot(join(top, "src")) === top);
+  const plugin = join(import.meta.dirname, "..");
+  const plain = (f) => readFileSync(f, "utf8") === readFileSync(join(plugin, "workflows", "run-plan.js"), "utf8");
+  const stageRepo = repoAt("stage");
+  const copy = stageScript(stageRepo, plugin);
+  ok("stageScript: the copy sits in the session's project, where Workflow loads it",
+    copy === join(stageRepo, ".claude", "ai-kit", "run-plan.js") && plain(copy), copy);
+  ok("stageScript: git status does not list the copy", git(stageRepo, "status", "--porcelain") === "", git(stageRepo, "status", "--porcelain"));
+  writeFileSync(copy, "old\n");
+  stageScript(stageRepo, plugin);
+  ok("stageScript: a stale copy is replaced", plain(copy));
+  const excludes = readFileSync(join(stageRepo, ".git", "info", "exclude"), "utf8").split("\n");
+  ok("stageScript: the exclude line is written once", excludes.filter((l) => l === "**/.claude/ai-kit/").length === 1, excludes);
+  mkdirSync(join(stageRepo, "app", "ai", "kit"), { recursive: true });
+  const below = stageScript(join(stageRepo, "app"), plugin);
+  ok("stageScript: a project below the git top gets its own copy, also unlisted",
+    below.startsWith(join(stageRepo, "app", ".claude")) && git(stageRepo, "status", "--porcelain") === "", git(stageRepo, "status", "--porcelain"));
+  const tree = join(tmp, "stage-tree");
+  git(stageRepo, "worktree", "add", "-q", tree);
+  const inTree = stageScript(tree, plugin);
+  ok("stageScript: a worktree's copy is inside the worktree, not under the main .git",
+    inTree.startsWith(join(tree, ".claude")) && plain(inTree) && git(tree, "status", "--porcelain") === "", git(tree, "status", "--porcelain"));
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
