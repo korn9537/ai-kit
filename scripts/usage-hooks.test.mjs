@@ -42,8 +42,10 @@ function project(name, { kit = true } = {}) {
   const root = join(tmp, name);
   mkdirSync(join(root, "ai", "kit"), { recursive: true });
   if (kit) {
-    mkdirSync(join(root, "ai", "usage", "2026-11"), { recursive: true });
-    writeFileSync(join(root, "ai", "usage", "2026-11", "S1.jsonl"), `${JSON.stringify({ v: 1, ts: T, agents: [], session: "S1", kit: "2.34.0" })}\n`);
+    // the kit version per session comes from the local usage buffer
+    spawnSync("git", ["init", "-q", root]);
+    mkdirSync(join(root, ".git", "claude-usage"), { recursive: true });
+    writeFileSync(join(root, ".git", "claude-usage", "S1.jsonl"), `${JSON.stringify({ v: 1, ts: T, agents: [], session: "S1", kit: "2.34.0" })}\n`);
   }
   return root;
 }

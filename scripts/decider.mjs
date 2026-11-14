@@ -2,15 +2,17 @@
 // Decision log CLI. Verdicts are read from each ai-kit:decider subagent's own transcript
 // (<session>/subagents/agent-<id>.jsonl beside the session transcript), so a background call counts as a foreground
 // one. `sync` (SubagentStop, Stop) writes a finished decider's verdict blocks once to
-// ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl; on SubagentStop from the hook's agent_id and
-// last_assistant_message. `guard` (ask-guard.sh) matches each asked question to a verdict block of the last 30
-// minutes and prints owner, decided, pending, unmatched or none, then one detail line per question; owner marks
-// those blocks used. `report [--since YYYY-MM-DD]` prints the log as markdown. Never fails: an error is one stderr line.
+// <git-common-dir>/claude-decider/log/<session>.<agent>.jsonl, which `usage.mjs send` posts; on SubagentStop from the
+// hook's agent_id and last_assistant_message. `guard` (ask-guard.sh) matches each asked question to a verdict block of
+// the last 30 minutes and prints owner, decided, pending, unmatched or none, then one detail line per question; owner
+// marks those blocks used. `report [--since YYYY-MM-DD]` prints the usage API's log of this project plus the unsent
+// ones as markdown. Never fails: an error is one stderr line.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { isMain } from "./lib/is-main.mjs";
 import { deciderDir } from "./lib/state-dirs.mjs";
+import { endpointOf, getAll, projectId } from "./lib/usage-api.mjs";
 
 const FIELDS = ["verdict", "kind", "question", "choice", "reason", "confidence", "undo", "sources"];
 const MAX_FIELD = 500;
@@ -130,14 +132,20 @@ export function deciders(dir) {
   return out.sort((a, b) => a.mtime - b.mtime);
 }
 
-// One file per finished decider call, created once ("wx": SubagentStop and Stop may race): no two branches,
-// worktrees or machines write the same name differently.
+// The decider log until `usage.mjs send` posts it; a sent file leaves <session>.<agent>.sent behind.
+const logDir = (root) => {
+  const d = deciderDir(root);
+  return d ? join(d, "log") : "";
+};
+
+// One file per finished decider call, created once ("wx": SubagentStop and Stop may race), never again once sent.
 function logDeciders(root, session, list) {
+  const dir = logDir(root);
+  if (!dir) return;
   for (const d of list) {
     if (!d.done || d.blocks.length === 0) continue;
-    const dir = join(root, "ai", "usage", "decisions", d.ts.slice(0, 7));
     const path = join(dir, `${session}.${d.id}.jsonl`);
-    if (existsSync(path)) continue;
+    if (existsSync(path) || existsSync(join(dir, `${session}.${d.id}.sent`))) continue;
     mkdirSync(dir, { recursive: true });
     try {
       writeFileSync(path, d.blocks.map((b) => JSON.stringify({ ts: d.ts, session, agent: d.id, ...b }) + "\n").join(""), { flag: "wx" });
@@ -325,11 +333,12 @@ export function check(input, now = Date.now()) {
 
 export const guard = (input, now = Date.now()) => check(input, now).state;
 
+// The local log files not sent yet.
 export function loadDecisions(root, since = "") {
-  const base = join(root, "ai", "usage", "decisions");
+  const base = logDir(root);
   let files = [];
   try {
-    files = readdirSync(base, { recursive: true }).map(String).filter((f) => f.endsWith(".jsonl"));
+    files = readdirSync(base).filter((f) => f.endsWith(".jsonl"));
   } catch {
     return [];
   }
@@ -341,14 +350,45 @@ export function loadDecisions(root, since = "") {
     } catch {
       continue;
     }
+    // seq: the line's index, as usage-send's sendDecisions numbers it
+    let seq = 0;
     for (const l of text.split("\n")) {
+      if (!l.trim()) continue;
+      const i = seq++;
       try {
-        const r = l && JSON.parse(l);
-        if (r && typeof r.ts === "string" && r.verdict && r.ts.slice(0, 10) >= since) out.push(r);
+        const r = JSON.parse(l);
+        if (r && typeof r.ts === "string" && r.verdict && r.ts.slice(0, 10) >= since) out.push({ ...r, seq: i });
       } catch {}
     }
   }
   return out.sort((a, b) => a.ts.localeCompare(b.ts));
+}
+
+function readConfig(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, "ai", "kit", "config.json"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+// The usage API's decisions of this project plus the local ones not sent yet, once each (session, agent, seq);
+// error is the API's one-line failure, the local ones are still returned.
+export async function loadAllDecisions(root, since = "") {
+  const local = loadDecisions(root, since);
+  const conf = readConfig(root).usage ?? {};
+  if (conf.enabled === false) return { recs: local, error: "" };
+  let rows = [];
+  try {
+    rows = await getAll(endpointOf(conf), "/v1/decisions", { project: projectId(root), since });
+  } catch (e) {
+    return { recs: local, error: e.message };
+  }
+  const recs = rows.map(({ session_id, agent_id, seq, project, extra, ...r }) => ({ ...(extra ?? {}), ...r, session: session_id, agent: agent_id, seq }))
+    .map((r) => Object.fromEntries(Object.entries(r).filter(([, v]) => v !== null)));
+  const seen = new Set(recs.map((r) => `${r.session}\n${r.agent}\n${r.seq}`));
+  for (const r of local) if (!seen.has(`${r.session}\n${r.agent}\n${r.seq}`)) recs.push(r);
+  return { recs: recs.sort((a, b) => a.ts.localeCompare(b.ts)), error: "" };
 }
 
 const cell = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\s+/g, " ").trim() || "-";
@@ -404,7 +444,9 @@ if (isMain(import.meta.url)) {
       const since = i >= 0 ? (args[i + 1] ?? "") : "";
       if (since && !/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error("--since takes YYYY-MM-DD");
       const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
-      process.stdout.write(report(loadDecisions(root, since), since));
+      const { recs, error } = await loadAllDecisions(root, since);
+      if (error) console.error(`decider: ${error}; showing the decisions not sent yet only`);
+      process.stdout.write(report(recs, since));
     } else {
       throw new Error("usage: decider.mjs sync | guard | report [--since YYYY-MM-DD]");
     }

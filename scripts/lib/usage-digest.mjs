@@ -532,7 +532,7 @@ export function digest(recs, prices, meta = {}) {
     out.push(`${m}: ${e.n} reviews, ${per(e.confirmed)} confirmed/review, ${per(e.plausible)} plausible/review, ${fmtUsd(e.cost / e.n)}/review`);
   }
 
-  // hook refusals (ai/usage/refusals/**), per rule and per kit; only for the committed records, not a baseline
+  // hook refusals, per rule and per kit; only for the API's records, not a baseline
   if (meta.refusals) {
     out.push("## refusals");
     const byRule = new Map();

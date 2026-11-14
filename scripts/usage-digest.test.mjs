@@ -1,6 +1,7 @@
 // Tests for usage-digest.mjs: usage records to a per-round record and summary line, a fixed-size text digest, loading, baseline.
 // Usage: node scripts/usage-digest.test.mjs
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -156,16 +157,68 @@ try {
   const withBad = loadRecords(join(tmp, "2026-02"));
   eq("records with wrong v or malformed agents are skipped and counted", [withBad.recs.length, withBad.skipped], [3, 6]);
 
-  // the CLI: a --since that leaves nothing says so, apart from a project with no records at all
-  const cli = (project, ...args) => spawnSync("node", [join(import.meta.dirname, "usage.mjs"), "digest", ...args],
-    { env: { ...process.env, CLAUDE_PROJECT_DIR: project }, encoding: "utf8" }).stdout.trim();
-  const withRecs = join(tmp, "withrecs");
-  mkdirSync(join(withRecs, "ai", "usage", "2026-02"), { recursive: true });
-  writeFileSync(join(withRecs, "ai", "usage", "2026-02", "s.1.jsonl"), line({ ts: "2026-02-01T00:00:00Z" }));
-  mkdirSync(join(tmp, "norecs"), { recursive: true });
-  eq("digest --since after every record: says no records since the date", cli(withRecs, "--since", "2099-01-01"), "no records since 2099-01-01");
-  eq("digest on a project with no records still says no usage records", [cli(join(tmp, "norecs")), cli(join(tmp, "norecs"), "--since", "2099-01-01")], ["no usage records", "no usage records"]);
-  match("digest --since before the records prints the digest", cli(withRecs, "--since", "2026-01-01"), /^records 1 /);
+  // the CLI reads GET /v1/records (plain desc) from a mock API: the same digest as the base64 records read from files
+  const apiRecs = (recs_) => recs_.map((r) => ({ project: "github.com/o/r", item: { ...r, agents: r.agents.map((a) => ({ ...a, desc: dec(a.desc) })) } }));
+  const refusalRows = [{ id: "x", project: "github.com/o/r", ts: "2026-02-01T10:00:00.000Z", rule: "pre-commit.comments", kit: "2.13.0", branch: "b", host: "h", session_id: null }];
+  const seenQueries = [];
+  let mode = "ok";
+  const server = createServer((req, res) => {
+    const url = new URL(req.url, "http://x");
+    seenQueries.push(`${url.pathname}?${url.searchParams}`);
+    const send = (status, body) => res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(body));
+    if (mode === "down") return send(500, { error: "internal error" });
+    if (url.pathname === "/v1/records") {
+      const since = url.searchParams.get("since") ?? "";
+      const all = apiRecs(recs).filter((x) => !since || x.item.ts >= since);
+      // two pages: the CLI must follow `next`
+      if (!url.searchParams.get("after")) return send(200, { items: all.slice(0, 1), next: all.length > 1 ? "p2" : null });
+      return send(200, { items: all.slice(1), next: null });
+    }
+    if (url.pathname === "/v1/refusals") return send(200, { items: refusalRows, next: null });
+    return send(404, { error: "not found" });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const endpoint = `http://127.0.0.1:${server.address().port}`;
+  const cli = (project, ...args) => new Promise((resolve) => {
+    const c = spawn("node", [join(import.meta.dirname, "usage.mjs"), "digest", ...args],
+      { env: { ...process.env, CLAUDE_PROJECT_DIR: project, AI_KIT_USAGE_ENDPOINT: endpoint }, stdio: ["ignore", "pipe", "pipe"] });
+    let out = "";
+    let err = "";
+    c.stdout.on("data", (x) => (out += x));
+    c.stderr.on("data", (x) => (err += x));
+    c.on("close", (code) => resolve({ out: out.trim(), err: err.trim(), code }));
+  });
+  const proj0 = join(tmp, "norecs");
+  mkdirSync(proj0, { recursive: true });
+  try {
+    const fileDir = join(tmp, "asfiles");
+    mkdirSync(join(fileDir, "2026-02"), { recursive: true });
+    writeFileSync(join(fileDir, "2026-02", "s.jsonl"), recs.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    const fromFiles = digest(loadRecords(fileDir).recs, P, { refusals: [{ v: 1, ts: refusalRows[0].ts, rule: refusalRows[0].rule, kit: "2.13.0", branch: "b" }] });
+    const viaApi = await cli(proj0);
+    eq("digest from the API (plain desc, two pages) equals the digest of the same records as files (base64 desc)", viaApi.out, fromFiles);
+    eq("the default scope is every project", seenQueries.some((q) => q.includes("project=")), false);
+    await cli(proj0, "--project");
+    eq("--project limits to this repo's id (no origin: local/<dir>)", seenQueries.filter((q) => q.startsWith("/v1/records") && !q.includes("after=")).pop(), "/v1/records?project=local%2Fnorecs&limit=10000");
+    eq("digest --since after every record: says no records since the date", (await cli(proj0, "--since", "2099-01-01")).out, "no records since 2099-01-01");
+    match("digest --since before the records prints the digest", (await cli(proj0, "--since", "2026-02-02")).out, /^records 2 /);
+    match("digest --compare reads the API too", (await cli(proj0, "--compare", "2.13.0", "2.13.1")).out, /^compare kit 2\.13\.0 vs 2\.13\.1/);
+    mode = "down";
+    const down = await cli(proj0);
+    eq("an API error: one stderr line, exit 2", [down.code, down.err.split("\n").length, /^usage-digest: GET \/v1\/records: HTTP 500/.test(down.err)], [2, 1, true]);
+  } finally {
+    server.close();
+  }
+  // a port nothing listens on: the one the closed server had
+  const deadUrl = endpoint;
+  const dead = await new Promise((resolve) => {
+    const c = spawn("node", [join(import.meta.dirname, "usage.mjs"), "digest"],
+      { env: { ...process.env, CLAUDE_PROJECT_DIR: proj0, AI_KIT_USAGE_ENDPOINT: deadUrl }, stdio: ["ignore", "ignore", "pipe"] });
+    let err = "";
+    c.stderr.on("data", (x) => (err += x));
+    c.on("close", (code) => resolve({ code, err: err.trim() }));
+  });
+  eq("network down: a clear one-line error and exit 2", [dead.code, dead.err === `usage-digest: usage API ${deadUrl} unreachable: ECONNREFUSED`], [2, true]);
 
   // baseline: one in-memory record per transcript, kit "baseline"; a broken one is skipped and counted
   const proj = join(tmp, "proj");

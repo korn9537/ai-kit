@@ -72,11 +72,11 @@ run_case "pass: the decider returned OWNER" 0
 run_case "block: one OWNER call serves one ask" 2
 hook_input | jq -c '.transcript_path = "'"$SUBS"'/agent-a3.jsonl"' |
   env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$LOG" subagent-stop >/dev/null 2>&1
-if [[ "$(ls "$REPO"/ai/usage/decisions/2026-10/ 2>/dev/null | tr '\n' ' ')" == "s1.a1.jsonl s1.a2.jsonl s1.a3.jsonl " ]]; then
+if [[ "$(ls "$REPO"/.git/claude-decider/log/ 2>/dev/null | tr '\n' ' ')" == "s1.a1.jsonl s1.a2.jsonl s1.a3.jsonl " ]]; then
   echo "ok   - kit-log subagent-stop logged each decider call"
   pass=$((pass + 1))
 else
-  echo "FAIL - kit-log subagent-stop logged: $(ls "$REPO"/ai/usage/decisions/2026-10/ 2>&1)"
+  echo "FAIL - kit-log subagent-stop logged: $(ls "$REPO"/.git/claude-decider/log/ 2>&1)"
   fail=$((fail + 1))
 fi
 

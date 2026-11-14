@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Tests for kit-log.sh: a throwaway repo and a hand-built transcript; part 1 (stop) checks the buffer file under the
-# git dir, stdout and the exit code; part 2 (session-end) the flush into ai/usage/ and the idle flush from
-# session-start.sh.
+# git dir, stdout and the exit code; part 2 the detached sends of session-end and session-start.sh to a mock usage API.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 HOOK="$PWD/kit-log.sh"
@@ -130,7 +129,7 @@ check "record: a quiet commit after the prompt is in commits, one before it is n
   "$(t jq -e --arg h "$quiet" '.commits == [$h]' "$(buf s9)")" "$(cat "$(buf s9)" 2>/dev/null)"
 
 
-# ---- part 2: session-end, the idle flush and the buffer-to-ai/usage flow (a fresh repo) ----
+# ---- part 2: session-end and the idle pass of session-start.sh start a detached send to a mock API (a fresh repo) ----
 REPO="$TMP/r2"
 mkdir -p "$REPO"
 git -C "$REPO" init -q
@@ -140,15 +139,29 @@ mkdir -p "$REPO/ai/kit"
 echo '{}' >"$REPO/ai/kit/config.json"
 git -C "$REPO" add -A
 git -C "$REPO" commit -qm base
-home_branch="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
-CLI="$PWD/../scripts/usage.mjs"
-
-month="$(date -u +%Y-%m)"
-UD="$REPO/ai/usage/$month"
 BUFS="$REPO/.git/claude-usage"
-lines() { wc -l <"$1" | tr -d ' '; }
 
-# transcript <file> <first user line>; asst <file> <id> <cache read tokens>
+# the mock API: one line per POST ("<path> <session ids in the body>"), 200 always
+node -e '
+  const fs = require("fs");
+  require("http").createServer((q, s) => {
+    let b = "";
+    q.on("data", (d) => (b += d));
+    q.on("end", () => {
+      let ids = "";
+      try { ids = (JSON.parse(b).sessions ?? []).map((x) => x.session_id).join(","); } catch {}
+      fs.appendFileSync(process.argv[1], `${q.url} ${ids}\n`);
+      s.writeHead(200, { "content-type": "application/json" }).end("{}");
+    });
+  }).listen(0, "127.0.0.1", function () { fs.writeFileSync(process.argv[2], String(this.address().port)); });
+' "$TMP/posts" "$TMP/port" &
+MOCK=$!
+disown "$MOCK"
+trap 'kill "$MOCK" 2>/dev/null; rm -rf "$TMP" "$TMP.wt"' EXIT
+for _ in $(seq 1 50); do [[ -s "$TMP/port" ]] && break; sleep 0.1; done
+API="http://127.0.0.1:$(cat "$TMP/port")"
+touch "$TMP/posts"
+
 transcript() { jq -cn --arg t "$2" '{type: "user", timestamp: "2030-01-15T10:00:00Z", message: {role: "user", content: $t}}' >"$1"; }
 asst() {
   jq -cn --arg id "$2" --argjson r "$3" '{type: "assistant", timestamp: "2030-01-15T10:00:30Z", message: {id: $id,
@@ -157,143 +170,79 @@ asst() {
 }
 stop() { # <session> <transcript>
   jq -n --arg t "$2" --arg s "$1" --arg c "$REPO" '{transcript_path: $t, session_id: $s, cwd: $c}' |
-    env -i PATH="$PATH" HOME="$HOME" "$HOOK" stop >/dev/null 2>&1
+    env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" stop >/dev/null 2>&1
 }
-flush() { # <session> [transcript] → exit code of the SessionEnd hook
+end_hook() { # <session> [transcript] → exit code of the SessionEnd hook
   jq -n --arg s "$1" --arg c "$REPO" --arg t "${2:-}" '{session_id: $s, cwd: $c, hook_event_name: "SessionEnd"}
     + (if $t == "" then {} else {transcript_path: $t} end)' |
-    env -i PATH="$PATH" HOME="$HOME" "$HOOK" session-end 2>"$TMP/err"
+    env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end 2>"$TMP/err"
 }
-sum_reads() { jq -s '[.[].agents[].read] | add' "$@"; }
-cli() { CLAUDE_PROJECT_DIR="$REPO" node "$CLI" "$@"; }
+# posted <session>: waits up to 10 s for the mock to see that session's events
+posted() { for _ in $(seq 1 100); do grep -q "^/v1/events $1\$" "$TMP/posts" && return 0; sleep 0.1; done; return 1; }
 age() { node -e 'const t = Date.now() / 1000 - Number(process.argv[2]); require("fs").utimesSync(process.argv[1], t, t)' "$1" "$2"; }
+now_ms() { node -e 'console.log(Date.now())'; }
 
 T1="$REPO/.git/t1.jsonl"
 transcript "$T1" "first ask"
 asst "$T1" m1 1000
 stop s1 "$T1"
-check "stop writes only the buffer: ai/usage absent, git status shows nothing for ai/" \
-  "$(t bash -c '[[ -f "$1/s1.jsonl" && ! -e "$2/ai/usage" && -z "$(git -C "$2" status --porcelain -- ai)" ]]' _ "$BUFS" "$REPO")"
+check "stop writes the buffer and the transcript path, nothing in ai/" \
+  "$(t bash -c '[[ -f "$1/s1.jsonl" && "$(cat "$1/s1.transcript")" == "$3" && ! -e "$2/ai/usage" && -z "$(git -C "$2" status --porcelain -- ai)" ]]' _ "$BUFS" "$REPO" "$T1")"
+check "stop sends nothing" "$(t test ! -s "$TMP/posts")"
 
-flush s1
-check "SessionEnd flush writes ai/usage/<YYYY-MM>/<session>.jsonl, the buffer's lines" \
-  "$(t bash -c '[[ "$(cat "$1/s1.jsonl")" == "$(cat "$2/s1.jsonl")" ]]' _ "$BUFS" "$UD")" "$(cat "$TMP/err")"
-check "the buffer is kept as the session's state" "$(t test -f "$BUFS/s1.jsonl")"
-sha1="$(shasum "$UD/s1.jsonl" | cut -d' ' -f1)"
+t0="$(now_ms)"
+end_hook s1 "$T1"
+rc=$?
+t1="$(now_ms)"
+check "SessionEnd exits 0 within 3 s (the send is detached)" "$(t test "$rc" == 0 -a $((t1 - t0)) -lt 3000)" "rc=$rc $((t1 - t0)) ms $(cat "$TMP/err")"
+check "the detached send posts the session's events" "$(t posted s1)" "$(cat "$TMP/posts") $(cat "$BUFS/send.log" 2>/dev/null)"
+for _ in $(seq 1 50); do [[ -f "$BUFS/s1.sent" ]] && break; sleep 0.1; done
+check "and records what it sent in <session>.sent; still nothing in ai/" \
+  "$(t bash -c '[[ "$(jq -r .transcript "$1/s1.sent")" == "$3" && ! -e "$2/ai/usage" ]]' _ "$BUFS" "$REPO" "$T1")"
 
-asst "$T1" m2 2000
-stop s1 "$T1"
-flush s1
-check "a second flush after more rounds writes <session>.2.jsonl with only the new record" \
-  "$(t bash -c '[[ "$(wc -l <"$1/s1.2.jsonl" | tr -d " ")" == 1 && "$(jq -r ".agents[0].read" "$1/s1.2.jsonl")" == 2000 ]]' _ "$UD")"
-check "the first file is never modified" "$(t test "$(shasum "$UD/s1.jsonl" | cut -d' ' -f1)" == "$sha1")"
-flush s1
-check "a flush with nothing new writes nothing" "$(t bash -c '[[ ! -e "$1/s1.3.jsonl" && "$(ls "$1" | wc -l | tr -d " ")" == 2 ]]' _ "$UD")"
-check "summed records equal the transcript total" "$(t test "$(sum_reads "$UD"/s1*.jsonl)" == 3000)"
-
-# a buffer lost on this machine is seeded from ai/usage: no double count
-rm -f "$BUFS/s1.jsonl" "$BUFS/s1.flushed" "$BUFS"/s1.json
-asst "$T1" m3 4000
-stop s1 "$T1"
-check "seeded from ai/usage: the new record holds only the new tokens" \
-  "$(t bash -c '[[ "$(wc -l <"$1/s1.jsonl" | tr -d " ")" == 3 && "$(tail -n 1 "$1/s1.jsonl" | jq -r ".agents[0].read")" == 4000 ]]' _ "$BUFS")"
-flush s1
-check "after the seed the flush writes only the new record, as file 3" \
-  "$(t bash -c '[[ "$(wc -l <"$1/s1.3.jsonl" | tr -d " ")" == 1 ]]' _ "$UD")"
-check "still equal to the transcript total" "$(t test "$(sum_reads "$UD"/s1*.jsonl)" == 7000)"
-
-# idle flush: other sessions' buffers whose last write is over 6 hours old
+# idle pass: other sessions whose transcript is over 6 hours old and grew since their .sent
 T7="$REPO/.git/t7.jsonl"
 transcript "$T7" "idle ask"
 asst "$T7" m1 500
 stop s7 "$T7"
-cli flush --idle
-check "idle flush skips a buffer written just now" "$(t test ! -e "$UD/s7.jsonl")"
-age "$BUFS/s7.jsonl" 60
-cli flush --idle
-check "idle flush skips a buffer written 1 minute ago" "$(t test ! -e "$UD/s7.jsonl")"
-age "$BUFS/s7.jsonl" 25200
-cli flush --idle --except s7
-check "idle flush --except skips the named session" "$(t test ! -e "$UD/s7.jsonl")"
-cli flush --idle
-check "idle flush writes a buffer 7 hours old" "$(t test "$(sum_reads "$UD/s7.jsonl")" == 500)"
+T9="$REPO/.git/t9.jsonl"
+transcript "$T9" "own ask"
+asst "$T9" m1 500
+stop s9 "$T9"
+age "$T7" 25200
+age "$T9" 25200
+out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
+check "session-start sends other idle sessions, prints nothing on stderr" "$(t posted s7)" "$out $(cat "$TMP/posts")"
+sleep 0.5
+check "and not its own session" "$(t bash -c '! grep -q " s9$" "$1"' _ "$TMP/posts")"
+age "$T1" 25200
+out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
+sleep 1
+check "a session unchanged since its .sent is not sent again" "$(t bash -c '[[ "$(grep -c " s1$" "$1")" == 1 && "$(grep -c " s7$" "$1")" == 1 ]]' _ "$TMP/posts")" "$(cat "$TMP/posts")"
 
-T8="$REPO/.git/t8.jsonl"
-transcript "$T8" "stale ask"
-asst "$T8" m1 600
-stop s8 "$T8"
-age "$BUFS/s8.jsonl" 25200
-stop s9 "$T8"
-age "$BUFS/s9.jsonl" 25200
-out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$PWD/session-start.sh" 2>&1 >/dev/null)"
-check "session-start flushes other sessions' stale buffers, not its own, and prints nothing on stderr" \
-  "$(t bash -c '[[ -f "$1/s8.jsonl" && ! -e "$1/s9.jsonl" && -z "$2" ]]' _ "$UD" "$out")" "$out"
-
-# SessionEnd records what came after the last Stop, then flushes
-T12="$REPO/.git/t12.jsonl"
-transcript "$T12" "tail ask"
-asst "$T12" m1 1000
-stop s12 "$T12"
-asst "$T12" m2 5000
-flush s12 "$T12"
-check "SessionEnd records the tokens after the last Stop: summed records equal the transcript total" \
-  "$(t test "$(sum_reads "$UD"/s12*.jsonl)" == 6000)" "$(cat "$TMP/err")"
-flush s12 "$T12"
-check "a second SessionEnd adds nothing" "$(t test "$(sum_reads "$UD"/s12*.jsonl)" == 6000)"
 jq -n --arg s s13 --arg c "$REPO" '{session_id: $s, cwd: $c, transcript_path: "/nonexistent"}' |
-  env -i PATH="$PATH" HOME="$HOME" "$HOOK" session-end >/dev/null 2>&1
+  env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end >/dev/null 2>&1
 check "SessionEnd with an unreadable transcript still exits 0" "$(t test "$?" == 0)"
 
-# usage.enabled false → the SessionEnd hook writes nothing
+# usage.enabled false → SessionEnd starts no send
 T10="$REPO/.git/t10.jsonl"
 transcript "$T10" "disabled ask"
 asst "$T10" m1 700
 stop s10 "$T10"
 echo '{"usage": {"enabled": false}}' >"$REPO/ai/kit/config.json"
-flush s10
-check "usage.enabled false: SessionEnd flush writes nothing" "$(t bash -c '[[ ! -e "$1/s10.jsonl" && "$2" == 0 ]]' _ "$UD" "$?")"
-age "$BUFS/s10.jsonl" 25200
-cli flush --idle
-check "usage.enabled false: idle flush writes nothing" "$(t test ! -e "$UD/s10.jsonl")"
+end_hook s10 "$T10"
+sleep 1
+check "usage.enabled false: SessionEnd sends nothing" "$(t bash -c '! grep -q " s10$" "$1"' _ "$TMP/posts")"
 echo '{}' >"$REPO/ai/kit/config.json"
 
-# the cross-branch flow: part committed on main, part committed on feature, switch, record, merge, switch
-T11="$REPO/.git/t11.jsonl"
-transcript "$T11" "branching ask"
-asst "$T11" m1 1000
-stop s11 "$T11"
-flush s11
-git -C "$REPO" add ai/usage/"$month"/s11.jsonl
-git -C "$REPO" commit -qm "records on main"
-git -C "$REPO" switch -q -c feature
-asst "$T11" m2 2000
-stop s11 "$T11"
-flush s11
-git -C "$REPO" add ai/usage/"$month"/s11.2.jsonl
-git -C "$REPO" commit -qm "records on feature"
-git -C "$REPO" switch -q "$home_branch"
-echo x >"$REPO/x.txt"
-git -C "$REPO" add x.txt
-git -C "$REPO" commit -qm "main moves on"
-asst "$T11" m3 3000
-stop s11 "$T11"
-flush s11
-check "on main after the switch the new records are a new untracked file, nothing else changed" \
-  "$(t bash -c '[[ -f "$1/s11.3.jsonl" && "$(git -C "$2" status --porcelain -- ai/usage/"$3"/s11.jsonl ai/usage/"$3"/s11.2.jsonl ai/usage/"$3"/s11.3.jsonl)" == "?? ai/usage/$3/s11.3.jsonl" ]]' _ "$UD" "$REPO" "$month")"
-git -C "$REPO" merge -q --no-edit feature 2>"$TMP/merge-err"
-check "git merge feature succeeds" "$(t test "$(git -C "$REPO" rev-list --count --merges HEAD)" == 1)" "$(cat "$TMP/merge-err")"
-check "after the merge the summed records equal the transcript total" "$(t test "$(sum_reads "$UD"/s11*.jsonl)" == 6000)"
-git -C "$REPO" switch -q feature 2>"$TMP/switch-err"
-check "git switch feature succeeds" "$(t test "$(git -C "$REPO" rev-parse --abbrev-ref HEAD)" == feature)" "$(cat "$TMP/switch-err")"
-
-# subagent-stop: a finished decider's verdict is logged under ai/usage/decisions/, and the hook exits 0
+# subagent-stop: a finished decider's verdict is logged under the git common dir until sent, and the hook exits 0
 mkdir -p "$TMP/proj/ss/subagents"
 jq -n --arg t "$TMP/proj/ss.jsonl" --arg c "$REPO" '{session_id: "ss", cwd: $c, transcript_path: $t, agent_id: "a9",
   agent_type: "ai-kit:decider", last_assistant_message: "Verdict: DECIDED\nChoice: x\nReason: y"}' |
-  env -i PATH="$PATH" HOME="$HOME" "$HOOK" subagent-stop 2>"$TMP/err"
+  env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" subagent-stop 2>"$TMP/err"
 rc=$?
-check "subagent-stop logs a decider verdict to ai/usage/decisions/, exit 0" \
-  "$(t bash -c '[[ "$1" == 0 ]] && grep -q "\"choice\":\"x\"" "$2"/ai/usage/decisions/*/ss.a9.jsonl' _ "$rc" "$REPO")" "rc=$rc $(cat "$TMP/err")"
+check "subagent-stop logs a decider verdict to .git/claude-decider/log/, exit 0" \
+  "$(t bash -c '[[ "$1" == 0 ]] && grep -q "\"choice\":\"x\"" "$2"/.git/claude-decider/log/ss.a9.jsonl' _ "$rc" "$REPO")" "rc=$rc $(cat "$TMP/err")"
 
 echo "$pass passed, $fail failed"
 ((fail == 0))

@@ -3,8 +3,8 @@
 // Options: { timeout } in ms (none by default, the old decider and plan calls had none); { throws: true } lets git's own error out.
 //   reviewDir      <absolute-git-dir>/claude-review   per work tree: review snapshots, read counts, run state
 //   usageCacheDir  <absolute-git-dir>/claude-usage    per work tree: transcript cache <session>.json
-//   usageBufDir    <git-common-dir>/claude-usage      shared: buffer <session>.jsonl, .flushed, locks
-//   deciderDir     <git-common-dir>/claude-decider    shared: used verdicts <session>.json
+//   usageBufDir    <git-common-dir>/claude-usage      shared: <session>.jsonl, .transcript, .sent, locks, refusals/, send.log
+//   deciderDir     <git-common-dir>/claude-decider    shared: used verdicts <session>.json, log/ (decider log until sent)
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 

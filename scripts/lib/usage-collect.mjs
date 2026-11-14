@@ -7,8 +7,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Text the harness or an IDE adds to a user entry; <pasted_content> is the user's own and stays.
-const INJECTED = /^<((?:browser_instruction|ide_|system-reminder|task-notification|local-command|command-)[\w-]*)[^>]*>/;
-const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
+export const INJECTED = /^<((?:browser_instruction|ide_|system-reminder|task-notification|local-command|command-)[\w-]*)[^>]*>/;
+export const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
 
 export function roleOf(desc, type) {
   if (/committer/.test(type ?? "") || /^\s*commit:/i.test(desc ?? "")) return "commit";
@@ -51,14 +51,14 @@ const freshFile = () => ({
   prompts: [], commits: [], last: null, efforts: {}, effort: "",
 });
 
-function textOf(content) {
+export function textOf(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content.filter((b) => b?.type === "text" && typeof b.text === "string").map((b) => b.text).join("\n");
 }
 
 // A prompt's own text: leading injected elements dropped (an unclosed one takes the rest), interrupt marks are no prompt.
-function promptText(raw) {
+export function promptText(raw) {
   let t = String(raw).trimStart();
   for (let m = INJECTED.exec(t); m; m = INJECTED.exec(t)) {
     const end = t.indexOf(`</${m[1]}>`, m[0].length);
@@ -211,36 +211,38 @@ function agentOf(id, role, desc, model, f, effort = "") {
   return a;
 }
 
+// Subagent files of a session: Agent tool subagents, then each workflow run's agents (subagents/workflows/<run>/),
+// with their meta ({} when unreadable) and run name ("" outside a workflow).
+export function sessionFiles(transcript) {
+  const subDir = join(dirname(transcript), basename(transcript, ".jsonl"), "subagents");
+  const agentFiles = (dir, run) => {
+    try {
+      return readdirSync(dir).filter((n) => n.startsWith("agent-") && n.endsWith(".jsonl")).sort().map((n) => ({ dir, name: n, run }));
+    } catch {
+      return [];
+    }
+  };
+  let runs = [];
+  try {
+    runs = readdirSync(join(subDir, "workflows")).sort();
+  } catch {}
+  return [...agentFiles(subDir, ""), ...runs.flatMap((r) => agentFiles(join(subDir, "workflows", r), r))].map(({ dir, name, run }) => {
+    const id = name.slice("agent-".length, -".jsonl".length);
+    let meta = {};
+    try {
+      meta = JSON.parse(readFileSync(join(dir, `agent-${id}.meta.json`), "utf8")) ?? {};
+    } catch {}
+    return { id, path: join(dir, name), meta, run };
+  });
+}
+
 export function collectSession(transcript, cache = { v: 3, files: {}, bytesRead: 0 }) {
   cache.bytesRead = 0;
   const mf = readNew(transcript, cache, true);
   const agents = { main: agentOf("main", "coordinator", "", mf.model, mf) };
   const commits = [...mf.commits];
-  const subDir = join(dirname(transcript), basename(transcript, ".jsonl"), "subagents");
-  const agentFiles = (dir) => {
-    try {
-      return readdirSync(dir).filter((n) => n.startsWith("agent-") && n.endsWith(".jsonl")).sort().map((n) => [dir, n]);
-    } catch {
-      return [];
-    }
-  };
-  // Agent tool subagents, then each workflow run's agents (subagents/workflows/<run>/)
-  let runs = [];
-  try {
-    runs = readdirSync(join(subDir, "workflows")).sort();
-  } catch {}
-  const files = [...agentFiles(subDir), ...runs.flatMap((r) => agentFiles(join(subDir, "workflows", r)))];
-  const metas = files.map(([dir, name]) => {
-    try {
-      return JSON.parse(readFileSync(join(dir, `agent-${name.slice("agent-".length, -".jsonl".length)}.meta.json`), "utf8"));
-    } catch {
-      return {};
-    }
-  });
-  for (const [i, [dir, name]] of files.entries()) {
-    const id = name.slice("agent-".length, -".jsonl".length);
-    const meta = metas[i];
-    const f = readNew(join(dir, name), cache, false);
+  for (const { id, path, meta } of sessionFiles(transcript)) {
+    const f = readNew(path, cache, false);
     const effort = f.effort || ((mf.efforts ??= {})[meta.toolUseId] ?? frontmatterEffort(meta.agentType));
     agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f, effort);
     for (const c of f.commits) if (!commits.some((x) => x.hash === c.hash)) commits.push(c);

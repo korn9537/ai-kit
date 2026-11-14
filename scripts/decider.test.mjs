@@ -56,7 +56,9 @@ try {
     const t = (Date.now() - age * 60000) / 1000;
     utimesSync(join(subs, `agent-${id}.jsonl`), t, t);
   };
-  const logged = () => readdirSync(join(repo, "ai", "usage", "decisions", "2026-10")).sort();
+  // the decider log sits in the git common dir until usage.mjs send posts it
+  const logDir = join(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: repo, encoding: "utf8" }).trim(), "claude-decider", "log");
+  const logged = () => readdirSync(logDir).sort();
 
   eq("guard: no decider yet", guard(input), "none");
   // a decider that has not written a transcript yet: only its meta file exists
@@ -77,7 +79,7 @@ try {
   eq("guard: any OWNER block", guard(input), "owner");
   eq("guard: the OWNER call serves one ask, then the older DECIDED one shows", guard(input), "decided");
   const stateDir = join(execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: repo, encoding: "utf8" }).trim(), "claude-decider");
-  eq("guard: the used list is written whole, no tmp file left", readdirSync(stateDir), ["s1.json"]);
+  eq("guard: the used list is written whole, no tmp file left", readdirSync(stateDir).filter((n) => n !== "log"), ["s1.json"]);
   agent("a3", "ai-kit:decider", block("OWNER", "q4", "low"), 45, "2026-10-27T05:00:00Z");
   eq("guard: an OWNER call older than 30 minutes does not count", guard(input), "decided");
   writeFileSync(join(subs, "agent-h1.meta.json"), JSON.stringify({ agentType: "ai-kit:decider" }));
@@ -86,10 +88,10 @@ try {
   eq("guard: a verdict handed back through SubagentHandback", guard(input), "owner");
   sync(input);
   eq("sync: every decider with verdicts logged", logged(), ["s1.a1.jsonl", "s1.a2.jsonl", "s1.a3.jsonl", "s1.h1.jsonl"]);
-  writeFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.a1.jsonl"), "kept\n");
+  writeFileSync(join(logDir, "s1.a1.jsonl"), "kept\n");
   sync({ ...input, transcript_path: join(subs, "agent-a1.jsonl") });
-  eq("sync: a written log file is never rewritten", readFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.a1.jsonl"), "utf8"), "kept\n");
-  writeFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.a1.jsonl"), `${JSON.stringify({ ts: "2026-10-27T03:04:05Z", verdict: "DECIDED", question: "q1" })}\n`);
+  eq("sync: a written log file is never rewritten", readFileSync(join(logDir, "s1.a1.jsonl"), "utf8"), "kept\n");
+  writeFileSync(join(logDir, "s1.a1.jsonl"), `${JSON.stringify({ ts: "2026-10-27T03:04:05Z", verdict: "DECIDED", question: "q1" })}\n`);
 
   const all = loadDecisions(repo);
   // still running: its last line is a text block streamed before the tool call, with verdict-like words in it
@@ -100,8 +102,8 @@ try {
   eq("sync: a decider still running is not logged", logged().includes("s1.run1.jsonl"), false);
   sync({ ...input, agent_id: "run1", agent_type: "ai-kit:decider", last_assistant_message: block("OWNER", "qf") });
   eq("sync: SubagentStop logs from last_assistant_message",
-    JSON.parse(readFileSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.run1.jsonl"), "utf8")).question, "qf");
-  rmSync(join(repo, "ai", "usage", "decisions", "2026-10", "s1.run1.jsonl"));
+    JSON.parse(readFileSync(join(logDir, "s1.run1.jsonl"), "utf8")).question, "qf");
+  rmSync(join(logDir, "s1.run1.jsonl"));
   rmSync(join(subs, "agent-run1.jsonl"));
   rmSync(join(subs, "agent-run1.meta.json"));
   eq("load: every record in ts order", all.map((r) => r.question), ["q1", "q2", "q3", "qh", "q4"]);
