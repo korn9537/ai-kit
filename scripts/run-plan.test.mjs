@@ -168,10 +168,10 @@ ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
   ok("plan review prompt names each batch's size", /Batch light \(size light\)/.test(t.calls[0].prompt) && /Batch none \(size normal\)/.test(t.calls[0].prompt) && /Batch heavy \(size heavy\)/.test(t.calls[0].prompt) && /code-level difficulty/.test(t.calls[0].prompt));
   ok("result shows size", t.res.batches[0].size.planned === "light" && t.res.batches[0].size.ran === "light");
 
-  // job fix: highest committed size, heavy for a dataRule finding, fix2 one tier above, never past heavy
-  const fixOpts = async (batches, reviews, extra) => {
+  // job fix: size of the batches the findings fall in, heavy for a dataRule finding, fix2 one tier above, never past heavy
+  const fixOpts = async (batches, reviews, extra, files = () => ["a.ts"]) => {
     let n = 0;
-    const o = await runOpts(batches, (l) => (/^review/.test(l) ? review(l === "review: plan" ? [] : reviews[n++] ?? []) : commit(`h${n}${l.length}${Math.random()}`.slice(0, 8))), extra);
+    const o = await runOpts(batches, (l) => (/^review/.test(l) ? review(l === "review: plan" ? [] : reviews[n++] ?? []) : { ...commit(`h${n}${l.length}${Math.random()}`.slice(0, 8)), files: files(l) }), extra);
     return { ...o, fixes: o.calls.filter((c) => / fix\]/.test(c.label)) };
   };
   const lightNormal = [sz("light"), sz("normal")];
@@ -185,6 +185,26 @@ ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
   ok("fix2 after a heavy fix stays heavy", f.fixes[1].o.model === "opus" && f.res.review.fix2.size.planned === "heavy");
   f = await fixOpts([sz("light")], [[finding("x")], [finding("y")], []]);
   ok("light job: fix light, fix2 normal", f.fixes[0].o.model === "sonnet" && !keys(f.fixes[1]).length);
+
+  // a finding is sized by the batch that holds its file, not by the heaviest batch of the job
+  const byFile = (l) => [/\[heavy\]/.test(l) ? "db/migrate.sql" : /\[normal\]/.test(l) ? "app/screen.ts" : "x.md"];
+  const at = (where) => ({ ...finding("x"), where });
+  f = await fixOpts([sz("heavy"), sz("normal")], [[at("app/screen.ts:12")], []], {}, byFile);
+  ok("finding in a normal batch's file: fix at normal although the job has a heavy batch", !keys(f.fixes[0]).length && f.res.review.fix.size.planned === "normal");
+  f = await fixOpts([sz("heavy"), sz("normal")], [[at("app/screen.ts:12"), at("./db/migrate.sql:3-9")], []], {}, byFile);
+  ok("findings in two batches: the higher one", f.fixes[0].o.model === "opus" && f.res.review.fix.size.planned === "heavy");
+  f = await fixOpts([sz("heavy"), sz("normal")], [[at("lib/other.ts:1")], []], {}, byFile);
+  ok("finding in no batch's file: normal", !keys(f.fixes[0]).length);
+  f = await fixOpts([sz("heavy"), sz("normal")], [[at("db/migrate.sql:12:5")], []], {}, byFile);
+  ok("file:line:col still finds its batch", f.res.review.fix.size.planned === "heavy");
+  f = await fixOpts([sz("heavy"), sz("normal")], [[at("app/screen.ts:1, db/migrate.sql:2")], []], {}, byFile);
+  ok("a finding naming two files: the higher batch", f.res.review.fix.size.planned === "heavy");
+  const near = { ...sz("heavy"), id: "near", brief: "change lib/data.ts", waitsFor: ["missing"] };
+  f = await fixOpts([sz("normal"), near], [[at("a.ts:1")], []], {}, byFile);
+  ok("a short name inside another path in a brief does not match", f.res.review.fix.size.planned === "normal");
+  const never = { ...sz("light"), id: "gone", brief: "build lib/gone.ts", waitsFor: ["missing"] };
+  f = await fixOpts([sz("normal"), never], [[at("lib/gone.ts:4")], []], {}, byFile);
+  ok("finding on a batch never built: that batch's planned size", f.fixes[0].o.model === "sonnet" && f.res.review.fix.size.planned === "light");
 
   // maxSize clamps every call; the raise comes first, the clamp last
   const m = await fixOpts([sz("heavy")], [[finding("x")], [finding("y")], []], { maxSize: "normal" });

@@ -48,7 +48,7 @@ export function saveCache(path, c) {
 // ids maps message.id to its last counted usage, so a repeated id replaces rather than adds.
 const freshFile = () => ({
   offset: 0, firstTs: null, baseContext: null, model: "", ids: {}, tu: {}, tools: {}, largest: 0, peak: 0,
-  prompts: [], commits: [], last: null, efforts: {},
+  prompts: [], commits: [], last: null, efforts: {}, effort: "",
 });
 
 function textOf(content) {
@@ -91,6 +91,8 @@ export function toolKey(b) {
 function absorb(f, e, isMain) {
   f.firstTs ??= e.timestamp ?? null;
   const msg = e.message;
+  // the effort each API request ran at; a workflow agent has no launching Agent call to read it from
+  if (e.type === "api-request-blob" && typeof msg?.output_config?.effort === "string") f.effort = msg.output_config.effort;
   if (e.type === "assistant" && msg) {
     if (msg.model === "<synthetic>") return;
     const u = msg.usage;
@@ -179,7 +181,8 @@ function readNew(path, cache, isMain) {
   return f;
 }
 
-// Effort of a subagent: the `effort` its launching Agent/Task call carried, else the effort: line of an ai-kit agent's frontmatter.
+// Effort of a subagent: the last effort its own requests ran at, else the `effort` its launching Agent/Task call carried,
+// else the effort: line of an ai-kit agent's frontmatter.
 const AGENTS_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "agents");
 
 export function frontmatterEffort(type, dir = AGENTS_DIR) {
@@ -237,8 +240,8 @@ export function collectSession(transcript, cache = { v: 3, files: {}, bytesRead:
   for (const [i, [dir, name]] of files.entries()) {
     const id = name.slice("agent-".length, -".jsonl".length);
     const meta = metas[i];
-    const effort = (mf.efforts ??= {})[meta.toolUseId] ?? frontmatterEffort(meta.agentType);
     const f = readNew(join(dir, name), cache, false);
+    const effort = f.effort || ((mf.efforts ??= {})[meta.toolUseId] ?? frontmatterEffort(meta.agentType));
     agents[id] = agentOf(id, roleOf(meta.description, meta.agentType), meta.description ?? "", f.model || (meta.model ?? ""), f, effort);
     for (const c of f.commits) if (!commits.some((x) => x.hash === c.hash)) commits.push(c);
   }

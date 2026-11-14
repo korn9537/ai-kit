@@ -271,8 +271,9 @@ async function reviewChain(b, r, need) {
     r.review = `no CONFIRMED finding (${rv.checked})`
     return
   }
-  // the highest planned size of the commits, heavy when a fix is about data or a rule; fix2 one tier above; clamped last
-  const z1 = sized(confirmed.some((f) => f.dataRule) ? 'heavy' : b.baseSize)
+  // the highest size of the batches the findings fall in, heavy when a fix is about data or a rule; fix2 one tier
+  // above; clamped last
+  const z1 = sized(confirmed.some((f) => f.dataRule) ? 'heavy' : confirmed.reduce((m, f) => higher(m, b.sizeAt(f.where)), 'light'))
   const z2 = sized(raise(z1.size.planned))
   log(`${b.title}: ${confirmed.length} CONFIRMED → fix${tag(z1)}`)
   const fx = await exclusive(() =>
@@ -399,6 +400,24 @@ for (const [i, b] of batches.entries()) {
   needs[b.id] = c.review
 }
 
+// a finding's size: per file it names (file:line, file:12:5, a list split on , or ;), that of the batches whose
+// commit holds the file (partial included), else of a batch with no commit whose brief names it, else normal; the
+// highest of them. Never the heaviest batch of the whole job for that alone
+const findingSize = (where, list, res) => {
+  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const sizes = (bs) => bs.reduce((m, x) => higher(m, x.size), 'light')
+  const one = (file) => {
+    const same = (p) => p === file || p.endsWith(`/${file}`) || file.endsWith(`/${p}`)
+    const built = list.filter((x) => res[x.id] && res[x.id].hash && (res[x.id].files || []).some(same))
+    if (built.length) return sizes(built)
+    const named = new RegExp(`(^|[\\s/\`'"(])${esc(file)}($|[\\s\`'"),:;.])`)
+    const unbuilt = list.filter((x) => !(res[x.id] && res[x.id].hash) && named.test(String(x.brief || '')))
+    return unbuilt.length ? sizes(unbuilt) : 'normal'
+  }
+  const files = String(where || '').split(/[,;]/).map((t) => /^\s*(?:\.\/)?([^\s:,;()]+)/.exec(t)?.[1]).filter(Boolean)
+  return files.length ? files.reduce((m, f) => higher(m, one(f)), 'light') : 'normal'
+}
+
 // one review of the whole job, after its last commit: the plan's checks, risks and tests together
 const made = batches.map((b) => results[b.id]).filter((r) => r && r.hash)
 let jobReview = null
@@ -410,8 +429,7 @@ if (made.length) {
     accept: batches.flatMap((b) => b.accept || []), tests: batches.flatMap((b) => b.tests || []),
     risks: batches.flatMap((b) => b.risks || []), verify: [...new Set(batches.map((b) => b.verify).filter(Boolean))].join(' && '),
     alsoInScope: batches.flatMap((b) => b.alsoInScope || []),
-    // the highest planned size over every batch with a hash, partial included
-    baseSize: batches.filter((b) => results[b.id] && results[b.id].hash).reduce((m, b) => higher(m, b.size), 'light'),
+    sizeAt: (where) => findingSize(where, batches, results),
   }
   jobReview = { id: 'job', title: jb.title, status: 'committed', hash: made.at(-1).hash, owner: [], blockers: [], unmet: [], notes: [],
     held: made.some((r) => (r.owner || []).length) }

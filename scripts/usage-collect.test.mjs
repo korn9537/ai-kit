@@ -225,6 +225,16 @@ eq("frontmatterEffort: ai-kit agent reads its effort line", [frontmatterEffort("
   writeFileSync(join(sd, "agent-e3.meta.json"), JSON.stringify({ description: "Decide it", agentType: "ai-kit:decider", toolUseId: "tu3" }));
   const r2 = collectSession(t, cache);
   eq("effort of a launch appended later, parent read incrementally", [r2.agents.e3.effort, r2.agents.e1.effort, cache.bytesRead < first], ["low", "high", true]);
+  // a workflow agent: no launching Agent call, its own api-request-blob lines carry the effort it ran at
+  const wd = join(sd, "workflows", "wf_1");
+  mkdirSync(wd, { recursive: true });
+  const blob = (effort) => JSON.stringify({ type: "api-request-blob", message: { output_config: { effort } } });
+  writeFileSync(join(wd, "agent-w1.jsonl"), `${blob("high")}\n${lines(asst("w1a", "2026-01-01T00:00:05Z", text("hi"), usage(1, 0, 0, 0, 1)))}`);
+  writeFileSync(join(wd, "agent-w1.meta.json"), JSON.stringify({ description: "commit: [b1] x", agentType: "ai-kit:committer" }));
+  writeFileSync(join(wd, "agent-w2.jsonl"), lines(asst("w2a", "2026-01-01T00:00:06Z", text("hi"), usage(1, 0, 0, 0, 1))));
+  writeFileSync(join(wd, "agent-w2.meta.json"), JSON.stringify({ description: "commit: [b2] y", agentType: "ai-kit:committer" }));
+  const r3 = collectSession(t);
+  eq("workflow agent: effort from its own requests, frontmatter without them", [r3.agents.w1.effort, r3.agents.w2.effort], ["high", frontmatterEffort("ai-kit:committer")]);
   rmSync(d2, { recursive: true, force: true });
 }
 

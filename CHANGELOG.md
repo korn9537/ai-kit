@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.49.2
+
+A fix in `/ai-kit:run-plan` and `/ai-kit:continuous` runs at the size of the batches its CONFIRMED findings fall in
+(the batch whose commit holds the file, else a batch never built whose brief names it, else `normal`), not at the
+heaviest batch of the job: one finding in a `normal` batch's file no longer starts an opus, effort high committer
+because another batch was `heavy` (#54, in part). Usage records take a subagent's effort from its own requests, so a
+workflow committer at `heavy` shows `high`, not its frontmatter's `medium`. Records written before stay as they
+are, and an agent whose transcript the collector had already read before the update keeps the old value.
+No project needs to edit anything.
+
 ## 2.49.1
 
 `/ai-kit:run-plan` and `/ai-kit:continuous` start again: Workflow now refuses a `scriptPath` outside the folders the

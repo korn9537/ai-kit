@@ -112,10 +112,12 @@ left to run.
 - The Agent call carries the batch's size: `light` → `model: "sonnet"`, `effort: "low"`; `normal` → no model or
   effort (the committer's frontmatter holds: sonnet, medium); `heavy` → `model: "opus"`, `effort: "high"`. Never
   `xhigh` or `max` automatically. `maxSize` (args, from `ai/kit/config.json` `committer.maxSize`) clamps every
-  committer call down to it. A fix in the workflow runs at the highest size of the job's committed batches,
-  partial included (`heavy` for a `dataRule` finding: the code already broke a settled rule, so the fix repairs
-  correctness rather than reads the rule anew), its second fix one tier up, nothing above `heavy`; the clamp applies
-  last. The main-session coordinator passes the same model and effort on the first launch
+  committer call down to it. A fix in the workflow runs at `heavy` when a CONFIRMED finding is `dataRule` (the code
+  already broke a settled rule, so the fix repairs correctness rather than reads the rule anew). Otherwise each file
+  a finding names takes the size of the batch whose commit holds it (partial included), else of a batch with no
+  commit whose brief names it, else `normal`, and the fix runs at the highest of these: never at the heaviest batch
+  of the job for that alone. Its second fix runs one tier up, nothing above `heavy`; the clamp applies last. The
+  main-session coordinator passes the same model and effort on the first launch
   of each batch's committer, at its size. A fix there goes by SendMessage,
   which cannot change model or effort, so it runs at the batch's own size: fix escalation is the workflow's, where
   each fix is a fresh agent. `/ai-kit:continuous` retries keep the size: a retry runs only an agent that died, and
