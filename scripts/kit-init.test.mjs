@@ -1,7 +1,7 @@
 // Tests for kit.mjs init and check on line endings (the LF rules a Windows checkout needs) and the commit-msg shim.
 // Usage: node scripts/kit-init.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -124,6 +124,38 @@ try {
   // #49: the staged-diff warning names the file:line and the matched command
   writeFileSync(join(abs, "ai", "kit", "pre-commit.sh"), '#!/usr/bin/env bash\nstaged="$(git diff --cached --name-only)"\n');
   eq("check: the staged-diff warning names line and command", run(abs, "check").includes("ai/kit/pre-commit.sh:2 `staged=\"$(git diff --cached --name-only)\"` reads the staged diff"), true);
+  // usage now goes to the server: leftover ai/usage files and long-unsent sessions are warned, offline
+  const use = join(tmp, "use");
+  execFileSync("git", ["init", "-q", use]);
+  run(use, "init");
+  eq("check: no usage warning in a clean repo", run(use, "check").includes("usage"), false);
+  mkdirSync(join(use, "ai", "usage", "2030-01"), { recursive: true });
+  writeFileSync(join(use, "ai", "usage", "2030-01", "s1.jsonl"), "{}\n");
+  eq("check: an untracked ai/usage file is warned with the migrate fix", run(use, "check").includes("usage.mjs migrate"), true);
+  execFileSync("git", ["add", "ai/usage"], { cwd: use });
+  eq("check: a tracked ai/usage file is warned too", run(use, "check").includes("ai/usage/ still holds 1 file(s)"), true);
+  rmSync(join(use, "ai", "usage"), { recursive: true });
+  execFileSync("git", ["rm", "-rq", "--cached", "ai/usage"], { cwd: use });
+  const buf = join(use, ".git", "claude-usage");
+  mkdirSync(buf, { recursive: true });
+  const age = (f, hours) => {
+    const t = new Date(Date.now() - hours * 36e5);
+    utimesSync(join(buf, f), t, t);
+  };
+  writeFileSync(join(buf, "s-new.transcript"), "/x/new.jsonl");
+  eq("check: a session recorded just now and unsent is not warned", run(use, "check").includes("not sent"), false);
+  writeFileSync(join(buf, "s-old.transcript"), "/x/old.jsonl");
+  age("s-old.transcript", 30);
+  const stale = run(use, "check");
+  eq("check: a session unsent for over a day names the send command", stale.includes("1 session(s) have usage not sent for over a day") && stale.includes("usage.mjs send --session s-old"), true);
+  writeFileSync(join(buf, "s-old.sent"), "{}");
+  eq("check: a sent session is not warned", run(use, "check").includes("not sent"), false);
+  age("s-old.transcript", 1);
+  age("s-old.sent", 40);
+  eq("check: a send older than a transcript idle under a day is not warned", run(use, "check").includes("not sent"), false);
+  age("s-old.transcript", 30);
+  age("s-old.sent", 50);
+  eq("check: a send older than the transcript, idle over a day, is warned", run(use, "check").includes("not sent"), true);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

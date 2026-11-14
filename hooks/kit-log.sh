@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Usage: kit-log.sh stop | session-end | subagent-stop. stop (Stop): buffer this round's token usage in the git common
 # dir and show a one-line summary (systemMessage). session-end (SessionEnd): record what came after the last Stop, then
-# flush this session's buffer to ai/usage/ (usage.mjs end). subagent-stop (SubagentStop, Stop): log each finished
-# ai-kit:decider call once to ai/usage/decisions/ (decider.mjs sync). Silent without ai/kit/; never blocks: a failure is
-# one stderr line and exit 0.
+# start a detached send of this session's events to the usage server (usage.mjs end). subagent-stop (SubagentStop,
+# Stop): log each finished ai-kit:decider call once in the git common dir until sent (decider.mjs sync). Silent
+# without ai/kit/; never blocks: a failure is one stderr line and exit 0.
 set -euo pipefail
 
 mode="${1:-}"

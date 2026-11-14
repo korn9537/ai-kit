@@ -8,6 +8,7 @@ import {
 import { isAbsolute, join } from "node:path";
 import { planWarnings } from "../plan.mjs";
 import { transcriptsDir } from "../lib/usage-collect.mjs";
+import { usageBufDir } from "../lib/state-dirs.mjs";
 import { MSG_SHIM, PLUGIN, SHIM, at, claudeDir, isObj, isShim, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, shimPath, tryGit, tryGitIn } from "./shared.mjs";
 import { snapshotWarnings } from "./sync.mjs";
 
@@ -122,18 +123,37 @@ function docsWarnings(conf) {
     : [];
 }
 
-// token records still out of a commit a day after their flush: every commit since was path-limited
+// usage left in the repo (tracked or untracked under ai/usage/) and sessions whose send keeps failing; offline, file times only
 function usageWarnings() {
-  const names = ["ls-files --others --modified --exclude-standard", "diff --cached --name-only"]
+  const out = [];
+  const left = ["ls-files", "ls-files --others --exclude-standard"]
     .flatMap((a) => (tryGitIn(root, [...a.split(" "), "-z", "--", "ai/usage"]) ?? "").split("\0"))
     .filter(Boolean);
+  if (left.length) {
+    out.push(
+      `ai/usage/ still holds ${new Set(left).size} file(s), but usage now goes to the usage server (fix: node <plugin>/scripts/usage.mjs migrate posts them and stages their removal, then commit)`,
+    );
+  }
+  const buf = usageBufDir(root);
   const day = Date.now() - 864e5;
-  const old = [...new Set(names)].filter((n) => (statSync(at(n), { throwIfNoEntry: false })?.mtimeMs ?? day) < day);
-  return old.length
-    ? [
-        `${old.length} token record file(s) under ai/usage/ uncommitted for over a day (fix: commit with git add <files> then git commit with no paths, and the pre-commit takes them along; a path-limited commit leaves them, CLAUDE.core.md)`,
-      ]
-    : [];
+  let names = [];
+  try {
+    names = readdirSync(buf).filter((n) => n.endsWith(".transcript"));
+  } catch {
+    // no buffer yet: nothing recorded
+  }
+  const stale = names.filter((n) => {
+    const t = statSync(join(buf, n), { throwIfNoEntry: false })?.mtimeMs ?? Infinity;
+    const sent = statSync(join(buf, `${n.slice(0, -".transcript".length)}.sent`), { throwIfNoEntry: false })?.mtimeMs ?? 0;
+    return t < day && sent < t;
+  });
+  if (stale.length) {
+    const id = stale[0].slice(0, -".transcript".length);
+    out.push(
+      `${stale.length} session(s) have usage not sent for over a day (sends retry at the next session start; send now: node <plugin>/scripts/usage.mjs send --session ${id}; failures are in ${join(buf, "send.log")})`,
+    );
+  }
+  return out;
 }
 
 // top-level entries of ai/ (docs/ai-layout.md); a path ui.api or analysis-sources.md names is allowed too

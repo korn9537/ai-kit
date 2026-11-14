@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # SessionStart: records the plugin path for the git pre-commit shim (<git-common-dir>/ai-kit-root), injects the second
-# half of CLAUDE.core.md (session-context.sh injects the first), flushes other sessions' token buffers idle for
-# 6 hours into ai/usage/, records a new session's review snapshot and names the plans not closed.
+# half of CLAUDE.core.md (session-context.sh injects the first), starts a detached send of other sessions' usage idle
+# for 6 hours to the usage server, records a new session's review snapshot and names the plans not closed.
 # Silent without ai/kit/.
 set -euo pipefail
 

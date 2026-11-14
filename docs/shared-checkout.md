@@ -12,7 +12,7 @@ push triggers, is in the project's CLAUDE.md (branch and deploy).
   quoted text and heredoc bodies are not read, unless the scan cannot follow them, as in a heredoc that may expand).
   Before `git add <file>` read `git diff <file>` for hunks that are not yours; before committing read
   `git diff --cached --stat`. Then `git commit` with no paths: `git commit -- <path>` commits the whole working-tree
-  file, other hunks included, and leaves the token records behind.
+  file, other hunks included.
 - A partially staged file is safe: the ai-kit pre-commit formats only its staged blob and leaves the other hunks
   unstaged. To stage only your hunks of a file holding someone else's: `git apply --cached` of your hunks, or write
   your version's blob (`git hash-object -w` + `git update-index --cacheinfo`); confirm HEAD builds in a worktree.

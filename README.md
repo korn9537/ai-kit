@@ -97,12 +97,14 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   the work tree (checkout, switch, stash, pull, merge, rebase, reset, restore, cherry-pick, revert).
 - `kit-log.sh stop` (Stop) appends each round's token use to a buffer in the git common dir
   (`<git-common-dir>/claude-usage/<session>.jsonl`, shared by all branches and worktrees) and shows a one-line
-  summary to the user only; nothing under `ai/usage/` changes during the session; it never blocks (the buffer
+  summary to the user only; nothing under `ai/` changes during the session; it never blocks (the buffer
   lock is waited for at most 1.5 s, then the record is skipped with one stderr line).
-- `kit-log.sh session-end` (SessionEnd) first records what came after the last Stop, then writes the buffer's new
-  records to a new file `ai/usage/<YYYY-MM>/<session>.jsonl` (`<session>.2.jsonl`, `.3`, ... after a resume; an
-  existing file is never modified). `session-start.sh` does the same for other sessions' buffers idle over 6 hours
-  (a crashed session), trying the buffer lock once without waiting. The next commit carries the files.
+- `kit-log.sh session-end` (SessionEnd) first records what came after the last Stop, then starts a detached
+  `usage.mjs send`, which posts the session's call-level events to the usage server (`usage.endpoint`, default
+  `https://ai-kit-usage.maybix.com`; the transcripts are the source, the server upserts, so a resumed session or a
+  second send adds nothing twice). `session-start.sh` does the same for other sessions idle over 6 hours (a crashed
+  session or a failed send), trying the buffer lock once without waiting; a send's errors go to
+  `<git-common-dir>/claude-usage/send.log`. Nothing is written under `ai/usage/` and no commit carries usage.
 - `ask-guard.sh` (PreToolUse on AskUserQuestion) blocks a question to the owner until an `ai-kit:decider` call of
   the session returned OWNER for it in the last 30 minutes. Each asked question (`question` and `header`) is matched
   to a verdict block's `Question:` line by word overlap (stop words dropped; Thai and other unspaced scripts compared
@@ -115,11 +117,10 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   whose description names the decider counts too (the type not loaded). Off with `decider.enabled: false`; a
   question matching `decider.always_owner` goes through, and so does every ask when node is missing or the guard
   errs.
-- `kit-log.sh subagent-stop` (SubagentStop, Stop) writes each finished decider call's verdict blocks once to
-  `ai/usage/decisions/<YYYY-MM>/<session>.<agent id>.jsonl` (one file per call, never rewritten, so branches and
-  worktrees never conflict on it), on SubagentStop from the hook's `last_assistant_message`; a call still running is
-  not logged. The pre-commit stages the log with `ai/usage`; reviews skip it.
-  `/ai-kit:decisions` prints it as a report.
+- `kit-log.sh subagent-stop` (SubagentStop, Stop) logs each finished decider call's verdict blocks once, in
+  `<git-common-dir>/claude-decider/log/<session>.<agent id>.jsonl` until `usage.mjs send` posts it to the usage
+  server, on SubagentStop from the hook's `last_assistant_message`; a call still running is not logged.
+  `/ai-kit:decisions` prints the server's log of this project plus the files not sent yet as a report.
 - `memory-guard.sh` (PreToolUse on Write/Edit/MultiEdit/NotebookEdit) blocks writes into
   `~/.claude/projects/*/memory/` (or under `CLAUDE_CONFIG_DIR`) and names the repo file to use instead. Bash writes into
   that dir are blocked by `bash-guard.sh`; `init` also sets `autoMemoryEnabled` false (`kit.mjs check` verifies it).
@@ -173,22 +174,26 @@ changed code path is one the plan names (`plan.mjs scope <job>`: paths, root fil
 edit outside that set is reviewed as usual, and the ask names it. After a Bash edit the changed paths are everything
 changed in the checkout since the snapshot, so another session's file counts as outside.
 
-`usage.enabled` (default `true`) turns the token records off with `false`; `usage.money` (default `true`)
+`usage.enabled` (default `true`) turns the usage records off with `false`; `usage.endpoint` (default
+`https://ai-kit-usage.maybix.com`, env `AI_KIT_USAGE_ENDPOINT` overrides) is the server they go to;
+`usage.money` (default `true`)
 set to `false` (a subscription, where dollars are not billed) shows the round and session summary in
-input-equivalent tokens only; a model without a ratio entry counts at fallback ratios, so the figure is approximate. A
-record holds no prompt text, only the prompt's length (`prompt_chars`); an agent's description is stored base64.
-`usage.prices`
+input-equivalent tokens only; a model without a ratio entry counts at fallback ratios, so the figure is approximate. The
+server stores every call, tool call, hook firing and commit of a session as plain rows, prompt and message text
+included, so the kit's versions can be compared; it has no token and no allowlist, so anyone who can reach it can read
+and write the data, and it keeps the newest 10 kit versions and at most 365 days. Projects are told apart by their
+origin URL (`local/<folder>` without a remote), for `--project`. `usage.prices`
 (`{"<model id prefix>": <base input $ per MTok>}`) overrides the kit's default prices; a model with no price is
-reported apart. Records are committed with the next commit (`githooks/pre-commit` stages new files under `ai/usage/`
-by name, except in a path-limited commit, so commit with `git add` then `git commit` with no paths; `check` warns
-about record files uncommitted for over a day). A tracked file under `ai/usage/` is never modified, so a branch switch,
-merge or rebase is never blocked.
+reported apart. No commit carries usage. A repo that still has `ai/usage/` runs `node <plugin>/scripts/usage.mjs
+migrate` once: it posts those files and, only when every post succeeded, stages their removal with `git rm`; commit
+that. `check` warns about leftover `ai/usage/` files and about a session whose usage has not been sent for over a day
+(file times only, no network).
 
 `decider.enabled` (default `true`) lets every AskUserQuestion through with `false`. `decider.always_owner` (a
 case-insensitive jq (Oniguruma) regex over the questions and headers, default none) names topics this project
 always decides itself, e.g. `"bundle id|store listing|privacy"`; an invalid pattern lets every ask through. The
-decision log is committed: the decider writes questions and reasons only, each field capped at 500 characters, and
-never a secret or personal data (`agents/decider.md`).
+decision log goes to the usage server: the decider writes questions and reasons only, each field capped at 500
+characters, and never a secret or personal data (`agents/decider.md`).
 
 `ui` (`{"platforms": ["web", "mobile"], "include": "<regex>", "api": "ai/api/"}`) turns on screen specs in
 `ai/screens/` linked to the API spec: `docs/screen-specs.md`. Absent or `"platforms": []` = off; `check` warns
@@ -237,10 +242,18 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
   then fills the `ai/` layout one category per commit, only from the code and existing docs.
 
 - `node <plugin>/scripts/usage.mjs digest [--since YYYY-MM-DD] [--baseline]` (read-only) prints a fixed-size text
-  digest of `ai/usage/**`: cost per model, role and kit version, driver signals, cost per commit by commits per
-  round (0, 1, 2-3, 4-7, 8+; commits are the hashes seen in this repo's transcripts), reviewer findings, the costliest
-  rounds, outliers, and the commits the git hooks refused, per rule and per kit (`## refusals`). `--baseline` builds
-  it from this machine's local transcripts instead, before any record exists.
+  digest of every project's records on the usage server (`--project`: this repo's only): cost per model, role and kit
+  version, driver signals, cost per commit by commits per round (0, 1, 2-3, 4-7, 8+; commits are the hashes seen in
+  this repo's transcripts), reviewer findings, the costliest rounds, outliers, and the commits the git hooks refused,
+  per rule and per kit (`## refusals`). `--baseline` builds it from this machine's local transcripts instead, before
+  any record is sent.
+- `node <plugin>/scripts/usage.mjs views <view> [--kit <version|prefix.>] [--project] [--since YYYY-MM-DD]`
+  (read-only) prints one of the server's analysis views as a table: `v_kit_compare` (kit versions side by side),
+  `v_kit_roles`, `v_tool_stats`, `v_hook_stats`, `v_repeat_reads`, `v_session_cost`, `v_round_cost`, `v_agent_cost`,
+  `v_call_cost`, `v_daily`. `/ai-kit:usage` starts from `v_kit_compare`.
+- `node <plugin>/scripts/usage.mjs migrate` posts this repo's old `ai/usage/**` to the server and stages its removal.
+- `node <plugin>/scripts/usage.mjs send [--session <id>]...` posts sessions now (what the hooks start detached),
+  then the refusal buffer and the decider logs.
 - `node <plugin>/scripts/usage.mjs digest --compare <kitA> <kitB>` (read-only) prints two kit versions side by side
   from the same records: sessions, rounds, cost per round and per commit, main-session peak, Read+Grep per round,
   committer calls per commit, reviewer findings per review, refusals per commit, and the change in %. A prefix such as
@@ -248,8 +261,8 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
 - `node <plugin>/scripts/usage.mjs refusal <rule-id>` is called by `githooks/pre-commit` and `githooks/commit-msg` when
   they refuse a commit (ids as in `scripts/lib/hook-events.mjs`, e.g. `pre-commit.comments`, `commit-msg.job`): it
   appends `{v, ts, rule, kit, branch}` to `<git-common-dir>/claude-usage/refusals/buffer.log` and never fails the hook
-  (a lock held over 1.5 s skips the record; node missing skips it too). The next flush moves the buffer to a new file
-  `ai/usage/refusals/<YYYY-MM>/<host hash>-<random>.jsonl`; `usage.enabled: false` records nothing.
+  (a lock held over 1.5 s skips the record; node missing skips it too). The next `usage.mjs send` posts the buffer to
+  the server; `usage.enabled: false` records nothing.
   `/ai-kit:usage` (`commands/usage.md`) runs it and names the largest driver with the one change that cuts it.
 - `node <plugin>/scripts/usage.mjs hooks [--since YYYY-MM-DD]` (read-only) counts each kit hook's firings (main
   and subagent, sessions, kit versions) from this machine's transcripts of the project; counts only, no message text.
@@ -381,13 +394,15 @@ screen spec และ API spec ชี้ถึง ของที่ไม่อ
 จากนั้นสั่งทีละหมวด (`config`, `move`, `data`, `decisions`, `requirements`, `screens`, `api`) หมวดละ commit เขียนจากโค้ดและเอกสาร
 ที่มีอยู่เท่านั้น ส่วนที่หาที่มาไม่ได้ลงเป็นคำถามในแผน decision ที่ต้นทางมีสถานะ final อยู่แล้วเป็น `Confirmed` ที่เหลือเป็น `Default`
 
-kit บันทึกการใช้ token ของทุก round (ค่า default เปิดอยู่ ไม่เก็บข้อความ prompt เก็บแค่ความยาว)
-ระหว่าง session เก็บไว้ใน `.git` ก่อน แล้วเขียนเป็นไฟล์ใหม่ใน `ai/usage/` ตอน session จบ
-และ commit ไปกับ commit ถัดไปเอง ไม่แก้ไฟล์ที่ commit แล้ว จึงไม่ขวางการสลับ branch
+kit บันทึกการใช้ token ของทุก round (ค่า default เปิดอยู่) ระหว่าง session เก็บไว้ใน `.git` ก่อน
+แล้วส่งขึ้น usage server กลางตอน session จบ (ส่งไม่สำเร็จจะลองใหม่ตอนเริ่ม session ถัดไป) ไม่เขียนอะไรลง repo
+และไม่มี commit เพิ่ม เก็บข้อความ prompt แบบเต็ม server ไม่มี token และไม่มี allowlist เก็บ kit version ล่าสุด 10 ตัว
+และไม่เกิน 365 วัน เป้าหมายคือเทียบ kit version เพื่อปรับ kit ไม่ใช่คิดเงินรายโปรเจกต์
 สรุปหนึ่งบรรทัดแสดงให้ผู้ใช้เห็นอย่างเดียว ปิดทั้งหมดด้วย `"usage": { "enabled": false }`
-ใน `ai/kit/config.json` สั่ง `/ai-kit:usage` เพื่อดูว่าอะไรใช้ token มากที่สุด
-commit ที่ถูก pre-commit ปฏิเสธเก็บเป็น refusal record ใน `ai/usage/refusals/` จึงนับรวมทุกเครื่อง (ไม่ใช่แค่ transcript
-ในเครื่อง) digest มีหัวข้อ refusals และเทียบสอง kit version ได้ด้วย `digest --compare <kitA> <kitB>`
+ใน `ai/kit/config.json` สั่ง `/ai-kit:usage` เพื่อเทียบ kit version และดูว่าอะไรใช้ token มากที่สุด
+repo ที่ยังมี `ai/usage/` เก่า รัน `usage.mjs migrate` ครั้งเดียวแล้ว commit การลบที่ stage ไว้
+commit ที่ถูก pre-commit ปฏิเสธส่งขึ้น server เช่นกัน digest มีหัวข้อ refusals และเทียบสอง kit version ได้ด้วย
+`digest --compare <kitA> <kitB>` หรือ `usage.mjs views v_kit_compare`
 
 การเขียนไฟล์ผ่าน Bash ก็ถูกตรวจหลังแก้ (comment, docs) เหมือนการใช้ Edit ยกเว้นคำสั่ง git ที่แตะ work tree และ
 การเรียกแบบ background

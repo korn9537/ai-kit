@@ -7,9 +7,9 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 ## Git
 
 - The checkout and index may be shared with other sessions: stage named files only (hook-guarded), read
-  `git diff --cached --stat` before committing, revert only your own hunks, push only when asked. `ai/usage/` holds
-  kit-written token records: never edit, stage, revert or search them; the pre-commit adds them, so commit with
-  `git add <files>` then `git commit` with no paths (`git commit -- <paths>` and `-o` leave them behind). Details:
+  `git diff --cached --stat` before committing, revert only your own hunks, push only when asked. `ai/usage/` is
+  the kit's old usage folder (usage now goes to a server): never edit, stage, revert or search it; commit with
+  `git add <files>` then `git commit` with no paths (`git commit -- <paths>` and `-o` take the whole file). Details:
   `ai-kit/docs/shared-checkout.md`.
 - **Every commit carries one `Job: <yyyy-mm-dd>-<slug>` trailer**: one id per user request, picked by the main
   session at its first commit and named in every committer brief; a review-fix commit copies the job of the commit
@@ -38,7 +38,7 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   suggestions such as "could X if ...", "want me to ...?" included) goes to the `ai-kit:decider` agent first, with its
   options, the user's words and what you know (when BA ran, its Owner decisions item for the question, sources
   included): DECIDED → act on it without asking; OWNER → ask, its recommendation first. The kit logs each verdict
-  (`ai/usage/decisions/`, `/ai-kit:decisions`).
+  (sent to the usage server, `/ai-kit:decisions`).
 - **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
   stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
   change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report. A request to

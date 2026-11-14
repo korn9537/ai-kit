@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.50.0
+
+Usage records no longer live in each repo. The hooks keep a local buffer under the git common dir, and at session
+end (or at the next session start, for a crashed session or a failed send) a detached `usage.mjs send` posts the
+session's call-level events, the refusals and the decider's decision log to one usage server for all projects
+(`usage.endpoint` in `ai/kit/config.json`, default `https://ai-kit-usage.maybix.com`, env `AI_KIT_USAGE_ENDPOINT`
+overrides). Nothing is written under `ai/usage/` any more, so the commits that carried it are gone:
+`githooks/pre-commit` stops staging it. The server has no token and no allowlist and stores text plainly, prompts and
+messages included; it keeps the newest 10 kit versions and at most a year, because the data is for comparing kit
+versions, not for per-repo accounting. `usage.mjs digest` and `digest --compare` read the server (every project;
+`--project` for this repo), the new `usage.mjs views <view>` prints its analysis views (`v_kit_compare`,
+`v_kit_roles`, `v_tool_stats`, `v_hook_stats`, `v_repeat_reads` and more), `/ai-kit:usage` now starts from
+`v_kit_compare`, and `/ai-kit:decisions` reads the server plus the logs not sent yet. `kit.mjs check` warns about
+files left under `ai/usage/` and about a session whose usage has not been sent for over a day, offline; it no longer
+warns about uncommitted records.
+
+A project with an `ai/usage/` folder runs `node <plugin>/scripts/usage.mjs migrate` once: it posts the old files and,
+only when every post succeeded, stages their removal; commit that. Nothing else. The `:(exclude)ai/usage` pathspecs
+in the Stop hook, the run-plan workflow and `jobs.mjs`, `plan.mjs` and `continuous.mjs` stay for now, so the migrate
+commit stays out of the review gate; they go in a later release.
+
 ## 2.49.2
 
 A fix in `/ai-kit:run-plan` and `/ai-kit:continuous` runs at the size of the batches its CONFIRMED findings fall in

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for the pre-commit runner (ai/usage staging, the 40 KB check, prettier in a path-limited commit): a
+# Tests for the pre-commit runner (ai/usage left alone, the 40 KB check, prettier in a path-limited commit): a
 # throwaway repo, real commits through a temp hooks dir.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -39,43 +39,25 @@ git -C "$REPO" add a.txt
 git -C "$REPO" commit -qm "no usage dir" 2>&1
 check "no ai/usage dir → commit unaffected" "$(files)" "a.txt "
 
+# ai/usage is no longer staged by the hook: files there stay as they are, in any kind of commit
 mkdir -p "$REPO/ai/usage/2030-01"
 echo '{"n":1}' >"$REPO/ai/usage/2030-01/s 1.jsonl"
 echo b >"$REPO/b.txt"
 git -C "$REPO" add b.txt
 git -C "$REPO" commit -qm "with usage" 2>&1
-check "commit of b.txt also carries the new ai/usage file" "$(files)" "ai/usage/2030-01/s 1.jsonl b.txt "
+check "a new ai/usage file is not carried by the commit" "$(files)" "b.txt "
+check "and stays untracked" "$(git -C "$REPO" status --porcelain -- ai/usage | cut -c1-2 | tr '\n' ' ')" "?? "
 
-echo c >"$REPO/c.txt"
-git -C "$REPO" add c.txt
-git -C "$REPO" commit -qm "unchanged usage" 2>&1
-check "an unchanged ai/usage file is not re-added" "$(files)" "c.txt "
-
-echo '{"n":2}' >>"$REPO/ai/usage/2030-01/s 1.jsonl"
-echo d >"$REPO/d.txt"
-git -C "$REPO" add d.txt
-git -C "$REPO" commit -qm "grown usage" 2>&1
-check "an appended ai/usage file rides along" "$(files)" "ai/usage/2030-01/s 1.jsonl d.txt "
-
-# a path-limited commit runs the hook with a temporary index: staging there would corrupt the real index (MM, D)
-echo '{"n":3}' >>"$REPO/ai/usage/2030-01/s 1.jsonl"
-echo '{"n":4}' >"$REPO/ai/usage/2030-01/s 2.jsonl"
 echo more >>"$REPO/a.txt"
 git -C "$REPO" commit -qm "path-limited" -- a.txt 2>&1
 check "path-limited commit carries only its path" "$(files)" "a.txt "
-check "path-limited commit leaves ai/usage out of the index (no MM, no D)" \
-  "$(git -C "$REPO" status --porcelain -- ai/usage | cut -c1-2 | sort | tr '\n' ' ')" " M ?? "
-echo e >"$REPO/e.txt"
-git -C "$REPO" add e.txt
-git -C "$REPO" commit -qm "later" 2>&1
-check "the records wait for a later commit, which carries them" "$(files)" "ai/usage/2030-01/s 1.jsonl ai/usage/2030-01/s 2.jsonl e.txt "
 
 # the "moved verbatim" lint-reason check reads code, not records
 printf '%s\n' '{"prompt":"// eslint-disable-next-line x -- moved verbatim"}' >"$REPO/ai/usage/2030-01/s 3.jsonl"
 echo f >"$REPO/f.txt"
 git -C "$REPO" add f.txt
 git -C "$REPO" commit -qm "record that quotes the phrase" 2>&1
-check "a record quoting 'moved verbatim' does not block the commit" "$(files)" "ai/usage/2030-01/s 3.jsonl f.txt "
+check "a record quoting 'moved verbatim' does not block the commit" "$(files)" "f.txt "
 
 # a code file over 40 KB at HEAD: an edit waits for its move-only split
 for i in $(seq 1 1200); do echo "export const value$i = computeSomething($i, 'argument value');"; done >"$REPO/big.ts"

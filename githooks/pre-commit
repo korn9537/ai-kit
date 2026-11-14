@@ -37,18 +37,6 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-# Token records (ai/usage, written by the SessionEnd and idle flush) ride along with any commit; names are NUL-split and literal.
-# A path-limited commit (-o, <paths>) runs the hook on a temporary index (next-index-*.lock): staging there would
-# corrupt the real index, so the records wait for a later commit.
-case "${GIT_INDEX_FILE:-}" in
-  *next-index-*.lock) ;;
-  *)
-    if [ -d ai/usage ]; then
-      git ls-files -m -o --exclude-standard -z -- ai/usage | xargs -0 -r git --literal-pathspecs add --
-    fi
-    ;;
-esac
-
 # A backslash is a valid filename char on macOS/Linux, so a Windows-style output path (`-o bin\Debug`) creates a
 # malformed dir that .gitignore misses.
 if git -c core.quotePath=false diff --cached --name-only --diff-filter=ACMR | grep -q '\\'; then

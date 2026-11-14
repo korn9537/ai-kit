@@ -40,14 +40,14 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `hooks/review-snapshot.sh` | PostToolUse Agent, Task, SendMessage; also `--tree` from session-start | records the work tree when the main session calls a review, so the Stop hook can diff against it |
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
 | `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`; send searches to a subagent; read a line range instead of a whole file |
-| `hooks/kit-log.sh` | Stop (`stop`, `subagent-stop`), SubagentStop (`subagent-stop`), SessionEnd (`session-end`) | calls `usage.mjs` (`record`, `end`) and `decider.mjs sync`; buffers each round's token use; writes `ai/usage/` records at session end; logs decider verdicts |
+| `hooks/kit-log.sh` | Stop (`stop`, `subagent-stop`), SubagentStop (`subagent-stop`), SessionEnd (`session-end`) | calls `usage.mjs` (`record`, `end`) and `decider.mjs sync`; buffers each round's token use; starts a detached send to the usage server at session end; logs decider verdicts until sent |
 | `hooks/*.test.sh` | n/a | fixture tests, one per hook that has one |
 
 ### githooks/ (git hooks, called by the project's `.githooks/` shims)
 
 | File | Role |
 |---|---|
-| `githooks/pre-commit` | runs in order: stage `ai/usage/` records, backslash path, `check-docs`, `eslint-disable ... moved verbatim`, 40 KB size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
+| `githooks/pre-commit` | runs in order: backslash path, `check-docs`, `eslint-disable ... moved verbatim`, 40 KB size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
 | `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer on a commit made under Claude Code (`CLAUDECODE=1`); a merge, a `fixup!`, `squash!` or `amend!` commit and a person's own commit pass |
 | `githooks/*.test.sh` | fixture tests |
 
@@ -70,7 +70,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `commands/retrofit.md` | fills the `ai/` layout from code and existing docs, one category per commit, from `kit.mjs inventory` |
 | `commands/memory-export.md` | moves auto-memory files into repo files |
 | `commands/harvest.md` | in the kit clone: lands accepted `proposal` issues |
-| `commands/usage.md` | runs `usage.mjs digest`, names the largest driver and the one change that cuts it |
+| `commands/usage.md` | compares kit versions with `usage.mjs views v_kit_compare`, finds the largest driver in the newest versions' views and `digest`, and names the one change that cuts it |
 | `commands/decisions.md` | prints the decider's decision log |
 | `commands/jobs.md` | `jobs.mjs`: lists jobs or shows one job's commits and revert command |
 | `commands/run-plan.md` | runs a multi-commit plan through `workflows/run-plan.js`; writes and closes the plan file with `plan.mjs` (`write`, `live`, `resume`, `close`) |
@@ -92,7 +92,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index, routes with no API entry; warnings only |
 | `scripts/lib/routes.mjs` | regex route extraction (Next, Nest, Express, FastAPI, Flask) and path-param normalizing |
-| `scripts/usage.mjs` | `record`, `end`, `flush`, `digest` (`--compare <kitA> <kitB>`), `refusal <rule-id>` (called by the git hooks): token records; `hooks`: counts of each hook's firings |
+| `scripts/usage.mjs` | `record`, `end`, `flush`, `send`, `digest` (`--compare <kitA> <kitB>`), `views <view>`, `migrate`, `refusal <rule-id>` (called by the git hooks): usage records sent to the usage server; `hooks`: counts of each hook's firings |
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
 | `scripts/lib/usage-events.mjs` | a session's `/v1/events` rows (sessions, rounds, agents, calls, tools, hooks, compactions, commits) from its transcripts; POST chunks |
@@ -166,9 +166,9 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `ai/kit/analysis-sources.md` | `init` (template), the project | business-analyst, decider, `kit.mjs` |
 | `ai/kit/kit-proposals.md` | a session | `session-start.sh` note, then filed as issues |
 | `ai/plans/<job>.md` | `plan.mjs` | `session-start.sh` note, `plan.mjs resume`, `continuous.mjs` |
-| `ai/usage/<YYYY-MM>/<session>.jsonl` (`.2`, `.3` on each later flush) | `usage.mjs end` (from `kit-log.sh session-end`) and `usage.mjs flush --idle` (from `session-start.sh`) | `usage.mjs digest` |
-| `ai/usage/refusals/<YYYY-MM>/<host hash>-<random>.jsonl` | `usage.mjs refusal` from `githooks/pre-commit` and `githooks/commit-msg` (buffer `claude-usage/refusals/buffer.log`), moved by `usage.mjs flush` | `usage.mjs digest` (`## refusals`, `--compare`) |
-| `ai/usage/decisions/<YYYY-MM>/*.jsonl` | `decider.mjs sync` (from `kit-log.sh subagent-stop`) | `/ai-kit:decisions` |
+| `<git-common-dir>/claude-usage/<session>.jsonl`, `.transcript`, `.sent` | `usage.mjs record` (from `kit-log.sh stop`), `usage.mjs send` | the Stop summary line, `usage.mjs send` (the usage server holds the records: `digest`, `views`) |
+| `<git-common-dir>/claude-usage/refusals/buffer.log` | `usage.mjs refusal` from `githooks/pre-commit` and `githooks/commit-msg` | `usage.mjs send`, then the server (`digest` `## refusals`, `--compare`) |
+| `<git-common-dir>/claude-decider/log/<session>.<agent>.jsonl` | `decider.mjs sync` (from `kit-log.sh subagent-stop`) | `usage.mjs send`; `/ai-kit:decisions` (server plus unsent files) |
 | `.githooks/pre-commit`, `.githooks/commit-msg` | `init` | git |
 | `.claude/settings.json` (`autoMemoryEnabled: false`) | `init` | Claude Code, `kit.mjs check` |
 | `.gitattributes` (LF rules for the shims and `ai/kit/*.sh`) | `init` | git |
@@ -245,16 +245,19 @@ Each step names the file that does it.
 
 1. `kit-log.sh stop` runs `usage.mjs record`: it reads the session transcripts
    (`scripts/lib/usage-collect.mjs`) and appends the round's tokens to the buffer in the git common dir.
-2. `kit-log.sh session-end` runs `usage.mjs end`: records the rest, writes new files under `ai/usage/`. A crashed
-   session's buffer is written by `usage.mjs flush --idle` from `session-start.sh`. The next commit stages them.
-3. `usage.mjs digest` (`scripts/lib/usage-digest.mjs`) reads them; `/ai-kit:usage` names the largest driver.
+2. `kit-log.sh session-end` runs `usage.mjs end`: records the rest and starts a detached `usage.mjs send`, which posts
+   the session's call-level events to the usage server. A crashed session is sent by `usage.mjs flush --idle` from
+   `session-start.sh`; a failed send retries at the next session start. Nothing is written under `ai/usage/`.
+3. `usage.mjs digest` and `usage.mjs views <view>` read the server; `/ai-kit:usage` compares kit versions and names the
+   largest driver.
 4. `usage.mjs hooks [--since]` counts each kit hook's firings from the local transcripts; the table is
    `scripts/lib/hook-events.mjs`.
 
 ### P6 Decisions
 
 1. `decider` returns DECIDED or OWNER verdict blocks.
-2. `kit-log.sh subagent-stop` runs `decider.mjs sync`: it writes finished calls to `ai/usage/decisions/`.
+2. `kit-log.sh subagent-stop` runs `decider.mjs sync`: it logs finished calls in the git common dir
+   until `usage.mjs send` posts them.
    `/ai-kit:decisions` runs `decider.mjs report`.
 
 ### P6b Jobs and memory

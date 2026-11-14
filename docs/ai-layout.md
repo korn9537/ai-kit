@@ -16,13 +16,13 @@ the plugin's `templates/ai/`; copy it when creating the first file of a type.
 | `ai/api/<area>.md` | API contract, when the repo has no OpenAPI file | — | `api.md` |
 | `ai/plans/<slug>.md` | a multi-commit plan in progress; deleted when done | `T-<n>` | `plan.md` |
 | `ai/notes.md` | references: URL, dashboard, ticket, account name | `R<n>` | `notes.md` |
-| `ai/usage/<YYYY-MM>/<session>[.<n>].jsonl` | token records, written by the kit (flushed once per session, never edited); not a doc | — | — |
-| `ai/usage/decisions/<YYYY-MM>/<session>.<agent>.jsonl` | `ai-kit:decider` verdicts, one file per call, written once by the kit; not a doc | — | — |
 
 - Ids are never reused. A file-level id (`F`, `S`) is in the file's heading; an entry id (`D`, `REQ`, `R`, `I`) in
   the entry's heading or line. `T-<n>` is scoped to its plan and never pointed to from outside it.
 - Nothing else under `ai/`. `kit.mjs check` warns on any other top-level entry, except a path `ui.api` or
   `ai/kit/analysis-sources.md` names.
+- `ai/usage/` is not a category any more: the kit writes no usage records under `ai/` (they go to the usage server);
+  only `usage.mjs migrate` reads an old `ai/usage/` once, to post it and stage its removal.
 - Outside `ai/`: human-read docs (customer requirements, meeting notes), generated files, history (git log).
   A doc under `ai/` points to its human source, never copies it.
 
@@ -67,7 +67,7 @@ For a project with `claude -p` runs that do not load the plugin (a CI job, a que
 - Turning `unattended` off stops the warnings only: delete the copies, `check.sh` and the `CLAUDE.md` line by hand.
 - Not carried over: plugin hooks, agents other than the review prompt, the Job trailer, `CLAUDE.core.md` beyond
   `conventions/unattended.md`. Enabling the plugin at project level is
-  not the way to get them: such a run leaves `ai/usage/` records in the clone, and its conversational rules conflict
+  not the way to get them: such a run starts usage sends from the clone, and its conversational rules conflict
   with a run that returns schema-bound output. A pipeline reads `ai/kit/review-prompt.md`,
   `ai/kit/review-checklist.md` and `ai/kit/conventions/` from the repo.
 
