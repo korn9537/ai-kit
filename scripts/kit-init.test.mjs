@@ -142,9 +142,10 @@ try {
     const t = new Date(Date.now() - hours * 36e5);
     utimesSync(join(buf, f), t, t);
   };
-  writeFileSync(join(buf, "s-new.transcript"), "/x/new.jsonl");
+  for (const t of ["new", "old"]) writeFileSync(join(tmp, `${t}.jsonl`), "{}\n");
+  writeFileSync(join(buf, "s-new.transcript"), join(tmp, "new.jsonl"));
   eq("check: a session recorded just now and unsent is not warned", run(use, "check").includes("not sent"), false);
-  writeFileSync(join(buf, "s-old.transcript"), "/x/old.jsonl");
+  writeFileSync(join(buf, "s-old.transcript"), `${join(tmp, "old.jsonl")}\n${use}\n`);
   age("s-old.transcript", 30);
   const stale = run(use, "check");
   eq("check: a session unsent for over a day names the send command", stale.includes("1 session(s) have usage not sent for over a day") && stale.includes("usage.mjs send --session s-old"), true);
@@ -156,6 +157,12 @@ try {
   age("s-old.transcript", 30);
   age("s-old.sent", 50);
   eq("check: a send older than the transcript, idle over a day, is warned", run(use, "check").includes("not sent"), true);
+  writeFileSync(join(buf, "s-gone.transcript"), join(tmp, "gone.jsonl"));
+  age("s-gone.transcript", 30);
+  eq("check: a session whose transcript is gone is not warned", run(use, "check").includes("2 session(s)"), false);
+  writeFileSync(join(buf, "s-old.sent"), JSON.stringify({ transcript: join(tmp, "old.jsonl"), bytes: 3, rejected: true, error: "HTTP 400" }));
+  const rej = run(use, "check");
+  eq("check: a session the server refused is named", rej.includes("1 session(s) refused by the usage server") && rej.includes("s-old"), true);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

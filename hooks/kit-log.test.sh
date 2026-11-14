@@ -186,8 +186,8 @@ T1="$REPO/.git/t1.jsonl"
 transcript "$T1" "first ask"
 asst "$T1" m1 1000
 stop s1 "$T1"
-check "stop writes the buffer and the transcript path, nothing in ai/" \
-  "$(t bash -c '[[ -f "$1/s1.jsonl" && "$(cat "$1/s1.transcript")" == "$3" && ! -e "$2/ai/usage" && -z "$(git -C "$2" status --porcelain -- ai)" ]]' _ "$BUFS" "$REPO" "$T1")"
+check "stop writes the buffer, the transcript path and the session's root, nothing in ai/" \
+  "$(t bash -c '[[ -f "$1/s1.jsonl" && "$(sed -n 1p "$1/s1.transcript")" == "$3" && "$(sed -n 2p "$1/s1.transcript")" == "$2" && ! -e "$2/ai/usage" && -z "$(git -C "$2" status --porcelain -- ai)" ]]' _ "$BUFS" "$REPO" "$T1")"
 check "stop sends nothing" "$(t test ! -s "$TMP/posts")"
 
 t0="$(now_ms)"

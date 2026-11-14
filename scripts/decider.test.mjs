@@ -1,7 +1,7 @@
 // Tests for decider.mjs: verdict parsing, reading decider subagent transcripts, the log files, the guard verdict and
 // the report. Usage: node scripts/decider.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { check, deciders, guard, overlap, loadDecisions, parseBlocks, report, subagentsDir, sync } from "./decider.mjs";
@@ -92,6 +92,11 @@ try {
   sync({ ...input, transcript_path: join(subs, "agent-a1.jsonl") });
   eq("sync: a written log file is never rewritten", readFileSync(join(logDir, "s1.a1.jsonl"), "utf8"), "kept\n");
   writeFileSync(join(logDir, "s1.a1.jsonl"), `${JSON.stringify({ ts: "2026-10-27T03:04:05Z", verdict: "DECIDED", question: "q1" })}\n`);
+  renameSync(join(logDir, "s1.a2.jsonl"), join(logDir, "s1.a2.jsonl.rejected"));
+  sync(input);
+  eq("sync: a log the server rejected is not written again", logged().filter((n) => n.startsWith("s1.a2.")), ["s1.a2.jsonl.rejected"]);
+  rmSync(join(logDir, "s1.a2.jsonl.rejected"));
+  sync(input);
 
   const all = loadDecisions(repo);
   // still running: its last line is a text block streamed before the tool call, with verdict-like words in it

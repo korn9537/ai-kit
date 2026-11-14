@@ -6,10 +6,12 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, 
 import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { postJson } from "./usage-api.mjs";
-import { buildEvents, chunkEvents } from "./usage-events.mjs";
+import { buildEvents, chunkEvents, clean, isInt32, isKey, tsOk } from "./usage-events.mjs";
 import { HOST, readText, sendLock, withLock } from "./usage-lock.mjs";
 
 export const IDLE_MS = 6 * 3600 * 1000;
+// a decider log younger than this may still be in writing (an older kit wrote it in place)
+const FRESH_MS = 5000;
 const IDLE_CAP = 20;
 const LOG_MAX = 1024 * 1024;
 export const REFUSAL_BUF = join("refusals", "buffer.log");
@@ -19,6 +21,17 @@ const writeAtomic = (path, text) => {
   const tmp = `${path}.${process.pid}.tmp`;
   writeFileSync(tmp, text);
   renameSync(tmp, path);
+};
+const is4xx = (e) => e?.status >= 400 && e.status < 500;
+// a line of send.log (the detached send's stderr)
+const logLine = (msg) => process.stderr.write(`${new Date().toISOString()} usage send: ${String(msg).replace(/\s+/g, " ")}\n`);
+// unlink or rename that another send may have done first
+const unlessGone = (fn) => {
+  try {
+    fn();
+  } catch (e) {
+    if (e?.code !== "ENOENT") throw e;
+  }
 };
 const jsonLines = (text) =>
   String(text ?? "").split("\n").map((l) => {
@@ -30,15 +43,22 @@ const jsonLines = (text) =>
     }
   });
 
-// <session>.transcript: the path record() saw, so an idle pass can find the session's files.
-export const transcriptOf = (bufDir, session) => readText(join(bufDir, `${session}.transcript`))?.trim() ?? "";
-export function saveTranscriptPath(bufDir, session, path) {
-  if (!path || transcriptOf(bufDir, session) === path) return;
+// <session>.transcript: line 1 the transcript path record() saw, line 2 the session's project root (a one-line file has
+// none), so an idle pass run from another worktree finds the session's files and its own worktree.
+const transcriptLines = (bufDir, session) => (readText(join(bufDir, `${session}.transcript`)) ?? "").split("\n").map((l) => l.trim());
+export const transcriptOf = (bufDir, session) => transcriptLines(bufDir, session)[0];
+export const sessionRootOf = (bufDir, session) => transcriptLines(bufDir, session)[1] ?? "";
+export function saveTranscriptPath(bufDir, session, path, root = "") {
+  if (!path) return;
+  const [was, wasRoot = ""] = transcriptLines(bufDir, session);
+  const keep = root || wasRoot;
+  if (was === path && wasRoot === keep) return;
   mkdirSync(bufDir, { recursive: true });
-  writeAtomic(join(bufDir, `${session}.transcript`), path);
+  writeAtomic(join(bufDir, `${session}.transcript`), keep ? `${path}\n${keep}\n` : path);
 }
 
-// <session>.sent: {transcript, bytes} of the last send whose every POST got 2xx.
+// <session>.sent: {transcript, bytes} of the last send whose every POST got 2xx, or with {rejected, error} of one the
+// server refused with a 4xx: that size is not sent again.
 export function readSent(bufDir, session) {
   try {
     const s = JSON.parse(readFileSync(join(bufDir, `${session}.sent`), "utf8"));
@@ -69,25 +89,38 @@ export function sessionBytes(transcript) {
   return n;
 }
 
-// ctx: { root, bufDir, session, base, project, user, host, kit }. Posts nothing when the files are as last sent.
+// ctx: { bufDir, session, base, project, user, host, kit }; the session's root comes from its .transcript, never from
+// the sending worktree. Posts nothing when the files are as last sent; a gone transcript drops its .transcript.
 export async function sendSession(ctx, { maxBytes, maxRows } = {}) {
   const { bufDir, session } = ctx;
   const release = sendLock(bufDir, session);
   if (!release) return { status: "locked" };
   try {
     const transcript = transcriptOf(bufDir, session);
-    if (!transcript || !existsSync(transcript)) return { status: "missing" };
+    if (!transcript) return { status: "missing" };
+    if (!existsSync(transcript)) {
+      unlessGone(() => unlinkSync(join(bufDir, `${session}.transcript`)));
+      return { status: "missing", removed: transcript };
+    }
     const sent = readSent(bufDir, session);
     const now = sessionBytes(transcript);
-    if (sent && sent.transcript === transcript && sent.bytes === now) return { status: "unchanged" };
+    if (sent && sent.transcript === transcript && sent.bytes === now) return { status: "unchanged", ...(sent.rejected ? { rejected: true } : {}) };
     const kits = jsonLines(readText(join(bufDir, `${session}.jsonl`))).filter((r) => r && typeof r.ts === "string" && typeof r.kit === "string")
       .map((r) => ({ ts: r.ts, kit: r.kit }));
-    const built = buildEvents(transcript, { ...ctx, kit: kits[kits.length - 1]?.kit ?? ctx.kit, kits });
+    const built = buildEvents(transcript, { ...ctx, root: sessionRootOf(bufDir, session), kit: kits[kits.length - 1]?.kit ?? ctx.kit, kits });
     if (!built) return { status: "missing" };
     const chunks = chunkEvents(ctx.project, built.tables, { maxBytes, maxRows });
-    for (const c of chunks) await postJson(ctx.base, "/v1/events", c);
-    writeAtomic(join(bufDir, `${session}.sent`), JSON.stringify({ transcript, bytes: built.bytes, at: new Date().toISOString() }));
-    return { status: "sent", posts: chunks.length, rows: Object.fromEntries(Object.entries(built.tables).map(([k, v]) => [k, v.length])) };
+    const mark = (extra = {}) =>
+      writeAtomic(join(bufDir, `${session}.sent`), JSON.stringify({ transcript, bytes: built.bytes, at: new Date().toISOString(), ...extra }));
+    try {
+      for (const c of chunks) await postJson(ctx.base, "/v1/events", c);
+    } catch (e) {
+      if (!is4xx(e)) throw e;
+      mark({ rejected: true, error: e.message.slice(0, 500) });
+      return { status: "rejected", error: e.message, dropped: built.dropped };
+    }
+    mark();
+    return { status: "sent", posts: chunks.length, dropped: built.dropped, rows: Object.fromEntries(Object.entries(built.tables).map(([k, v]) => [k, v.length])) };
   } finally {
     release();
   }
@@ -117,9 +150,56 @@ export function idleSessions(bufDir, except = "", now = Date.now()) {
   return out.sort((a, b) => b.mtime - a.mtime).slice(0, IDLE_CAP).map((x) => x.session);
 }
 
+const isObj = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const refusalOk = (r) => isObj(r) && tsOk(r.ts) && isKey(r.rule);
+const decisionOk = (r) => isObj(r) && tsOk(r.ts) && isKey(r.session) && isKey(r.agent);
+// a v1 record: what legacyBatch needs, and its integers within the int4 and int8 columns they land in
+const fits = (v, ok) => !Number.isInteger(v) || ok(v);
+const legacyOk = (r) => isObj(r) && isKey(r.session) && tsOk(r.ts) && isInt32(r.round)
+  && ["prompt_chars", "duration_s", "base_context"].every((k) => fits(r[k], isInt32))
+  && (!Array.isArray(r.agents) || r.agents.every((a) => !isObj(a) || (["calls", "peak", "largest_result"].every((k) => fits(a[k], isInt32))
+    && ["input", "read", "write_5m", "write_1h", "output"].every((k) => fits(a[k], Number.isSafeInteger)))));
+
+// Items in POSTs of at most maxItems and about maxBytes each (the server takes 20000 items and 32 MiB a body).
+export async function postItems(base, path, project, items, { maxItems = 5000, maxBytes = 8 * 1024 * 1024 } = {}) {
+  let cur = [];
+  let bytes = 0;
+  const post = async () => {
+    if (cur.length) await postJson(base, path, { project, items: cur });
+    cur = [];
+    bytes = 0;
+  };
+  for (const it of items) {
+    const n = Buffer.byteLength(JSON.stringify(it)) + 1;
+    if (cur.length && (cur.length >= maxItems || bytes + n > maxBytes)) await post();
+    cur.push(it);
+    bytes += n;
+  }
+  await post();
+}
+
+// One file's items posted: 2xx → done(); a 4xx → the file kept as <name>.rejected with the error in send.log; any
+// other HTTP error → into errors, the next file still tried; unreachable → thrown, as every file would fail.
+async function postFile(path, post, done, errors, log) {
+  try {
+    await post();
+  } catch (e) {
+    if (is4xx(e)) {
+      unlessGone(() => renameSync(path, `${path}.rejected`));
+      log(`${basename(path)} rejected, kept as ${basename(path)}.rejected: ${e.message}`);
+      return 0;
+    }
+    if (!e?.status) throw e;
+    errors.push(`${basename(path)}: ${e.message}`);
+    return 0;
+  }
+  done();
+  return 1;
+}
+
 // Refusals: the buffer is taken (renamed to refusals/out-*.log) under the buffer lock, posted outside it, and each out
-// file deleted only on 2xx; a failed one waits for the next send.
-export async function sendRefusals(bufDir, base, project) {
+// file deleted only on 2xx; a failed one waits for the next send. Two sends may post one file: the server upserts.
+export async function sendRefusals(bufDir, base, project, { log = logLine } = {}) {
   const dir = join(bufDir, "refusals");
   if (existsSync(join(bufDir, REFUSAL_BUF))) {
     try {
@@ -135,33 +215,46 @@ export async function sendRefusals(bufDir, base, project) {
     outs = readdirSync(dir).filter((n) => /^out-.*\.log$/.test(n)).sort();
   } catch {}
   let sent = 0;
+  const errors = [];
   for (const n of outs) {
-    const items = jsonLines(readText(join(dir, n))).filter((r) => r && typeof r.ts === "string" && typeof r.rule === "string")
-      .map(({ v, ...r }) => ({ ...r, host: r.host ?? HOST }));
-    if (items.length) await postJson(base, "/v1/refusals", { project, items });
-    unlinkSync(join(dir, n));
-    sent += items.length;
+    const path = join(dir, n);
+    const text = readText(path);
+    if (text === null) continue;
+    const lines = jsonLines(text).filter((x) => x !== undefined);
+    const items = lines.filter(refusalOk).map(({ v, ...r }) => clean({ ...r, host: r.host ?? HOST }));
+    if (items.length < lines.length) log(`${n}: ${lines.length - items.length} invalid line(s) dropped`);
+    const post = () => postItems(base, "/v1/refusals", project, items);
+    if (await postFile(path, post, () => unlessGone(() => unlinkSync(path)), errors, log)) sent += items.length;
   }
+  if (errors.length) throw new Error(errors.join("; "));
   return sent;
 }
 
 // Decider logs <logDir>/<session>.<agent>.jsonl: seq = line index; on 2xx the file goes and a .sent marker stays,
-// so decider.mjs sync does not write it again.
-export async function sendDecisions(logDir, base, project) {
+// so decider.mjs sync does not write it again. An empty or fresh file waits for a later send.
+export async function sendDecisions(logDir, base, project, { log = logLine, now = Date.now() } = {}) {
   let names = [];
   try {
     names = readdirSync(logDir).filter((n) => n.endsWith(".jsonl")).sort();
   } catch {}
   let sent = 0;
+  const errors = [];
   for (const n of names) {
     const path = join(logDir, n);
-    const items = jsonLines(readText(path)).filter((x) => x !== undefined).flatMap((r, seq) =>
-      r && typeof r.ts === "string" && typeof r.session === "string" && typeof r.agent === "string" ? [{ ...r, seq }] : []);
-    if (items.length) await postJson(base, "/v1/decisions", { project, items });
-    writeFileSync(`${path.slice(0, -".jsonl".length)}.sent`, "");
-    unlinkSync(path);
-    sent += items.length;
+    const st = statSync(path, { throwIfNoEntry: false });
+    if (!st?.size || now - st.mtimeMs < FRESH_MS) continue;
+    const text = readText(path);
+    if (text === null) continue;
+    const lines = jsonLines(text).filter((x) => x !== undefined);
+    const items = lines.flatMap((r, seq) => (decisionOk(r) ? [clean({ ...r, seq })] : []));
+    if (items.length < lines.length) log(`${n}: ${lines.length - items.length} invalid line(s) dropped`);
+    const done = () => {
+      writeFileSync(`${path.slice(0, -".jsonl".length)}.sent`, "");
+      unlessGone(() => unlinkSync(path));
+    };
+    if (await postFile(path, () => postItems(base, "/v1/decisions", project, items), done, errors, log)) sent += items.length;
   }
+  if (errors.length) throw new Error(errors.join("; "));
   return sent;
 }
 
@@ -194,7 +287,7 @@ export function spawnSend(root, bufDir, args) {
   }
 }
 
-// ai/usage/** as the server's legacy, refusal and decision items; a v1 record without session, ts or round is dropped.
+// ai/usage/** as the server's legacy, refusal and decision items; a line the server would refuse counts as dropped.
 export function readLegacy(usageDir) {
   const out = { records: [], refusals: [], decisions: [], dropped: 0 };
   let files = [];
@@ -209,17 +302,17 @@ export function readLegacy(usageDir) {
     if (rel.startsWith("refusals/")) {
       const host = rel.split("/").pop().split("-")[0];
       for (const r of lines) {
-        if (r && typeof r.ts === "string" && typeof r.rule === "string") out.refusals.push({ ...r, host });
+        if (refusalOk(r)) out.refusals.push(clean({ ...r, host }));
         else out.dropped++;
       }
     } else if (rel.startsWith("decisions/")) {
       lines.forEach((r, seq) => {
-        if (r && typeof r.ts === "string" && typeof r.session === "string" && typeof r.agent === "string") out.decisions.push({ ...r, seq });
+        if (decisionOk(r)) out.decisions.push(clean({ ...r, seq }));
         else out.dropped++;
       });
     } else {
       for (const r of lines) {
-        if (r && typeof r.session === "string" && r.session && !Number.isNaN(Date.parse(r.ts)) && Number.isInteger(r.round)) out.records.push(r);
+        if (legacyOk(r)) out.records.push(clean(r));
         else out.dropped++;
       }
     }
@@ -227,9 +320,8 @@ export function readLegacy(usageDir) {
   return out;
 }
 
-export async function postLegacy(base, project, legacy) {
-  const chunks = (xs, n) => Array.from({ length: Math.ceil(xs.length / n) }, (_, i) => xs.slice(i * n, i * n + n));
-  for (const items of chunks(legacy.records, 2000)) await postJson(base, "/v1/legacy", { project, items });
-  for (const items of chunks(legacy.refusals, 5000)) await postJson(base, "/v1/refusals", { project, items });
-  for (const items of chunks(legacy.decisions, 5000)) await postJson(base, "/v1/decisions", { project, items });
+export async function postLegacy(base, project, legacy, { maxBytes } = {}) {
+  await postItems(base, "/v1/legacy", project, legacy.records, { maxItems: 2000, maxBytes });
+  await postItems(base, "/v1/refusals", project, legacy.refusals, { maxBytes });
+  await postItems(base, "/v1/decisions", project, legacy.decisions, { maxBytes });
 }

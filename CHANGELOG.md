@@ -3,18 +3,23 @@
 ## 2.50.0
 
 Usage records no longer live in each repo. The hooks keep a local buffer under the git common dir, and at session
-end (or at the next session start, for a crashed session or a failed send) a detached `usage.mjs send` posts the
-session's call-level events, the refusals and the decider's decision log to one usage server for all projects
-(`usage.endpoint` in `ai/kit/config.json`, default `https://ai-kit-usage.maybix.com`, env `AI_KIT_USAGE_ENDPOINT`
-overrides). Nothing is written under `ai/usage/` any more, so the commits that carried it are gone:
-`githooks/pre-commit` stops staging it. The server has no token and no allowlist and stores text plainly, prompts and
-messages included; it keeps the newest 10 kit versions and at most a year, because the data is for comparing kit
-versions, not for per-repo accounting. `usage.mjs digest` and `digest --compare` read the server (every project;
-`--project` for this repo), the new `usage.mjs views <view>` prints its analysis views (`v_kit_compare`,
-`v_kit_roles`, `v_tool_stats`, `v_hook_stats`, `v_repeat_reads` and more), `/ai-kit:usage` now starts from
-`v_kit_compare`, and `/ai-kit:decisions` reads the server plus the logs not sent yet. `kit.mjs check` warns about
-files left under `ai/usage/` and about a session whose usage has not been sent for over a day, offline; it no longer
-warns about uncommitted records.
+end (or, for a crashed session or a failed send, at a session start once that session has been idle 6 hours) a
+detached `usage.mjs send` posts the session's call-level events, the refusals and the decider's decision log to one
+usage server for all projects (`usage.endpoint` in `ai/kit/config.json`, default `https://ai-kit-usage.maybix.com`,
+env `AI_KIT_USAGE_ENDPOINT` overrides). Nothing is written under `ai/usage/` any more, so the commits that carried
+it are gone: `githooks/pre-commit` stops staging it. The server has no token and no allowlist and stores text
+plainly, prompts and messages included; it keeps the newest 10 kit versions and at most a year, because the data is
+for comparing kit versions, not for per-repo accounting. `usage.mjs digest` and `digest --compare` read the server
+(every project; `--project` for this repo), the new `usage.mjs views <view>` prints its analysis views
+(`v_kit_compare`, `v_kit_roles`, `v_tool_stats`, `v_hook_stats`, `v_repeat_reads` and more; the first four span
+every project and take `--kit` only, so `views` refuses `--project` and `--since` on them), `/ai-kit:usage` now
+starts from `v_kit_compare`, and `/ai-kit:decisions` reads the server plus the logs not sent yet. A session is sent
+with its own worktree and commits, also when another worktree's session start sends it. The kit checks rows as the
+server does and drops a line the server would refuse (logged in `send.log`, counted by `migrate`); a refusal or
+decision file the server still refuses is kept as `<name>.rejected`, and a refused session is not sent again until
+its transcript grows. `kit.mjs check` warns about files left under `ai/usage/`, about a session whose usage has not
+been sent for over a day and about one the server refused, offline; it no longer warns about uncommitted records,
+nor about a session whose transcript is gone. With `usage.enabled: false`, `migrate` refuses.
 
 A project with an `ai/usage/` folder runs `node <plugin>/scripts/usage.mjs migrate` once: it posts the old files and,
 only when every post succeeded, stages their removal; commit that. Nothing else. The `:(exclude)ai/usage` pathspecs

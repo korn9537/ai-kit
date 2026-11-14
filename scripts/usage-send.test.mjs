@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { formatTable, normalizeRemote, projectId } from "./lib/usage-api.mjs";
 import { buildEvents, chunkEvents, jobBatch } from "./lib/usage-events.mjs";
-import { readSent, saveTranscriptPath, sendDecisions, sendRefusals, sendSession } from "./lib/usage-send.mjs";
+import { postLegacy, readSent, saveTranscriptPath, sendDecisions, sendRefusals, sendSession } from "./lib/usage-send.mjs";
 import { loadAllDecisions } from "./decider.mjs";
 
 let passed = 0;
@@ -24,8 +24,8 @@ function eq(desc, got, want) {
   }
 }
 
-// the mock API: keeps every request; `fail` > 0 answers that many POSTs with 500
-const mock = { reqs: [], fail: 0, records: [], decisions: [], views: [] };
+// the mock API: keeps every request; `fail` > 0 answers that many POSTs with `failStatus` (500)
+const mock = { reqs: [], fail: 0, failStatus: 500, records: [], decisions: [], views: [] };
 const server = createServer((req, res) => {
   let body = "";
   req.on("data", (d) => (body += d));
@@ -37,7 +37,7 @@ const server = createServer((req, res) => {
       mock.reqs.push({ path: url.pathname, body: parsed, bytes: Buffer.byteLength(body) });
       if (mock.fail > 0) {
         mock.fail--;
-        return send(500, { error: "internal error" });
+        return send(mock.failStatus, { error: mock.failStatus === 500 ? "internal error" : "items[0].ts must be timestamptz" });
       }
       return send(200, { written: {} });
     }
@@ -54,7 +54,9 @@ const posts = (path) => mock.reqs.filter((r) => r.path === path && r.body);
 const reset = () => {
   mock.reqs = [];
   mock.fail = 0;
+  mock.failStatus = 500;
 };
+const aged = (path, s = 60) => utimesSync(path, Date.now() / 1000 - s, Date.now() / 1000 - s);
 const run = (args, opts = {}) => new Promise((resolve) => {
   const t0 = Date.now();
   const c = spawn(process.execPath, [join(import.meta.dirname, "usage.mjs"), ...args], { ...opts, stdio: ["pipe", "pipe", "pipe"] });
@@ -297,6 +299,7 @@ try {
   mkdirSync(logDir, { recursive: true });
   const dline = (q) => ({ ts: "2030-01-15T10:00:00Z", session: "sess-2", agent: "d1", verdict: "DECIDED", question: q, choice: "x" });
   writeFileSync(join(logDir, "sess-2.d1.jsonl"), jl([dline("q1"), dline("q2")]));
+  aged(join(logDir, "sess-2.d1.jsonl"));
   reset();
   mock.fail = 1;
   try {
@@ -367,6 +370,138 @@ try {
   eq("formatTable caps rows", formatTable(Array.from({ length: 70 }, (_, i) => ({ n: i })), { cap: 60 }).split("\n").slice(-1)[0], "+10 more rows");
   const vbad = await run(["views", "nope"], { env: env2 });
   eq("views: a bad name exits 2", vbad.code, 2);
+
+  // ---- a session sent from another worktree: its own worktree and commits, from its .transcript root ----
+  const r5 = repo("r5");
+  const r5b = join(tmp, "r5-b");
+  git(r5, "worktree", "add", "-q", "-b", "b", r5b);
+  const commitAt = (cwd, file, ts) => {
+    writeFileSync(join(cwd, file), file);
+    git(cwd, "add", file);
+    execFileSync("git", ["commit", "-qm", `add ${file}`], { cwd, env: { ...process.env, GIT_COMMITTER_DATE: ts, GIT_AUTHOR_DATE: ts } });
+    return git(cwd, "rev-parse", "HEAD");
+  };
+  const ca = commitAt(r5, "a5.txt", "2030-01-15T10:02:00Z");
+  const cb = commitAt(r5b, "b5.txt", "2030-01-15T10:03:00Z");
+  const buf5 = join(r5, ".git", "claude-usage");
+  const copyAs = (id, cwd) => {
+    const p = join(tmp, "projects", "p", `${id}.jsonl`);
+    writeFileSync(p, readFileSync(T, "utf8").replaceAll(S, id).replaceAll(root, cwd));
+    return p;
+  };
+  const fromB = async (id) => {
+    reset();
+    const r = await sendSession({ root: r5b, bufDir: buf5, session: id, base: API, project: "p5", user: "u", host: "h", kit: "2.50.0" });
+    const ep = posts("/v1/events");
+    return [r.status, ep.find((x) => x.body.sessions)?.body.sessions[0].worktree, ep.flatMap((x) => x.body.commits ?? []).map((c) => c.hash)];
+  };
+  saveTranscriptPath(buf5, "sess-5", copyAs("sess-5", r5), r5);
+  eq(".transcript keeps the session's root on its second line", readFileSync(join(buf5, "sess-5.transcript"), "utf8").split("\n")[1], r5);
+  eq("a session of worktree A sent from B: A's worktree and A's commits only", await fromB("sess-5"), ["sent", "r5", [ca]]);
+  writeFileSync(join(buf5, "sess-6.transcript"), copyAs("sess-6", r5b));
+  eq("a one-line .transcript: the root from the transcript's cwd", await fromB("sess-6"), ["sent", "r5-b", [cb]]);
+  saveTranscriptPath(buf5, "sess-7", copyAs("sess-7", r5), join(tmp, "gone-wt"));
+  eq("a root gone from disk: its name, no commit rows, never the sender's root", await fromB("sess-7"), ["sent", "gone-wt", []]);
+
+  // ---- a transcript gone: its .transcript removed, and send says so ----
+  writeFileSync(join(buf2, "sess-gone.transcript"), join(tmp, "nope.jsonl"));
+  const gone = await run(["send", "--session", "sess-gone"], { env: env2 });
+  eq("send: a gone transcript is named and its .transcript removed", [/sess-gone: transcript .*nope\.jsonl is gone/.test(gone.out), existsSync(join(buf2, "sess-gone.transcript"))], [true, false]);
+
+  // ---- a 4xx: the session size marked rejected and not retried; files kept as .rejected; the loop goes on ----
+  const S8 = "sess-8";
+  saveTranscriptPath(buf5, S8, copyAs(S8, r5), r5);
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 400;
+  const rej = await sendSession({ bufDir: buf5, session: S8, base: API, project: "p5", user: "u", host: "h", kit: "2.50.0" });
+  eq("sendSession: a 400 returns rejected and marks that size in .sent", [rej.status, /HTTP 400/.test(rej.error), readSent(buf5, S8).rejected, readSent(buf5, S8).bytes > 0], ["rejected", true, true, true]);
+  reset();
+  eq("and the same size is not sent again", [(await sendSession({ bufDir: buf5, session: S8, base: API, project: "p5" })).status, mock.reqs.length], ["unchanged", 0]);
+
+  const rdir = join(buf5, "refusals");
+  mkdirSync(rdir, { recursive: true });
+  const ref = (rule, ts = "2030-01-15T10:00:00Z") => ({ v: 1, ts, rule, kit: "2.50.0", branch: "main" });
+  writeFileSync(join(rdir, "out-1.log"), jl([ref("a")]));
+  writeFileSync(join(rdir, "out-2.log"), `${jl([ref("b"), ref(""), ref("c", ""), ref("d", "yesterday"), ref("e", "0000-01-01T00:00:00Z"), { ts: 5, rule: "f" }])}not json\n`);
+  const logs = [];
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 400;
+  const nref = await sendRefusals(buf5, API, "p5", { log: (m) => logs.push(m) });
+  eq("refusals: a 400 file kept as .rejected, the next file still sent", [nref, readdirSync(rdir).sort(), logs.some((m) => /out-1\.log rejected.*HTTP 400/.test(m))],
+    [1, ["out-1.log.rejected"], true]);
+  eq("refusals: lines the server would refuse are dropped and counted", [posts("/v1/refusals").pop().body.items.map((x) => x.rule), logs.some((m) => /out-2\.log: 6 invalid line\(s\) dropped/.test(m))],
+    [["b"], true]);
+
+  writeFileSync(join(rdir, "out-3.log"), jl([ref("g")]));
+  writeFileSync(join(rdir, "out-4.log"), jl([ref("h")]));
+  reset();
+  const both = await Promise.allSettled([sendRefusals(buf5, API, "p5", { log: () => {} }), sendRefusals(buf5, API, "p5", { log: () => {} })]);
+  eq("refusals: two concurrent sends both finish and leave no out file", [both.map((x) => x.status), readdirSync(rdir).filter((n) => n.endsWith(".log"))], [["fulfilled", "fulfilled"], []]);
+
+  const ldir = join(tmp, "dlog");
+  mkdirSync(ldir);
+  writeFileSync(join(ldir, "s.empty.jsonl"), "");
+  aged(join(ldir, "s.empty.jsonl"));
+  writeFileSync(join(ldir, "s.fresh.jsonl"), jl([dline("f")]));
+  reset();
+  eq("decisions: an empty file and one written under 5 s ago wait, unmarked", [await sendDecisions(ldir, API, "p5", { log: () => {} }), readdirSync(ldir).sort(), mock.reqs.length],
+    [0, ["s.empty.jsonl", "s.fresh.jsonl"], 0]);
+  rmSync(join(ldir, "s.empty.jsonl"));
+  rmSync(join(ldir, "s.fresh.jsonl"));
+  for (const a of ["a", "b", "c"]) {
+    writeFileSync(join(ldir, `s.${a}.jsonl`), jl([dline(a), { ...dline("bad"), session: "" }, { ...dline("bad"), ts: "never" }]));
+    aged(join(ldir, `s.${a}.jsonl`));
+  }
+  const dlogs = [];
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 413;
+  eq("decisions: a 413 file kept as .rejected, unmarked; the rest sent with invalid lines dropped", [await sendDecisions(ldir, API, "p5", { log: (m) => dlogs.push(m) }),
+    readdirSync(ldir).sort(), dlogs.filter((m) => /2 invalid line/.test(m)).length], [2, ["s.a.jsonl.rejected", "s.b.sent", "s.c.sent"], 3]);
+  for (const a of ["d", "e"]) {
+    writeFileSync(join(ldir, `s.${a}.jsonl`), jl([dline(a)]));
+    aged(join(ldir, `s.${a}.jsonl`));
+  }
+  reset();
+  const dboth = await Promise.allSettled([sendDecisions(ldir, API, "p5", { log: () => {} }), sendDecisions(ldir, API, "p5", { log: () => {} })]);
+  eq("decisions: two concurrent sends both finish, each file marked sent", [dboth.map((x) => x.status), readdirSync(ldir).filter((n) => /^s\.[de]\./.test(n)).sort()],
+    [["fulfilled", "fulfilled"], ["s.d.sent", "s.e.sent"]]);
+
+  // ---- migrate: lines the server would refuse are skipped, not fatal; refused with usage off ----
+  const r6 = repo("r6");
+  mkdirSync(join(r6, "ai", "usage", "2030-01"), { recursive: true });
+  writeFileSync(join(r6, "ai", "usage", "2030-01", "m.jsonl"), jl([v1(1), { ...v1(2), round: 2 ** 31 }, { ...v1(3), ts: "soon" }, { ...v1(4), session: "" },
+    { ...v1(5), duration_s: 2 ** 40 }, { ...v1(6), agents: [{ id: "main", calls: 2 ** 33 }] }]));
+  reset();
+  const m6 = await run(["migrate"], { env: { ...env4, CLAUDE_PROJECT_DIR: r6 } });
+  eq("migrate: invalid v1 lines are counted as skipped and the rest sent", [m6.code, posts("/v1/legacy").flatMap((r) => r.body.items).length, /5 unusable lines skipped/.test(m6.out)], [0, 1, true]);
+  mkdirSync(join(r3, "ai", "usage"), { recursive: true });
+  reset();
+  const off = await run(["migrate"], { env: env3 });
+  eq("migrate: usage.enabled false exits 2 with one line and posts nothing", [off.code, off.err.trim().split("\n").length, /usage\.enabled is false/.test(off.err), mock.reqs.length], [2, 1, true, 0]);
+
+  // ---- postLegacy splits by bytes too ----
+  reset();
+  const big = Array.from({ length: 6 }, (_, i) => ({ ...v1(i), agents: [{ id: "main", desc: "x".repeat(3 * 1024 * 1024) }] }));
+  await postLegacy(API, "p", { records: big, refusals: [], decisions: [] });
+  const lp = posts("/v1/legacy");
+  eq("postLegacy: large records split into bodies of at most 8 MiB", [lp.length > 2, lp.every((r) => r.bytes <= 8 * 1024 * 1024 + 4096), lp.reduce((n, r) => n + r.body.items.length, 0)], [true, true, 6]);
+
+  // ---- a row cut to 4 MiB never ends in half a surrogate pair ----
+  const cut = "a".repeat(4 * 1024 * 1024 - 1) + "\u{1F600}" + "b".repeat(21 * 1024 * 1024);
+  const cutRow = chunkEvents("p", { tool_calls: [{ session_id: "s", tool_use_id: "t", agent_id: "main", ts: "2030-01-15T10:00:00Z", tool: "Read", result: cut }] })[0].tool_calls[0];
+  eq("chunkEvents: a cut result is well formed", [cutRow.result.length <= 4 * 1024 * 1024, cutRow.result.isWellFormed()], [true, true]);
+
+  // ---- views: a filter the server would refuse is refused here, without a request ----
+  reset();
+  const vp = await run(["views", "v_kit_compare", "--project"], { env: env2 });
+  const vs = await run(["views", "v_tool_stats", "--since", "2030-01-01"], { env: env2 });
+  eq("views: --project and --since on a cross-project, dateless view exit 2 with no request", [vp.code, /across projects/.test(vp.err), vs.code, /no date column/.test(vs.err), mock.reqs.length],
+    [2, true, 2, true, 0]);
+  const vd = await run(["views", "v_daily", "--since", "2030-01-01", "--project"], { env: env2 });
+  eq("views: v_daily takes --since and --project", [vd.code, mock.reqs[0]?.query], [0, "since=2030-01-01&project=local%2Fr2&limit=61"]);
 } finally {
   server.close();
   rmSync(tmp, { recursive: true, force: true });

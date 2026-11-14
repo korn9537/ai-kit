@@ -247,7 +247,8 @@ Each step names the file that does it.
    (`scripts/lib/usage-collect.mjs`) and appends the round's tokens to the buffer in the git common dir.
 2. `kit-log.sh session-end` runs `usage.mjs end`: records the rest and starts a detached `usage.mjs send`, which posts
    the session's call-level events to the usage server. A crashed session is sent by `usage.mjs flush --idle` from
-   `session-start.sh`; a failed send retries at the next session start. Nothing is written under `ai/usage/`.
+   `session-start.sh`; a failed send is retried by a session start once that session has been idle 6 h. Nothing is
+   written under `ai/usage/`.
 3. `usage.mjs digest` and `usage.mjs views <view>` read the server; `/ai-kit:usage` compares kit versions and names the
    largest driver.
 4. `usage.mjs hooks [--since]` counts each kit hook's firings from the local transcripts; the table is

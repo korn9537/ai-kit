@@ -87,6 +87,15 @@ export async function getAll(base, path, query = {}) {
   }
 }
 
+// Which views take --project and --since: a copy of ai-kit-usage src/app.mjs VIEWS, so a filter the server would 400
+// is refused before the request. A view not listed goes to the server as asked.
+export const VIEW_FILTERS = {
+  v_kit_compare: { project: false, since: false }, v_kit_roles: { project: false, since: false },
+  v_tool_stats: { project: false, since: false }, v_hook_stats: { project: false, since: false },
+  v_session_cost: { project: true, since: true }, v_round_cost: { project: true, since: true }, v_agent_cost: { project: true, since: true },
+  v_call_cost: { project: true, since: true }, v_repeat_reads: { project: true, since: true }, v_daily: { project: true, since: true },
+};
+
 // A view's rows as a fixed-width table: numbers rounded, timestamps to the minute, cells cut to `width`.
 export function formatTable(rows, { cap = 60, width = 40 } = {}) {
   if (!rows.length) return "no rows";

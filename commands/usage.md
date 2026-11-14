@@ -6,15 +6,18 @@ Analyse token usage from the server's views and the digest, never from raw rows.
 version: the goal is to see which kit version cost more or less and why, not to account for one repo.
 
 1. Run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" views v_kit_compare`. It lists the kit versions the server
-   holds (the newest 10, at most a year back), every project together; add `--project` for this repo only, `--since
-   YYYY-MM-DD` to start later. It prints nothing or fails → the server is unreachable or empty: say so under Open;
-   `usage.mjs digest --baseline` still gives this machine's transcripts.
+   holds (the newest 10, at most a year back), every project together; `--kit <version>` narrows it. It prints
+   nothing or fails → the server is unreachable or empty: say so under Open; `usage.mjs digest --baseline` still
+   gives this machine's transcripts.
 2. For the newest versions, find where the cost goes: `views v_kit_roles --kit <version>` (cost per role),
    `views v_tool_stats --kit <version>` (tools), `views v_hook_stats --kit <version>` (hook firings),
    `views v_repeat_reads --kit <version>` (files read again and again); `--kit` takes a version or a prefix with a
-   trailing dot such as `2.49.`. Then `usage.mjs digest [--since YYYY-MM-DD] [--project]` for the fixed-size summary:
-   cost per model, role and kit version, peak context, cost per commit, reviewer findings, outliers, refusals. Read
-   only these outputs: never fetch or read raw rows or `ai/usage/` files.
+   trailing dot such as `2.49.`. `v_kit_compare`, `v_kit_roles`, `v_tool_stats` and `v_hook_stats` span every project
+   and have no date: they take `--kit` only. `--project` (this repo) and `--since YYYY-MM-DD` work on
+   `v_session_cost`, `v_round_cost`, `v_agent_cost`, `v_call_cost`, `v_repeat_reads` and `v_daily`. Then
+   `usage.mjs digest [--since YYYY-MM-DD] [--project]` for the fixed-size summary: cost per model, role and kit
+   version, peak context, cost per commit, reviewer findings, outliers, refusals. Read only these outputs: never fetch
+   or read raw rows or `ai/usage/` files.
 3. Name the largest driver: the role with the biggest cost share in the newest versions, and what moved it against
    the older ones. Give its evidence: model, calls, peak context, tool mix, the agents behind it (outliers, costliest
    rounds); unpriced models apart.

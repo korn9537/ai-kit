@@ -9,6 +9,7 @@ import { isAbsolute, join } from "node:path";
 import { planWarnings } from "../plan.mjs";
 import { transcriptsDir } from "../lib/usage-collect.mjs";
 import { usageBufDir } from "../lib/state-dirs.mjs";
+import { readSent, transcriptOf } from "../lib/usage-send.mjs";
 import { MSG_SHIM, PLUGIN, SHIM, at, claudeDir, isObj, isShim, kit, lfMissing, lsFiles, msgShimPath, notExecutable, ownHooksPath, read, readConf, readLF, root, shimPath, tryGit, tryGitIn } from "./shared.mjs";
 import { snapshotWarnings } from "./sync.mjs";
 
@@ -123,7 +124,8 @@ function docsWarnings(conf) {
     : [];
 }
 
-// usage left in the repo (tracked or untracked under ai/usage/) and sessions whose send keeps failing; offline, file times only
+// usage left in the repo (tracked or untracked under ai/usage/), sessions whose send keeps failing or the server
+// refused; offline, file times and the buffer's own files only
 function usageWarnings() {
   const out = [];
   const left = ["ls-files", "ls-files --others --exclude-standard"]
@@ -142,15 +144,25 @@ function usageWarnings() {
   } catch {
     // no buffer yet: nothing recorded
   }
-  const stale = names.filter((n) => {
-    const t = statSync(join(buf, n), { throwIfNoEntry: false })?.mtimeMs ?? Infinity;
-    const sent = statSync(join(buf, `${n.slice(0, -".transcript".length)}.sent`), { throwIfNoEntry: false })?.mtimeMs ?? 0;
+  // a session whose transcript is gone has nothing left to send
+  const live = names.map((n) => n.slice(0, -".transcript".length)).filter((id) => {
+    const t = transcriptOf(buf, id);
+    return t && existsSync(t);
+  });
+  const stale = live.filter((id) => {
+    const t = statSync(join(buf, `${id}.transcript`), { throwIfNoEntry: false })?.mtimeMs ?? Infinity;
+    const sent = statSync(join(buf, `${id}.sent`), { throwIfNoEntry: false })?.mtimeMs ?? 0;
     return t < day && sent < t;
   });
   if (stale.length) {
-    const id = stale[0].slice(0, -".transcript".length);
     out.push(
-      `${stale.length} session(s) have usage not sent for over a day (sends retry at the next session start; send now: node <plugin>/scripts/usage.mjs send --session ${id}; failures are in ${join(buf, "send.log")})`,
+      `${stale.length} session(s) have usage not sent for over a day (a send is retried at a session start once the session has been idle 6 h; send now: node <plugin>/scripts/usage.mjs send --session ${stale[0]}; failures are in ${join(buf, "send.log")})`,
+    );
+  }
+  const rejected = live.filter((id) => readSent(buf, id)?.rejected);
+  if (rejected.length) {
+    out.push(
+      `${rejected.length} session(s) refused by the usage server (HTTP 4xx), not sent again until the transcript grows: ${rejected.slice(0, 3).join(", ")} (error in ${join(buf, `${rejected[0]}.sent`)} and ${join(buf, "send.log")})`,
     );
   }
   return out;

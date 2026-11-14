@@ -11,7 +11,7 @@ import { collectSession, loadCache, mergeCommits, saveCache, transcriptsDir } fr
 import { formatHooks, scanHooks } from "./lib/hook-events.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, compare, digest, enc, summaryLine } from "./lib/usage-digest.mjs";
 import { HOST, LOCK_STALE_MS, LOCK_WAIT_MS, breakLock, withLock } from "./lib/usage-lock.mjs";
-import { endpointOf, formatTable, getAll, getJson, projectId } from "./lib/usage-api.mjs";
+import { VIEW_FILTERS, endpointOf, formatTable, getAll, getJson, projectId } from "./lib/usage-api.mjs";
 import {
   REFUSAL_BUF, idleSessions, pendingExtras, postLegacy, readLegacy, saveTranscriptPath, sendDecisions, sendRefusals, sendSession, spawnSend,
 } from "./lib/usage-send.mjs";
@@ -84,7 +84,7 @@ function record(input, quiet = false, lockWait = {}) {
   const cacheDir = usageCacheDir(root, { timeout: 5000 });
   const bufDir = usageBufDir(root, { timeout: 5000 });
   if (!cacheDir || !bufDir) throw new Error("not a git repository, usage not recorded");
-  saveTranscriptPath(bufDir, session, transcript);
+  saveTranscriptPath(bufDir, session, transcript, root);
   const cachePath = join(cacheDir, `${session}.json`);
   const cache = loadCache(cachePath);
   const sess = collectSession(transcript, cache);
@@ -161,7 +161,8 @@ function flushCmd(args) {
 }
 
 // send [--session <id>]...: posts each session's events, then the refusal buffer and the decider logs. The heavy part,
-// run detached by end and flush; a failure leaves .sent as it was, so the next idle pass retries.
+// run detached by end and flush; a failure leaves .sent as it was, so a session start after 6 h idle retries it; a
+// 4xx marks that transcript size rejected in .sent.
 async function sendCmd(args) {
   const root = usageRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!root) return;
@@ -176,22 +177,26 @@ async function sendCmd(args) {
   const project = projectId(root);
   const ctx = { root, bufDir, base, project, user: git(root, "config", "user.name"), host: HOST, kit: kitVersion() };
   const errors = [];
+  const log = (m) => process.stderr.write(`${new Date().toISOString()} usage send: ${String(m).replace(/\s+/g, " ")}\n`);
   for (const session of sessions) {
     try {
       const r = await sendSession({ ...ctx, session });
-      if (process.stdout.isTTY || process.env.AI_KIT_USAGE_VERBOSE) process.stdout.write(`${session}: ${JSON.stringify(r)}\n`);
+      if (r.removed) process.stdout.write(`${session}: transcript ${r.removed} is gone, nothing sent; its .transcript removed\n`);
+      else if (process.stdout.isTTY || process.env.AI_KIT_USAGE_VERBOSE) process.stdout.write(`${session}: ${JSON.stringify(r)}\n`);
+      if (r.dropped) log(`${session}: ${r.dropped} row(s) without a key the server needs, dropped`);
+      if (r.status === "rejected") errors.push(`${session}: rejected, not sent again until its transcript grows: ${r.error}`);
     } catch (e) {
       errors.push(`${session}: ${e.message}`);
     }
   }
   try {
-    await sendRefusals(bufDir, base, project);
+    await sendRefusals(bufDir, base, project, { log });
   } catch (e) {
     errors.push(`refusals: ${e.message}`);
   }
   try {
     const logDir = deciderLog(root);
-    if (logDir) await sendDecisions(logDir, base, project);
+    if (logDir) await sendDecisions(logDir, base, project, { log });
   } catch (e) {
     errors.push(`decisions: ${e.message}`);
   }
@@ -256,6 +261,9 @@ async function viewsCmd(args) {
     else if (args[i] === "--since" && /^\d{4}-\d{2}-\d{2}$/.test(args[i + 1] ?? "")) q.since = args[++i];
     else throw new Error("usage: usage.mjs views <view> [--kit <version|prefix.>] [--project] [--since YYYY-MM-DD]");
   }
+  const f = VIEW_FILTERS[view];
+  if (f && own && !f.project) throw new Error(`${view} is across projects: --project does not apply (use --kit)`);
+  if (f && q.since && !f.since) throw new Error(`${view} has no date column: --since does not apply (use --kit)`);
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (own) q.project = projectId(root);
   const { items = [] } = await getJson(endpointOf(readConfig(root).usage ?? {}), `/v1/views/${view}`, { ...q, limit: 61 });
@@ -265,6 +273,7 @@ async function viewsCmd(args) {
 // migrate: posts this repo's ai/usage/** to the usage API; only when every POST got 2xx, stages its removal.
 async function migrateCmd() {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  if (readConfig(root).usage?.enabled === false) throw new Error("usage.enabled is false in ai/kit/config.json: nothing migrated");
   const legacy = readLegacy(join(root, "ai", "usage"));
   if (!legacy) {
     process.stdout.write("no ai/usage/ in this repo: nothing to migrate\n");
@@ -339,7 +348,7 @@ function main() {
         const root = usageRoot(process.env.CLAUDE_PROJECT_DIR || input.cwd);
         const bufDir = root ? usageBufDir(root, { timeout: 5000 }) : "";
         if (bufDir) {
-          if (input.transcript_path && existsSync(input.transcript_path)) saveTranscriptPath(bufDir, String(input.session_id), input.transcript_path);
+          if (input.transcript_path && existsSync(input.transcript_path)) saveTranscriptPath(bufDir, String(input.session_id), input.transcript_path, root);
           spawnSend(root, bufDir, ["--session", String(input.session_id)]);
         }
       }

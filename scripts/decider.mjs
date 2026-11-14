@@ -8,7 +8,7 @@
 // marks those blocks used. `report [--since YYYY-MM-DD]` prints the usage API's log of this project plus the unsent
 // ones as markdown. Never fails: an error is one stderr line.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { isMain } from "./lib/is-main.mjs";
 import { deciderDir } from "./lib/state-dirs.mjs";
@@ -138,19 +138,24 @@ const logDir = (root) => {
   return d ? join(d, "log") : "";
 };
 
-// One file per finished decider call, created once ("wx": SubagentStop and Stop may race), never again once sent.
+// One file per finished decider call, never again once sent or rejected. Written whole to a tmp file and hard-linked
+// to its name, which fails if it exists (SubagentStop and Stop may race), so a send never reads a half-written file.
 function logDeciders(root, session, list) {
   const dir = logDir(root);
   if (!dir) return;
   for (const d of list) {
     if (!d.done || d.blocks.length === 0) continue;
     const path = join(dir, `${session}.${d.id}.jsonl`);
-    if (existsSync(path) || existsSync(join(dir, `${session}.${d.id}.sent`))) continue;
+    if (existsSync(path) || existsSync(`${path}.rejected`) || existsSync(join(dir, `${session}.${d.id}.sent`))) continue;
     mkdirSync(dir, { recursive: true });
+    const tmp = `${path}.${process.pid}.tmp`;
+    writeFileSync(tmp, d.blocks.map((b) => JSON.stringify({ ts: d.ts, session, agent: d.id, ...b }) + "\n").join(""));
     try {
-      writeFileSync(path, d.blocks.map((b) => JSON.stringify({ ts: d.ts, session, agent: d.id, ...b }) + "\n").join(""), { flag: "wx" });
+      linkSync(tmp, path);
     } catch (e) {
       if (e.code !== "EEXIST") throw e;
+    } finally {
+      unlinkSync(tmp);
     }
   }
 }

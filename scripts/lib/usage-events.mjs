@@ -1,15 +1,25 @@
 // Rows of every /v1/events table for one session, rebuilt from its transcripts (main, subagents, workflow agents).
 // Text stays whole and plain; column names and types: ai-kit-usage src/ingest.mjs TABLES.
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { COMMIT_RE, collectSession, promptText, roleOf, sessionFiles, textOf, toolKey } from "./usage-collect.mjs";
 
 export const TABLE_ORDER = ["sessions", "rounds", "agents", "model_calls", "tool_calls", "hook_events", "compactions", "commits"];
 
-const int = (v) => (Number.isInteger(v) && Math.abs(v) <= 2_147_483_647 ? v : null);
-const str = (v) => (typeof v === "string" && v !== "" ? v : null);
-const tsOk = (v) => typeof v === "string" && !Number.isNaN(Date.parse(v));
+// The server's checkRow rules (ai-kit-usage src/ingest.mjs TYPE_OK, REQUIRED), kept here so a bad row is dropped, not
+// 400ed: an integer column fits int4, a key is a non-empty string, a timestamp is ISO with year 0001 to 9999.
+export const isInt32 = (v) => Number.isInteger(v) && Math.abs(v) <= 2_147_483_647;
+export const isKey = (v) => typeof v === "string" && v !== "";
+export const tsOk = (v) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) && !v.startsWith("0000") && !Number.isNaN(Date.parse(v));
+const int = (v) => (isInt32(v) ? v : null);
+const str = (v) => (isKey(v) ? v : null);
+// key and NOT NULL columns per events table beyond project, which the server fills
+const NEEDS = {
+  sessions: ["session_id"], rounds: ["session_id", "round", "ts"], agents: ["session_id", "agent_id"],
+  model_calls: ["session_id", "msg_id", "agent_id", "ts"], tool_calls: ["session_id", "tool_use_id", "agent_id", "ts", "tool"],
+  hook_events: ["session_id", "event_id", "agent_id", "ts"], compactions: ["session_id", "event_id", "agent_id", "ts"], commits: ["hash"],
+};
 
 // Postgres text and jsonb refuse NUL and lone surrogates; everything else is kept as written.
 export function clean(v) {
@@ -254,8 +264,12 @@ export function commitRows(root, session, found, { since, until, roundAt }) {
   return rows;
 }
 
-// Every events row of the session; null when the main transcript cannot be read. bytes: main plus subagent files read.
-// ctx: { session, root, user, host, kit, kits: [{ts, kit}] from the local buffer }.
+// git toplevel of a dir that still exists; "" otherwise
+const topOf = (dir) => (typeof dir === "string" && dir && existsSync(dir) ? gitOut(dir, ["rev-parse", "--show-toplevel"]).trim() : "");
+
+// Every events row of the session; null when the main transcript cannot be read. bytes: main plus subagent files read;
+// dropped: rows missing a key the server needs. ctx: { session, root, user, host, kit, kits: [{ts, kit}] }; root is the
+// session's own worktree (else its transcript's cwd), and a root gone from disk gives no commit rows.
 export function buildEvents(transcript, ctx) {
   const main = readEntries(transcript, true);
   if (!main) return null;
@@ -306,18 +320,23 @@ export function buildEvents(transcript, ctx) {
   const first = main.entries.find((e) => tsOk(e.timestamp))?.timestamp ?? null;
   const pick = (k) => main.entries.find((e) => str(e[k]))?.[k] ?? null;
   const lastOf = (k) => main.entries.findLast((e) => str(e[k]))?.[k] ?? null;
+  const root = ctx.root || topOf(pick("cwd"));
   const firstModel = main.entries.find((e) => e.type === "assistant" && str(e.message?.model) && e.message.model !== "<synthetic>")?.message.model ?? null;
   const sessions = [{ session_id: session, user_name: str(ctx.user), host: str(ctx.host), kit_version: str(ctx.kit), cc_version: lastOf("version"),
-    entrypoint: pick("entrypoint"), cwd: pick("cwd"), worktree: ctx.root ? basename(ctx.root) : null, git_branch: lastOf("gitBranch"),
+    entrypoint: pick("entrypoint"), cwd: pick("cwd"), worktree: root ? basename(root) : null, git_branch: lastOf("gitBranch"),
     first_model: firstModel, base_context: int(sess.baseContext), started_at: first, ended_at: last ?? first }];
   const rounds = prompts.map((p, i) => ({ session_id: session, round: i + 1, ts: p.ts, prompt: p.prompt, prompt_chars: [...p.prompt].length,
     command: p.command, permission_mode: p.permission_mode, git_branch: p.git_branch, kit_version: kitAt(p.ts) }));
-  const commits = ctx.root ? commitRows(ctx.root, session, acc.commits, { since: first, until: last, roundAt }) : [];
-  return {
-    bytes,
-    tables: clean({ sessions: first ? sessions : [], rounds, agents: agents.filter((a) => a.started_at), model_calls, tool_calls,
-      hook_events: acc.hooks, compactions: acc.compactions, commits }),
-  };
+  const commits = root && existsSync(root) ? commitRows(root, session, acc.commits, { since: first, until: last, roundAt }) : [];
+  const all = clean({ sessions: first ? sessions : [], rounds, agents: agents.filter((a) => a.started_at), model_calls, tool_calls,
+    hook_events: acc.hooks, compactions: acc.compactions, commits });
+  let dropped = 0;
+  const tables = Object.fromEntries(Object.entries(all).map(([t, rows]) => {
+    const ok = rows.filter((r) => NEEDS[t].every((k) => r[k] !== null && r[k] !== undefined && r[k] !== ""));
+    dropped += rows.length - ok.length;
+    return [t, ok];
+  }));
+  return { bytes, dropped, tables };
 }
 
 // POST bodies under maxBytes and maxRows each, tables in TABLE_ORDER so the sessions row is in the first one. A row
@@ -340,7 +359,7 @@ export function chunkEvents(project, tables, { maxBytes = 8 * 1024 * 1024, maxRo
       let n = Buffer.byteLength(JSON.stringify(r)) + 1;
       if (n > ROW_MAX) {
         r = { ...r };
-        for (const k of ["result", "text", "content", "prompt"]) if (typeof r[k] === "string") r[k] = r[k].slice(0, 4 * 1024 * 1024);
+        for (const k of ["result", "text", "content", "prompt"]) if (typeof r[k] === "string") r[k] = r[k].slice(0, 4 * 1024 * 1024).toWellFormed();
         if (t === "tool_calls" && Buffer.byteLength(JSON.stringify(r)) > ROW_MAX) Object.assign(r, { input: null, input_truncated: true });
         n = Buffer.byteLength(JSON.stringify(r)) + 1;
       }
