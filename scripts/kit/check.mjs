@@ -162,7 +162,7 @@ function usageWarnings() {
   const rejected = live.filter((id) => readSent(buf, id)?.rejected);
   if (rejected.length) {
     out.push(
-      `${rejected.length} session(s) refused by the usage server (HTTP 4xx), not sent again until the transcript grows: ${rejected.slice(0, 3).join(", ")} (error in ${join(buf, `${rejected[0]}.sent`)} and ${join(buf, "send.log")})`,
+      `${rejected.length} session(s) refused by the usage server (HTTP 400 or 413), not sent again until the transcript grows: ${rejected.slice(0, 3).join(", ")} (error in ${join(buf, `${rejected[0]}.sent`)} and ${join(buf, "send.log")})`,
     );
   }
   return out;

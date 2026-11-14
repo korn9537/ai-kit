@@ -16,10 +16,12 @@ every project and take `--kit` only, so `views` refuses `--project` and `--since
 starts from `v_kit_compare`, and `/ai-kit:decisions` reads the server plus the logs not sent yet. A session is sent
 with its own worktree and commits, also when another worktree's session start sends it. The kit checks rows as the
 server does and drops a line the server would refuse (logged in `send.log`, counted by `migrate`); a refusal or
-decision file the server still refuses is kept as `<name>.rejected`, and a refused session is not sent again until
-its transcript grows. `kit.mjs check` warns about files left under `ai/usage/`, about a session whose usage has not
-been sent for over a day and about one the server refused, offline; it no longer warns about uncommitted records,
-nor about a session whose transcript is gone. With `usage.enabled: false`, `migrate` refuses.
+decision file the server still refuses (HTTP 400 or 413) is kept as `<name>.rejected`, and a refused session is not
+sent again until its transcript grows. Any other error (a 404 or 502 while the server redeploys, a 429 rate limit,
+which also ends that send) leaves everything for the next send. `kit.mjs check` warns about files left under
+`ai/usage/`, about a session whose usage has not been sent for over a day and about one the server refused,
+offline; it no longer warns about uncommitted records, nor about a session whose transcript is gone. With
+`usage.enabled: false`, `migrate` refuses.
 
 A project with an `ai/usage/` folder runs `node <plugin>/scripts/usage.mjs migrate` once: it posts the old files and,
 only when every post succeeded, stages their removal; commit that. Nothing else. The `:(exclude)ai/usage` pathspecs

@@ -13,7 +13,7 @@ import { DEFAULT_PRICES, baselineRecords, buildRecord, compare, digest, enc, sum
 import { HOST, LOCK_STALE_MS, LOCK_WAIT_MS, breakLock, withLock } from "./lib/usage-lock.mjs";
 import { VIEW_FILTERS, endpointOf, formatTable, getAll, getJson, projectId } from "./lib/usage-api.mjs";
 import {
-  REFUSAL_BUF, idleSessions, pendingExtras, postLegacy, readLegacy, saveTranscriptPath, sendDecisions, sendRefusals, sendSession, spawnSend,
+  REFUSAL_BUF, idleSessions, isThrottled, pendingExtras, postLegacy, readLegacy, saveTranscriptPath, sendDecisions, sendRefusals, sendSession, spawnSend,
 } from "./lib/usage-send.mjs";
 
 export { LOCK_STALE_MS, breakLock, withLock };
@@ -162,7 +162,7 @@ function flushCmd(args) {
 
 // send [--session <id>]...: posts each session's events, then the refusal buffer and the decider logs. The heavy part,
 // run detached by end and flush; a failure leaves .sent as it was, so a session start after 6 h idle retries it; a
-// 4xx marks that transcript size rejected in .sent.
+// PERMANENT_STATUS (400, 413) marks that transcript size rejected in .sent; a 429 ends the pass, the rest waits.
 async function sendCmd(args) {
   const root = usageRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!root) return;
@@ -178,7 +178,13 @@ async function sendCmd(args) {
   const ctx = { root, bufDir, base, project, user: git(root, "config", "user.name"), host: HOST, kit: kitVersion() };
   const errors = [];
   const log = (m) => process.stderr.write(`${new Date().toISOString()} usage send: ${String(m).replace(/\s+/g, " ")}\n`);
+  let throttled = false;
+  const fail = (what, e) => {
+    errors.push(`${what}: ${e.message}`);
+    throttled = isThrottled(e);
+  };
   for (const session of sessions) {
+    if (throttled) break;
     try {
       const r = await sendSession({ ...ctx, session });
       if (r.removed) process.stdout.write(`${session}: transcript ${r.removed} is gone, nothing sent; its .transcript removed\n`);
@@ -186,20 +192,25 @@ async function sendCmd(args) {
       if (r.dropped) log(`${session}: ${r.dropped} row(s) without a key the server needs, dropped`);
       if (r.status === "rejected") errors.push(`${session}: rejected, not sent again until its transcript grows: ${r.error}`);
     } catch (e) {
-      errors.push(`${session}: ${e.message}`);
+      fail(session, e);
     }
   }
-  try {
-    await sendRefusals(bufDir, base, project, { log });
-  } catch (e) {
-    errors.push(`refusals: ${e.message}`);
+  if (!throttled) {
+    try {
+      await sendRefusals(bufDir, base, project, { log });
+    } catch (e) {
+      fail("refusals", e);
+    }
   }
-  try {
-    const logDir = deciderLog(root);
-    if (logDir) await sendDecisions(logDir, base, project, { log });
-  } catch (e) {
-    errors.push(`decisions: ${e.message}`);
+  if (!throttled) {
+    try {
+      const logDir = deciderLog(root);
+      if (logDir) await sendDecisions(logDir, base, project, { log });
+    } catch (e) {
+      fail("decisions", e);
+    }
   }
+  if (throttled) errors.push("rate limited (429): the rest of this send waits for the next one");
   if (errors.length) throw new Error(errors.join("; "));
 }
 

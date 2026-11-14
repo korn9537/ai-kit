@@ -22,7 +22,14 @@ const writeAtomic = (path, text) => {
   writeFileSync(tmp, text);
   renameSync(tmp, path);
 };
-const is4xx = (e) => e?.status >= 400 && e.status < 500;
+// statuses where the server refuses the data itself (bad input, body too large), so a resend cannot succeed; any other
+// non-2xx (404, 405, 408, 429, a proxy's 502-504 while the server redeploys) is retried by a later send
+export const PERMANENT_STATUS = [400, 413];
+const isPermanent = (e) => PERMANENT_STATUS.includes(e?.status);
+// a 429 stops the rest of a send pass: the next pass retries
+export const isThrottled = (e) => e?.status === 429;
+// a decider tmp file older than this was left by a crash (decider.mjs logDeciders links and unlinks it at once)
+const TMP_MS = 10 * 60 * 1000;
 // a line of send.log (the detached send's stderr)
 const logLine = (msg) => process.stderr.write(`${new Date().toISOString()} usage send: ${String(msg).replace(/\s+/g, " ")}\n`);
 // unlink or rename that another send may have done first
@@ -58,7 +65,7 @@ export function saveTranscriptPath(bufDir, session, path, root = "") {
 }
 
 // <session>.sent: {transcript, bytes} of the last send whose every POST got 2xx, or with {rejected, error} of one the
-// server refused with a 4xx: that size is not sent again.
+// server refused with a PERMANENT_STATUS: that size is not sent again.
 export function readSent(bufDir, session) {
   try {
     const s = JSON.parse(readFileSync(join(bufDir, `${session}.sent`), "utf8"));
@@ -115,7 +122,7 @@ export async function sendSession(ctx, { maxBytes, maxRows } = {}) {
     try {
       for (const c of chunks) await postJson(ctx.base, "/v1/events", c);
     } catch (e) {
-      if (!is4xx(e)) throw e;
+      if (!isPermanent(e)) throw e;
       mark({ rejected: true, error: e.message.slice(0, 500) });
       return { status: "rejected", error: e.message, dropped: built.dropped };
     }
@@ -178,19 +185,21 @@ export async function postItems(base, path, project, items, { maxItems = 5000, m
   await post();
 }
 
-// One file's items posted: 2xx → done(); a 4xx → the file kept as <name>.rejected with the error in send.log; any
-// other HTTP error → into errors, the next file still tried; unreachable → thrown, as every file would fail.
+// One file's items posted: 2xx → done(); a PERMANENT_STATUS → the file kept as <name>.rejected with the error in
+// send.log; any other HTTP error → into errors, the file left for the next send and the next file still tried, but a
+// 429 is thrown with the errors so far to end the pass; unreachable → thrown, as every file would fail.
 async function postFile(path, post, done, errors, log) {
   try {
     await post();
   } catch (e) {
-    if (is4xx(e)) {
+    if (isPermanent(e)) {
       unlessGone(() => renameSync(path, `${path}.rejected`));
       log(`${basename(path)} rejected, kept as ${basename(path)}.rejected: ${e.message}`);
       return 0;
     }
     if (!e?.status) throw e;
     errors.push(`${basename(path)}: ${e.message}`);
+    if (isThrottled(e)) throw Object.assign(new Error(errors.join("; ")), { status: e.status });
     return 0;
   }
   done();
@@ -231,27 +240,36 @@ export async function sendRefusals(bufDir, base, project, { log = logLine } = {}
 }
 
 // Decider logs <logDir>/<session>.<agent>.jsonl: seq = line index; on 2xx the file goes and a .sent marker stays,
-// so decider.mjs sync does not write it again. An empty or fresh file waits for a later send.
+// so decider.mjs sync does not write it again. A fresh file waits for a later send; an empty one past FRESH_MS is
+// marked sent with no POST; a <name>.jsonl.<pid>.tmp past TMP_MS (a crashed logDeciders) is deleted.
 export async function sendDecisions(logDir, base, project, { log = logLine, now = Date.now() } = {}) {
   let names = [];
   try {
-    names = readdirSync(logDir).filter((n) => n.endsWith(".jsonl")).sort();
+    names = readdirSync(logDir).sort();
   } catch {}
+  for (const n of names.filter((x) => /\.jsonl\.\d+\.tmp$/.test(x))) {
+    const mtime = statSync(join(logDir, n), { throwIfNoEntry: false })?.mtimeMs;
+    if (mtime !== undefined && now - mtime > TMP_MS) unlessGone(() => unlinkSync(join(logDir, n)));
+  }
   let sent = 0;
   const errors = [];
-  for (const n of names) {
+  for (const n of names.filter((x) => x.endsWith(".jsonl"))) {
     const path = join(logDir, n);
     const st = statSync(path, { throwIfNoEntry: false });
-    if (!st?.size || now - st.mtimeMs < FRESH_MS) continue;
+    if (!st || now - st.mtimeMs < FRESH_MS) continue;
+    const done = () => {
+      writeFileSync(`${path.slice(0, -".jsonl".length)}.sent`, "");
+      unlessGone(() => unlinkSync(path));
+    };
+    if (!st.size) {
+      done();
+      continue;
+    }
     const text = readText(path);
     if (text === null) continue;
     const lines = jsonLines(text).filter((x) => x !== undefined);
     const items = lines.flatMap((r, seq) => (decisionOk(r) ? [clean({ ...r, seq })] : []));
     if (items.length < lines.length) log(`${n}: ${lines.length - items.length} invalid line(s) dropped`);
-    const done = () => {
-      writeFileSync(`${path.slice(0, -".jsonl".length)}.sent`, "");
-      unlessGone(() => unlinkSync(path));
-    };
     if (await postFile(path, () => postItems(base, "/v1/decisions", project, items), done, errors, log)) sent += items.length;
   }
   if (errors.length) throw new Error(errors.join("; "));

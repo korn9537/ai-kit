@@ -419,6 +419,19 @@ try {
   reset();
   eq("and the same size is not sent again", [(await sendSession({ bufDir: buf5, session: S8, base: API, project: "p5" })).status, mock.reqs.length], ["unchanged", 0]);
 
+  // ---- a 404 or 429 (a proxy mid-redeploy, the rate limit) is retried: nothing marked, the next send posts it ----
+  for (const status of [404, 429]) {
+    const S9 = `sess-9-${status}`;
+    saveTranscriptPath(buf5, S9, copyAs(S9, r5), r5);
+    reset();
+    mock.fail = 1;
+    mock.failStatus = status;
+    const thrown = await sendSession({ bufDir: buf5, session: S9, base: API, project: "p5", user: "u", host: "h", kit: "2.50.0" }).catch((e) => e);
+    eq(`sendSession: a ${status} is thrown with its status and leaves no .sent`, [thrown.status, readSent(buf5, S9)], [status, null]);
+    reset();
+    eq(`and the next send posts it`, (await sendSession({ bufDir: buf5, session: S9, base: API, project: "p5", user: "u", host: "h", kit: "2.50.0" })).status, "sent");
+  }
+
   const rdir = join(buf5, "refusals");
   mkdirSync(rdir, { recursive: true });
   const ref = (rule, ts = "2030-01-15T10:00:00Z") => ({ v: 1, ts, rule, kit: "2.50.0", branch: "main" });
@@ -440,16 +453,65 @@ try {
   const both = await Promise.allSettled([sendRefusals(buf5, API, "p5", { log: () => {} }), sendRefusals(buf5, API, "p5", { log: () => {} })]);
   eq("refusals: two concurrent sends both finish and leave no out file", [both.map((x) => x.status), readdirSync(rdir).filter((n) => n.endsWith(".log"))], [["fulfilled", "fulfilled"], []]);
 
+  const outs = () => readdirSync(rdir).filter((n) => n.endsWith(".log")).sort();
+  writeFileSync(join(rdir, "out-5.log"), jl([ref("i")]));
+  writeFileSync(join(rdir, "out-6.log"), jl([ref("j")]));
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 404;
+  const r404 = await sendRefusals(buf5, API, "p5", { log: () => {} }).catch((e) => e);
+  eq("refusals: a 404 file is kept for the next send, the next file still sent", [/out-5\.log: .*HTTP 404/.test(r404.message), outs(), posts("/v1/refusals").length], [true, ["out-5.log"], 2]);
+  writeFileSync(join(rdir, "out-7.log"), jl([ref("k")]));
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 429;
+  const r429 = await sendRefusals(buf5, API, "p5", { log: () => {} }).catch((e) => e);
+  eq("refusals: a 429 is thrown at once, no later file posted, both kept", [r429.status, posts("/v1/refusals").length, outs()], [429, 1, ["out-5.log", "out-7.log"]]);
+  reset();
+  eq("and the next send posts both", [await sendRefusals(buf5, API, "p5", { log: () => {} }), outs()], [2, []]);
+
+  for (const s of ["sess-10", "sess-11"]) saveTranscriptPath(buf5, s, copyAs(s, r5), r5);
+  writeFileSync(join(rdir, "out-8.log"), jl([ref("l")]));
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 429;
+  const s429 = await run(["send", "--session", "sess-10", "--session", "sess-11"], { env: { ...process.env, CLAUDE_PROJECT_DIR: r5, AI_KIT_USAGE_ENDPOINT: API } });
+  eq("send: a 429 ends the pass, the other session and the refusals wait, nothing marked",
+    [s429.code, /rate limited/.test(s429.err), mock.reqs.length, readSent(buf5, "sess-10"), readSent(buf5, "sess-11"), outs()], [2, true, 1, null, null, ["out-8.log"]]);
+  rmSync(join(rdir, "out-8.log"));
+
   const ldir = join(tmp, "dlog");
   mkdirSync(ldir);
   writeFileSync(join(ldir, "s.empty.jsonl"), "");
   aged(join(ldir, "s.empty.jsonl"));
   writeFileSync(join(ldir, "s.fresh.jsonl"), jl([dline("f")]));
+  writeFileSync(join(ldir, "s.fresh-empty.jsonl"), "");
+  writeFileSync(join(ldir, "s.crash.jsonl.123.tmp"), jl([dline("t")]));
+  aged(join(ldir, "s.crash.jsonl.123.tmp"), 11 * 60);
+  writeFileSync(join(ldir, "s.live.jsonl.456.tmp"), jl([dline("t")]));
+  aged(join(ldir, "s.live.jsonl.456.tmp"), 9 * 60);
   reset();
-  eq("decisions: an empty file and one written under 5 s ago wait, unmarked", [await sendDecisions(ldir, API, "p5", { log: () => {} }), readdirSync(ldir).sort(), mock.reqs.length],
-    [0, ["s.empty.jsonl", "s.fresh.jsonl"], 0]);
-  rmSync(join(ldir, "s.empty.jsonl"));
-  rmSync(join(ldir, "s.fresh.jsonl"));
+  eq("decisions: an aged empty file marked sent with no POST; fresh files wait; only a tmp over 10 min deleted",
+    [await sendDecisions(ldir, API, "p5", { log: () => {} }), readdirSync(ldir).sort(), mock.reqs.length],
+    [0, ["s.empty.sent", "s.fresh-empty.jsonl", "s.fresh.jsonl", "s.live.jsonl.456.tmp"], 0]);
+  for (const n of readdirSync(ldir)) rmSync(join(ldir, n));
+  for (const a of ["x", "y"]) {
+    writeFileSync(join(ldir, `s.${a}.jsonl`), jl([dline(a)]));
+    aged(join(ldir, `s.${a}.jsonl`));
+  }
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 429;
+  const d429 = await sendDecisions(ldir, API, "p5", { log: () => {} }).catch((e) => e);
+  eq("decisions: a 429 is thrown at once, both files kept, none marked", [d429.status, posts("/v1/decisions").length, readdirSync(ldir).sort()], [429, 1, ["s.x.jsonl", "s.y.jsonl"]]);
+  reset();
+  mock.fail = 1;
+  mock.failStatus = 404;
+  const d404 = await sendDecisions(ldir, API, "p5", { log: () => {} }).catch((e) => e);
+  eq("decisions: a 404 file kept unmarked, the next sent", [/s\.x\.jsonl: .*HTTP 404/.test(d404.message), readdirSync(ldir).sort()], [true, ["s.x.jsonl", "s.y.sent"]]);
+  reset();
+  eq("and the next send posts it", [await sendDecisions(ldir, API, "p5", { log: () => {} }), readdirSync(ldir).sort()], [1, ["s.x.sent", "s.y.sent"]]);
+  for (const n of readdirSync(ldir)) rmSync(join(ldir, n));
   for (const a of ["a", "b", "c"]) {
     writeFileSync(join(ldir, `s.${a}.jsonl`), jl([dline(a), { ...dline("bad"), session: "" }, { ...dline("bad"), ts: "never" }]));
     aged(join(ldir, `s.${a}.jsonl`));
