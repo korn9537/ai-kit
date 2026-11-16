@@ -410,7 +410,8 @@ scan() {
           cat >&2 <<EOF
 Blocked: a sweeping stage (git add -A/-u/./a directory/a glob, git commit -a or with such a path; xargs git add;
 git add with an argument from \$( ) or a backtick). Other sessions share this working tree and index, so it would
-commit their work. Stage your files by name, read
+commit their work. Stage your files by name, written out (git add a.ts b.ts), from the files you edited, not from
+git diff or git status (those list the other sessions' changes too); read
 \`git diff --cached --stat\`, then commit ($(kit_conf .shared_checkout_doc "$kit_plugin/docs/shared-checkout.md")).
 EOF
           exit 2

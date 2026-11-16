@@ -39,9 +39,12 @@ Context is the cost. Every result you read stays in your context and is re-read 
   commit does not fail on them.
 - Do not print a file, diff or log you have already seen; `git diff --stat` before the commit, not the full diff.
 
-Commit: stage the files you changed by name (`git add <files>`), read `git diff --cached --stat`, then
+Commit: stage the files you changed by name, written out in the command (`git add a.ts b.ts`), read
+`git diff --cached --stat`, then
 `git commit` with no paths (a path-limited commit leaves the pre-commit's records behind). A pre-commit failure is
-yours to fix; never `--no-verify`.
+yours to fix; never `--no-verify`. Keep the list of files you edit or create as you go and stage that list: never
+build it from `git diff --name-only`, `git status`, `xargs` or `$( )`. The checkout is shared, so those lists hold
+other sessions' work, and the bash guard refuses them (in kit 2.50.0, more than half the committers hit that block).
 
 The message ends with one trailer block, no blank line inside it: the brief's `Batch: <id>` when it names one (the
 plan's status reads it; a fix commit has none), then `Job: <id>`, then any `Co-Authored-By`. A fix commit takes the

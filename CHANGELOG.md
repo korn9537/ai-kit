@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.51.0
+
+Two changes from the first call-level usage data (kit 2.50.0, 27 sessions). A committer now stages the list of
+files it kept while editing, written out in the command, never one built from `git diff --name-only`, `git status`,
+`xargs` or `$( )`: 127 of 245 committers had the bash guard refuse such a stage (134 blocks), and the guard's message
+now says the same. A `heavy` batch holds only the hard part; the screens, client and other side's tests that build on
+it go to a following `normal` batch unless that splits a contract change (docs/plan-batching.md): the five opus
+committers with 120 calls or more were 42% of the opus committer cost. No project needs to edit anything.
+
 ## 2.50.0
 
 Usage records no longer live in each repo. The hooks keep a local buffer under the git common dir, and at session
