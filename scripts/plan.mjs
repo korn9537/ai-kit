@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The plan file: batches in ai/plans/<job>.md, status from the job's commits, so a lost session loses no batch.
-// Usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop]
-//        | live <workflow transcript dir>
+// Usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue
+//        | close <job> [--drop] | live <workflow transcript dir>
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -45,7 +45,7 @@ function fold(v, indent = 0, lead = 0) {
 // a JSON string cannot wrap, so a long one is written as { lines } and parse joins it
 export function render(plan) {
   const title = plan.job.replace(/^\d{4}-\d{2}-\d{2}-/, "");
-  const { job, request, batches } = plan;
+  const { job, request, base, batches } = plan;
   return [
     `# Plan ${title}`,
     "",
@@ -54,7 +54,7 @@ export function render(plan) {
     "status: the commits of this job, by their Batch trailer (`plan.mjs status`); never edited here.",
     "",
     "```json",
-    JSON.stringify(fold({ job, request, batches }), null, 2),
+    JSON.stringify(fold({ job, request, ...(base ? { base } : {}), batches }), null, 2),
     "```",
     "",
   ].join("\n");
@@ -436,19 +436,33 @@ export function scope(root, job) {
   return [...entries];
 }
 
-export function write(root, args, replace = false) {
+// the commit the briefs were last checked against; none on an unborn HEAD
+function headOf(root) {
+  try {
+    return gitIn(root)("rev-parse", "--verify", "-q", "HEAD").trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// base is HEAD for a new plan, a plan with none, and on rebase (stale checked); else kept, so stale paths
+// of other batches survive a write
+export function write(root, args, replace = false, rebase = false) {
   const rel = relPath(args.job);
   const path = join(root, rel);
   const before = existsSync(path) ? readFileSync(path, "utf8") : null;
   const old = before === null ? null : parse(before);
   if (before !== null && !old) throw new Error(`${rel} is not a plan this script wrote`);
   const commits = commitsOf(root, args.job);
-  const plan = merge(old, args, commits, replace);
+  const merged = merge(old, args, commits, replace);
+  const base = (rebase ? undefined : old?.base) ?? headOf(root);
+  const plan = { job: merged.job, request: merged.request, ...(base ? { base } : {}), batches: merged.batches };
   const text = render(plan);
   refuseFile(text, plan, before);
   const shared = sharedFiles(plan.batches.filter((b) => !commits.has(b.id)), root);
   const hint = shared.length ? { shared } : {};
   // parsed, not as text: a formatter in the pre-commit rewrites the block
+  // base is kept unless it is to move, so equal text means nothing to commit
   if (old && JSON.stringify(old) === JSON.stringify(parse(text)) && committed(root, rel)) return { plan: rel, committed: false, ...hint };
   // a failed commit leaves no plan behind, and the run must not start as if it had one
   commit(root, args.job, `docs: plan ${args.job}`, "write", () => {
@@ -460,6 +474,35 @@ export function write(root, args, replace = false) {
     else writeFileSync(path, before);
   });
   return { plan: rel, committed: true, ...hint };
+}
+
+// files commits outside the job changed since base, within the scope of the batches with no commit
+// (project-root paths): the briefs may not match them
+export function staleFiles(root, plan) {
+  if (!plan.base) return { staleUnknown: "plan written before base was recorded" };
+  const git = gitIn(root);
+  const first = (e) => String(e.stderr || e.message).split("\n").find(Boolean) || "git failed";
+  try {
+    git("cat-file", "-e", `${plan.base}^{commit}`);
+  } catch {
+    return { staleUnknown: `base ${short(plan.base)} is not a commit here any more` };
+  }
+  try {
+    git("merge-base", "--is-ancestor", plan.base, "HEAD");
+  } catch (e) {
+    // the object may outlive a rebase or squash (reflog): only history proves it is still behind HEAD
+    if (e.status === 1) return { staleUnknown: `base ${short(plan.base)} is no longer in this branch's history` };
+    return { staleUnknown: first(e) };
+  }
+  try {
+    const commits = commitsOf(root, plan.job);
+    const entries = scopePaths(plan.batches.filter((b) => !commits.has(b.id)), root);
+    const log = git("-c", "core.quotePath=false", "log", "-E", "--invert-grep", `--grep=^Job: ${plan.job}$`, "--name-only", "--relative", "--format=", `${plan.base}..HEAD`, "--");
+    const stale = [...new Set(log.split("\n").filter(Boolean))].sort().filter((f) => inScope(f, entries));
+    return { stale };
+  } catch (e) {
+    return { staleUnknown: first(e) };
+  }
 }
 
 export function close(root, job, drop = false) {
@@ -489,6 +532,50 @@ const openPlans = (root) =>
   planFiles(root)
     .map((path) => parse(readFileSync(path, "utf8")))
     .filter(Boolean);
+
+// plans with batches left, oldest adding commit first (equal seconds: earlier in rev-list, then file name);
+// uncommitted ones last; shared: a path two or more name
+export function queue(root) {
+  const git = gitIn(root);
+  const order = new Map();
+  try {
+    git("rev-list", "HEAD").split("\n").filter(Boolean).forEach((h, i) => order.set(h, i));
+  } catch {
+    // no history: no tie-break from it
+  }
+  const rows = [];
+  for (const path of planFiles(root)) {
+    const plan = parse(readFileSync(path, "utf8"));
+    if (!plan) continue;
+    let row;
+    let scopes = [];
+    let time = null;
+    let pos = 0;
+    try {
+      const commits = commitsOf(root, plan.job);
+      const p = progress(plan, commits);
+      if (!p.left.length) continue;
+      row = { job: plan.job, left: p.left, ready: p.ready };
+      scopes = scopePaths(plan.batches.filter((b) => !commits.has(b.id)), root);
+      const [hash, ct] = git("log", "--diff-filter=A", "-1", "--format=%H %ct", "--", relPath(plan.job)).trim().split(" ");
+      if (ct) {
+        time = Number(ct);
+        pos = order.get(hash) ?? 0;
+      }
+    } catch {
+      row = { job: plan.job, error: "status not known" };
+      scopes = [];
+      time = null;
+    }
+    rows.push({ row, scopes, time, pos });
+  }
+  // rev-list is newest first, so a larger position is an older commit
+  rows.sort((a, b) => (a.time === null) - (b.time === null) || (a.time ?? 0) - (b.time ?? 0) || b.pos - a.pos);
+  const by = new Map();
+  for (const { row, scopes } of rows) for (const f of scopes) by.set(f, [...(by.get(f) ?? []), row.job]);
+  const shared = [...by].filter(([, jobs]) => jobs.length > 1).map(([file, jobs]) => ({ file, jobs }));
+  return { queue: rows.map((r) => r.row), shared };
+}
 
 function pickPlan(root, job) {
   const plans = openPlans(root);
@@ -544,7 +631,7 @@ export function resume(root, job, plugin) {
   const argsFile = join(dir, `plan-${plan.job}.args.json`);
   const { maxSize, warning } = configMaxSize(root);
   writeFileSync(argsFile, `${JSON.stringify(resumeArgs(plan, commits, plugin, maxSize), null, 2)}\n`);
-  return { ...out, argsFile, ...(warning ? { warnings: [warning] } : {}) };
+  return { ...out, ...staleFiles(root, plan), argsFile, ...(warning ? { warnings: [warning] } : {}) };
 }
 
 // Workflow loads no scriptPath outside the session (plugin cache, a worktree's .git, a git top above it): the run uses
@@ -681,13 +768,15 @@ if (isMain(import.meta.url)) {
       const args = JSON.parse(readFileSync(arg, "utf8"));
       // staged first: a copy that fails must not hide a plan already committed
       const script = stageScript(process.cwd(), plugin);
-      console.log(JSON.stringify({ ...write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace")), script }));
+      console.log(JSON.stringify({ ...write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace"), flags.includes("--rebase")), script }));
     } else if (cmd === "status") {
       status(projectRoot(process.cwd()), arg, flags.includes("--quick") ? 2000 : 0).forEach((l) => console.log(l));
     } else if (cmd === "resume") {
       const root = projectRoot(process.cwd());
       const out = resume(root, arg, plugin);
       console.log(JSON.stringify(out.argsFile ? { ...out, script: stageScript(process.cwd(), plugin) } : out));
+    } else if (cmd === "queue") {
+      console.log(JSON.stringify(queue(projectRoot(process.cwd()))));
     } else if (cmd === "close" && arg) {
       console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
     } else if (cmd === "scope" && arg) {
@@ -701,7 +790,7 @@ if (isMain(import.meta.url)) {
       if (!existsSync(join(dir, "journal.jsonl"))) throw new Error(`no workflow journal in ${dir}`);
       console.log(liveStatus(dir, Date.now()).join("\n"));
     } else {
-      console.error("usage: plan.mjs write <args.json> [--replace] | status [job] [--quick] | resume [job] | close <job> [--drop] | scope <job> [--outside] | live <dir>");
+      console.error("usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue | close <job> [--drop] | scope <job> [--outside] | live <dir>");
       process.exit(2);
     }
   } catch (e) {

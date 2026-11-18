@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, scope, scopePaths, inScope, sharedFiles, stageScript, status, write } from "./plan.mjs";
+import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, queue, scope, scopePaths, inScope, sharedFiles, stageScript, staleFiles, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -214,7 +214,7 @@ try {
   writeFileSync(join(oldRepo, "ai", "plans", `${oldArgs.job}.md`), render(merge(null, oldArgs)));
   git(oldRepo, "add", "ai");
   git(oldRepo, "commit", "-q", "-m", "older plan");
-  ok("a plan already in the repo stays writable, however wide", write(oldRepo, oldArgs).committed === false);
+  ok("a plan already in the repo stays writable, however wide", write(oldRepo, oldArgs).committed === true && write(oldRepo, oldArgs).committed === false);
   ok("a wide plan takes a new batch", write(oldRepo, { ...oldArgs, batches: [...oldArgs.batches, { id: "d", title: "D", brief: "do d", accept: ["ok"], risks: ["r"], tests: ["t"] }] }).committed === true);
   const narrow = repoAt("narrow");
   write(narrow, args());
@@ -321,6 +321,90 @@ try {
   writeFileSync(join(bad, "ai", "plans", "2026-01-02-broken.md"), '```json\n{"job":"2026-01-02-broken","batches":[{"id":"a","waitsFor":"x"}]}\n```\n');
   ok("a broken plan hides no other plan", status(bad).length === 1 && status(bad)[0].startsWith(JOB), status(bad));
   ok("a broken plan does not crash check", planWarnings(bad).length === 0, planWarnings(bad));
+
+
+  // base, stale and queue
+  {
+    const b1 = repoAt("bs-base1");
+    write(b1, args());
+    const head1 = git(b1, "rev-parse", "HEAD~1").trim();
+    ok("write records base = HEAD before the plan commit", parse(readFileSync(join(b1, "ai", "plans", `${JOB}.md`), "utf8")).base === head1);
+    ok("a repeat write with the same batches commits nothing", write(b1, args()).committed === false && count(b1) === 2);
+    const named = args([{ id: "a", brief: "edit src/a.ts" }, { id: "b", brief: "edit src/b.ts" }, { id: "c", brief: "edit other/c.ts" }]);
+    const b2 = repoAt("bs-stale");
+    write(b2, named);
+    const touch = (repo, file, msg = "outside") => {
+      mkdirSync(join(repo, file, ".."), { recursive: true });
+      writeFileSync(join(repo, file), `${Math.random()}\n`);
+      git(repo, "add", file);
+      git(repo, "commit", "-q", "-m", msg);
+    };
+    touch(b2, "src/a.ts");
+    touch(b2, "docs/none.md");
+    batchCommit(b2, "c", "src/b.ts");
+    const r1 = resume(b2, JOB, "/p");
+    ok("stale holds a file a left batch names, not an unnamed one or the job's own commit", r1.stale?.join() === "src/a.ts", r1);
+    write(b2, args([{ id: "b", brief: "edit src/b.ts, new words" }]));
+    ok("a write for another batch leaves stale as it was", resume(b2, JOB, "/p").stale?.join() === "src/a.ts", resume(b2, JOB, "/p"));
+    ok("rebase commits the new base", write(b2, args([{ id: "b", brief: "edit src/b.ts, new words" }]), false, true).committed === true);
+    ok("resume after the step that records checked prints no stale", resume(b2, JOB, "/p").stale?.length === 0, resume(b2, JOB, "/p"));
+
+    // a plan file of 2.51.0 has no base
+    const b3 = repoAt("bs-nobase");
+    mkdirSync(join(b3, "ai", "plans"), { recursive: true });
+    writeFileSync(join(b3, "ai", "plans", `${JOB}.md`), render(merge(null, named)));
+    git(b3, "add", "ai");
+    git(b3, "commit", "-q", "-m", "old plan");
+    ok("resume of a plan with no base says staleUnknown", /before base/.test(resume(b3, JOB, "/p").staleUnknown ?? ""), resume(b3, JOB, "/p"));
+    ok("a write with the same batches records the base once", write(b3, named).committed === true && write(b3, named).committed === false);
+    ok("then stale is known", resume(b3, JOB, "/p").stale?.length === 0);
+
+    const b4 = repoAt("bs-badbase");
+    write(b4, named);
+    const text = readFileSync(join(b4, "ai", "plans", `${JOB}.md`), "utf8");
+    writeFileSync(join(b4, "ai", "plans", `${JOB}.md`), text.replace(/"base": "[0-9a-f]+"/, `"base": "${"1".repeat(40)}"`));
+    ok("a base that is not a commit gives staleUnknown, not an error", /1111111/.test(resume(b4, JOB, "/p").staleUnknown ?? ""), resume(b4, JOB, "/p"));
+    // the old base object survives a reset and a new commit: only history says it is gone
+    const b5 = repoAt("bs-rebased");
+    touch(b5, "x.txt");
+    const side = git(b5, "rev-parse", "HEAD").trim();
+    git(b5, "reset", "-q", "--hard", "HEAD~1");
+    write(b5, named);
+    const fixed = readFileSync(join(b5, "ai", "plans", `${JOB}.md`), "utf8").replace(/"base": "[0-9a-f]+"/, `"base": "${side}"`);
+    writeFileSync(join(b5, "ai", "plans", `${JOB}.md`), fixed);
+    ok("a base that exists but is not behind HEAD gives staleUnknown", /no longer in this branch/.test(resume(b5, JOB, "/p").staleUnknown ?? ""), resume(b5, JOB, "/p"));
+
+    // ai/kit in a subfolder
+    const b6 = repoAt("bs-sub");
+    const app = join(b6, "app");
+    mkdirSync(join(app, "ai", "kit"), { recursive: true });
+    writeFileSync(join(app, "ai", "kit", "keep.txt"), "x\n");
+    git(b6, "add", "app");
+    git(b6, "commit", "-q", "-m", "app");
+    write(app, named);
+    touch(b6, "app/src/a.ts");
+    touch(b6, "lib/src/b.ts");
+    ok("stale paths are relative to the project folder", resume(app, JOB, "/p").stale?.join() === "src/a.ts", resume(app, JOB, "/p"));
+
+    // queue
+    const q = repoAt("bs-queue");
+    const later = { ...args([{ id: "a", brief: "edit shared/x.ts" }]), job: "2026-11-06-aaa-newer" };
+    const earlier = { ...args([{ id: "a", brief: "edit shared/x.ts and q.ts" }]), job: "2026-11-06-zzz-older" };
+    const done = { ...args([{ id: "a" }]), job: "2026-11-06-mmm-done" };
+    const tie = { GIT_COMMITTER_DATE: "2026-11-06T10:00:00Z", GIT_AUTHOR_DATE: "2026-11-06T10:00:00Z" };
+    Object.assign(process.env, tie);
+    write(q, earlier);
+    write(q, later);
+    write(q, done);
+    for (const k of Object.keys(tie)) delete process.env[k];
+    execFileSync("git", ["commit", "-q", "--allow-empty", "-m", "work\n\nBatch: a\nJob: 2026-11-06-mmm-done"], { cwd: q });
+    writeFileSync(join(q, "ai", "plans", "2026-11-01-broken.md"), "```json\n{nope\n```\n");
+    const got = queue(q);
+    ok("queue: oldest first even with one second, a finished plan left out", got.queue.map((x) => x.job).join() === "2026-11-06-zzz-older,2026-11-06-aaa-newer", got);
+    ok("queue names a path two plans share", got.shared.length === 1 && got.shared[0].file === "shared/x.ts" && got.shared[0].jobs.join() === "2026-11-06-zzz-older,2026-11-06-aaa-newer", got);
+    const cli = spawnSync("node", [SCRIPT, "queue"], { cwd: q, encoding: "utf8" });
+    ok("the queue command prints the JSON", JSON.parse(cli.stdout).queue.length === 2, cli);
+  }
 
   const slow = repoAt("slow");
   write(slow, args());
