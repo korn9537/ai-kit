@@ -45,6 +45,10 @@ ok("bad outcome refused", /outcome/.test(throws(() => next(q0, Q, A, "fine"))));
 const ap = approve(q0, B, ["heldBy:b2", "running"]);
 ok("a heldBy approved at the start is not new for the later job", !fresh(ap, B, ["heldBy:b2"]).length, ap);
 ok("what was not approved is new", fresh(ap, B, ["heldBy:b2", "heldBy:b3", "dirty"]).join() === "heldBy:b3,dirty");
+// a yes to the tree the user saw: a path dirtied after the start is new
+const apd = approve(q0, B, ["dirty:src/a.ts", "loose:abc1234"]);
+ok("an approved dirty path and loose hash are not new", !fresh(apd, B, ["dirty:src/a.ts", "loose:abc1234"]).length, apd);
+ok("a path dirtied later is new", fresh(apd, B, ["dirty:src/a.ts", "dirty:src/b.ts"]).join() === "dirty:src/b.ts");
 
 // CLI: a git repo's review dir holds the queue file
 const dir = mkdtempSync(join(tmpdir(), "queue-"));

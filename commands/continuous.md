@@ -77,9 +77,10 @@ file`; its state per job is `<state>` as above.
    `<plugin>/commands/run-plan.md` §Resume that needs the user's word (`running`, `continuousRunning`, `dirty`,
    `heldBy`, an owner's answer into a brief through `write`), all questions in one message, so nothing later waits on
    the user. A `running` marker the user calls over: `node <plugin>/scripts/plan.mjs unmark <job>`. The stale step is
-   done for the first plan now. Each yes the user gives that `resume` keeps printing (a `heldBy` batch id, `running`,
-   `dirty`) is recorded: `node <plugin>/scripts/queue.mjs approve <qfile> <job> heldBy:<id> running dirty`, because
-   `resume` prints it again on that job's turn.
+   done for the first plan now. Each yes the user gives that `resume` keeps printing is recorded, one item per thing
+   seen, because `resume` prints it again on that job's turn: `node <plugin>/scripts/queue.mjs approve <qfile> <job>
+   heldBy:<id> running:<dir> dirty:<path> loose:<hash>`. A yes covers what the user saw, never a later edit: each
+   dirty path and loose hash is its own item.
 4. The first job: §Start steps 2 to 6 with `resume`'s `argsFile` as the args file (only `init`, no `write`), except
    the cron prompt names the queue: `Continuous queue <qfile>: follow §Queue tick of <plugin>/commands/continuous.md,
    plugin <plugin>.`
@@ -104,7 +105,8 @@ lost after `close` does no harm. Act on the printed `action`:
 
 - **On action job**: `plan.mjs resume <job>`. A step that needs the user's word now (`running`, `continuousRunning`,
   `dirty`, `heldBy`, loose commits that may hold a batch) stops the queue, but only what `queue.mjs check <qfile> <job>
-  <item...>` prints as `new` against the start's approvals (items as in Start step 3): `queue.mjs next <qfile> <job>
+  <item...>` prints as `new` against the start's approvals (items as in Start step 3, one per path, hash or run seen
+  now, so a path dirtied after the start is new): `queue.mjs next <qfile> <job>
   stopped`, then the end below. `stale` or `staleUnknown`: re-check those briefs against the code yourself and write
   the fixes (`plan.mjs write`, or `write --rebase`), then resume again; a fix that needs an owner decision stops the
   queue the same way, never a guess. Then `node <plugin>/scripts/continuous.mjs init <state> <argsFile>` and §Tick at
