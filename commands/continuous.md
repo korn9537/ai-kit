@@ -104,7 +104,7 @@ lost after `close` does no harm. Act on the printed `action`:
 
 - **On action job**: `plan.mjs resume <job>`. A step that needs the user's word now (`running`, `continuousRunning`,
   `dirty`, `heldBy`, loose commits that may hold a batch) stops the queue, but only what `queue.mjs check <qfile> <job>
-  <item...>` prints as `new` against the start's approvals (items as in Start step 2): `queue.mjs next <qfile> <job>
+  <item...>` prints as `new` against the start's approvals (items as in Start step 3): `queue.mjs next <qfile> <job>
   stopped`, then the end below. `stale` or `staleUnknown`: re-check those briefs against the code yourself and write
   the fixes (`plan.mjs write`, or `write --rebase`), then resume again; a fix that needs an owner decision stops the
   queue the same way, never a guess. Then `node <plugin>/scripts/continuous.mjs init <state> <argsFile>` and §Tick at
