@@ -4,7 +4,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, queue, scope, scopePaths, inScope, sharedFiles, stageScript, staleFiles, status, write } from "./plan.mjs";
+import { planRunDir } from "./lib/state-dirs.mjs";
+import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, mark, queue, runMarker, unmark, scope, scopePaths, inScope, sharedFiles, stageScript, staleFiles, status, write } from "./plan.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
@@ -365,7 +366,7 @@ try {
     writeFileSync(join(b3, "ai", "plans", `${JOB}.md`), render(merge(null, named)));
     git(b3, "add", "ai");
     git(b3, "commit", "-q", "-m", "old plan");
-    ok("resume of a plan with no base says staleUnknown", /before base/.test(resume(b3, JOB, "/p").staleUnknown ?? ""), resume(b3, JOB, "/p"));
+    ok("resume of a committed plan with no base takes the plan commit as base", resume(b3, JOB, "/p").stale?.length === 0 && /^plan commit /.test(resume(b3, JOB, "/p").baseFrom), resume(b3, JOB, "/p"));
     ok("a write with the same batches records the base once", write(b3, named).committed === true && write(b3, named).committed === false);
     ok("then stale is known", resume(b3, JOB, "/p").stale?.length === 0);
 
@@ -414,6 +415,74 @@ try {
     ok("queue names a path two plans share", got.shared.length === 1 && got.shared[0].file === "shared/x.ts" && got.shared[0].jobs.join() === "2026-11-06-zzz-older,2026-11-06-aaa-newer", got);
     const cli = spawnSync("node", [SCRIPT, "queue"], { cwd: q, encoding: "utf8" });
     ok("the queue command prints the JSON", JSON.parse(cli.stdout).queue.length === 2, cli);
+
+    // queue: an injected commitsOf that throws for one job
+    const flaky = queue(q, { commitsOf: (r, job) => { if (job === "2026-11-06-aaa-newer") throw new Error("boom"); return new Map(job.includes("done") ? [["a", "h"]] : []); } });
+    ok("queue: a job whose status fails is an error row, the others keep their order",
+      JSON.stringify(flaky.queue.map((x) => x.error ? { job: x.job, error: x.error } : x.job)) === JSON.stringify(["2026-11-06-zzz-older", { job: "2026-11-06-aaa-newer", error: "status not known" }]), flaky);
+
+    // run marker
+    const wf = (name, status) => {
+      const base = join(tmp, `wf-${name}`);
+      const dir = join(base, "subagents", "workflows", "run1");
+      mkdirSync(dir, { recursive: true });
+      if (status) {
+        mkdirSync(join(base, "workflows"), { recursive: true });
+        writeFileSync(join(base, "workflows", "run1.json"), JSON.stringify({ status }));
+      }
+      return dir;
+    };
+    const mr = repoAt("bs-run");
+    write(mr, args());
+    const mpath = join(planRunDir(mr), `run-${JOB}.json`);
+    ok("no marker: resume has no running", resume(mr, JOB, "/p").running === undefined);
+    const live = wf("live", "running");
+    const cliMark = spawnSync("node", [SCRIPT, "mark", JOB, live, "a"], { cwd: mr, encoding: "utf8" });
+    ok("mark writes the marker", cliMark.status === 0 && JSON.parse(readFileSync(mpath, "utf8")).task === "a", cliMark);
+    const r = resume(mr, JOB, "/p").running;
+    ok("resume prints running with dir, task and idleMinutes", r?.dir === live && r.task === "a" && r.idleMinutes < 2, r);
+    ok("idle counts from the run's agents or the marker", runMarker(mr, JOB, Date.now() + 20 * 60000).idleMinutes >= 20);
+    mark(mr, JOB, join(tmp, "wf-nothing-yet"), null);
+    ok("a run with nothing written yet reads as freshly running, not idle for decades", runMarker(mr, JOB).idleMinutes < 2, runMarker(mr, JOB));
+    const mtree = join(tmp, "bs-run-wt");
+    git(mr, "worktree", "add", "-q", mtree);
+    ok("a second work tree sees the same marker", runMarker(mtree, JOB) !== null && planRunDir(mtree) === planRunDir(mr));
+    const queued = queue(mr).queue[0];
+    ok("queue: a live marker gives running run-plan", queued.running?.kind === "run-plan" && queued.running.idleMinutes < 2, queued);
+    unmark(mr, JOB);
+    ok("unmark removes the marker", !existsSync(mpath) && runMarker(mr, JOB) === null);
+    mark(mr, JOB, wf("done", "completed"), "a");
+    ok("a completed run is no running", resume(mr, JOB, "/p").running === undefined);
+    ok("and its marker is deleted", !existsSync(mpath));
+    mark(mr, JOB, live, "a");
+    close(mr, JOB, true);
+    ok("close deletes the job's marker", !existsSync(mpath));
+    mark(mr, JOB, live, "a");
+    writeFileSync(mpath, "{torn");
+    ok("a garbage marker reads as no run", runMarker(mr, JOB) === null);
+    const mq = repoAt("bs-run-q");
+    write(mq, args());
+    mkdirSync(planRunDir(mq), { recursive: true });
+    writeFileSync(join(planRunDir(mq), `run-${JOB}.json`), "{torn");
+    const gq = queue(mq).queue[0];
+    ok("queue: a garbage marker leaves the row whole", gq.job === JOB && !gq.error && !gq.running, gq);
+    mkdirSync(join(mq, ".git", "claude-review"), { recursive: true });
+    writeFileSync(join(mq, ".git", "claude-review", `continuous-${JOB}.json`), JSON.stringify({ running: true }));
+    ok("queue: a continuous state running gives running continuous", queue(mq).queue[0].running?.kind === "continuous", queue(mq));
+
+    // a plan with no base takes the commit that added it
+    const nb = repoAt("bs-nobase-commit");
+    mkdirSync(join(nb, "ai", "plans"), { recursive: true });
+    writeFileSync(join(nb, "ai", "plans", `${JOB}.md`), render(merge(null, named)));
+    git(nb, "add", "ai");
+    git(nb, "commit", "-q", "-m", "old plan");
+    touch(nb, "src/a.ts");
+    const nbr = resume(nb, JOB, "/p");
+    ok("no base: stale from the plan commit, with baseFrom", nbr.stale?.join() === "src/a.ts" && /^plan commit [0-9a-f]{7}$/.test(nbr.baseFrom), nbr);
+    const nu = repoAt("bs-nobase-never");
+    mkdirSync(join(nu, "ai", "plans"), { recursive: true });
+    writeFileSync(join(nu, "ai", "plans", `${JOB}.md`), render(merge(null, named)));
+    ok("no base and never committed: staleUnknown", /before base/.test(resume(nu, JOB, "/p").staleUnknown ?? ""), resume(nu, JOB, "/p"));
   }
 
   const slow = repoAt("slow");

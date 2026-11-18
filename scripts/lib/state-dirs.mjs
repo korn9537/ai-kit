@@ -4,6 +4,7 @@
 //   reviewDir      <absolute-git-dir>/claude-review   per work tree: review snapshots, read counts, run state
 //   usageCacheDir  <absolute-git-dir>/claude-usage    per work tree: transcript cache <session>.json
 //   usageBufDir    <git-common-dir>/claude-usage      shared: <session>.jsonl, .transcript, .sent, locks, refusals/, send.log
+//   planRunDir     <git-common-dir>/claude-plan-run   shared: run-<job>.json, the marker of a run-plan workflow (no shell twin)
 //   deciderDir     <git-common-dir>/claude-decider    shared: used verdicts <session>.json, log/ (decider log until sent)
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
@@ -24,3 +25,4 @@ export const reviewDir = (root, o) => under(gitDir(root, o), "claude-review");
 export const usageCacheDir = (root, o) => under(gitDir(root, o), "claude-usage");
 export const usageBufDir = (root, o) => under(commonDir(root, o), "claude-usage");
 export const deciderDir = (root, o) => under(commonDir(root, o), "claude-decider");
+export const planRunDir = (root, o) => under(commonDir(root, o), "claude-plan-run");

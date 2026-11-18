@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { deciderDir, reviewDir, usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
+import { deciderDir, planRunDir, reviewDir, usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
 
 let failed = 0;
 function eq(desc, got, want) {
@@ -55,9 +55,11 @@ try {
   eq("review and usage-cache differ per work tree", [m[0] !== w[0], m[1] !== w[1]], [true, true]);
   eq("usage and decider are shared", [m[2] === w[2], m[3] === w[3]], [true, true]);
 
+  eq("planRunDir is in the git common dir, equal in both work trees", [planRunDir(repo) === planRunDir(wt), planRunDir(repo) === `${git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}/claude-plan-run`], [true, true]);
+
   const none = join(tmp, "none");
   mkdirSync(none);
-  eq("outside a repo: node helpers return empty", nodeDirs(none), ["", "", "", ""]);
+  eq("outside a repo: node helpers return empty", [...nodeDirs(none), planRunDir(none)], ["", "", "", "", ""]);
   const outs = KINDS.map((k) => bash(none, k));
   eq("outside a repo: bash prints nothing and fails", outs.map((o) => [o.stdout, o.status !== 0]), KINDS.map(() => ["", true]));
   eq("bash: an unknown kind fails", bash(repo, "nope").status !== 0, true);

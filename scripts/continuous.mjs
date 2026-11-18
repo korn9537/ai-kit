@@ -2,12 +2,14 @@
 // Next step of a /ai-kit:continuous run, from a state file that outlives /compact and the workflow's run file.
 // Usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task id> | abandon <state>
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
+import { readRun } from "./lib/workflow-run.mjs";
 import { JOB, checkBatch, checkMaxSize, readRepo, stageScript } from "./plan.mjs";
 
+export { readRun };
 export const MAX_TRIES = 6;
 export const RETRY_GAP = 60 * 60 * 1000;
 export const HUNG_AFTER = 2 * 60 * 60 * 1000;
@@ -172,24 +174,6 @@ const write = (p, v) => {
   writeFileSync(tmp, `${JSON.stringify(v, null, 2)}\n`);
   renameSync(tmp, p);
 };
-
-// <session>/subagents/workflows/<runId> → <session>/workflows/<runId>.json; only `completed` is known to end a run,
-// so any other status counts as running until nothing has moved for HUNG_AFTER
-export function readRun(dir, since = 0, now = Date.now()) {
-  let run = {};
-  try {
-    run = read(join(dir, "..", "..", "..", "workflows", `${basename(dir)}.json`));
-  } catch {
-    // not written yet
-  }
-  let last = since;
-  try {
-    for (const f of readdirSync(dir)) last = Math.max(last, statSync(join(dir, f)).mtimeMs);
-  } catch {
-    // no agent wrote yet
-  }
-  return { ...run, idle: now - last };
-}
 
 // ai/usage stays: the kit writes it all the time, and it never holds an agent's work
 function stash(cwd, name) {

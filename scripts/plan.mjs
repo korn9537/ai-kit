@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // The plan file: batches in ai/plans/<job>.md, status from the job's commits, so a lost session loses no batch.
 // Usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue
-//        | close <job> [--drop] | live <workflow transcript dir>
+//        | close <job> [--drop] | mark <job> <workflow transcript dir> [task id] | unmark <job> | live <workflow transcript dir>
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
-import { reviewDir as reviewDirOf } from "./lib/state-dirs.mjs";
+import { planRunDir, reviewDir as reviewDirOf } from "./lib/state-dirs.mjs";
+import { readRun } from "./lib/workflow-run.mjs";
 
 export const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
 const relPath = (job) => `ai/plans/${job}.md`;
@@ -479,27 +480,38 @@ export function write(root, args, replace = false, rebase = false) {
 // files commits outside the job changed since base, within the scope of the batches with no commit
 // (project-root paths): the briefs may not match them
 export function staleFiles(root, plan) {
-  if (!plan.base) return { staleUnknown: "plan written before base was recorded" };
   const git = gitIn(root);
+  let base = plan.base;
+  let baseFrom;
+  if (!base) {
+    // a plan file of 2.51.0 or older: the commit that added it is the state its briefs were written against
+    try {
+      base = git("log", "--diff-filter=A", "-1", "--format=%H", "--", relPath(plan.job)).trim();
+    } catch {
+      base = "";
+    }
+    if (!base) return { staleUnknown: "plan written before base was recorded" };
+    baseFrom = `plan commit ${short(base)}`;
+  }
   const first = (e) => String(e.stderr || e.message).split("\n").find(Boolean) || "git failed";
   try {
-    git("cat-file", "-e", `${plan.base}^{commit}`);
+    git("cat-file", "-e", `${base}^{commit}`);
   } catch {
-    return { staleUnknown: `base ${short(plan.base)} is not a commit here any more` };
+    return { staleUnknown: `base ${short(base)} is not a commit here any more` };
   }
   try {
-    git("merge-base", "--is-ancestor", plan.base, "HEAD");
+    git("merge-base", "--is-ancestor", base, "HEAD");
   } catch (e) {
     // the object may outlive a rebase or squash (reflog): only history proves it is still behind HEAD
-    if (e.status === 1) return { staleUnknown: `base ${short(plan.base)} is no longer in this branch's history` };
+    if (e.status === 1) return { staleUnknown: `base ${short(base)} is no longer in this branch's history` };
     return { staleUnknown: first(e) };
   }
   try {
     const commits = commitsOf(root, plan.job);
     const entries = scopePaths(plan.batches.filter((b) => !commits.has(b.id)), root);
-    const log = git("-c", "core.quotePath=false", "log", "-E", "--invert-grep", `--grep=^Job: ${plan.job}$`, "--name-only", "--no-renames", "--relative", "--format=", `${plan.base}..HEAD`, "--");
+    const log = git("-c", "core.quotePath=false", "log", "-E", "--invert-grep", `--grep=^Job: ${plan.job}$`, "--name-only", "--no-renames", "--relative", "--format=", `${base}..HEAD`, "--");
     const stale = [...new Set(log.split("\n").filter(Boolean))].sort().filter((f) => inScope(f, entries));
-    return { stale };
+    return { stale, ...(baseFrom ? { baseFrom } : {}) };
   } catch (e) {
     return { staleUnknown: first(e) };
   }
@@ -518,6 +530,7 @@ export function close(root, job, drop = false) {
     // staged by a killed run, it would ride along with the next commit
     gitIn(root)("rm", "-q", "--cached", "--ignore-unmatch", "--", rel);
     rmSync(path);
+    unmark(root, job);
     return { plan: rel, dropped: left };
   }
   commit(root, job, `docs: close plan ${job}`, "close", () => gitIn(root)("rm", "-q", "-f", "--", rel), () => {
@@ -525,6 +538,7 @@ export function close(root, job, drop = false) {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, before);
   });
+  unmark(root, job);
   return { plan: rel, dropped: left };
 }
 
@@ -535,7 +549,7 @@ const openPlans = (root) =>
 
 // plans with batches left, oldest adding commit first (equal seconds: earlier in rev-list, then file name);
 // uncommitted ones last; shared: a path two or more name
-export function queue(root) {
+export function queue(root, { commitsOf: commitsFor = commitsOf } = {}) {
   const git = gitIn(root);
   const order = new Map();
   try {
@@ -548,11 +562,12 @@ export function queue(root) {
     const plan = parse(readFileSync(path, "utf8"));
     if (!plan) continue;
     let row;
+    const running = runningOf(root, plan.job);
     let scopes = [];
     let time = null;
     let pos = 0;
     try {
-      const commits = commitsOf(root, plan.job);
+      const commits = commitsFor(root, plan.job);
       const p = progress(plan, commits);
       if (!p.left.length) continue;
       row = { job: plan.job, left: p.left, ready: p.ready };
@@ -567,7 +582,7 @@ export function queue(root) {
       scopes = [];
       time = null;
     }
-    rows.push({ row, scopes, time, pos });
+    rows.push({ row: running ? { ...row, running } : row, scopes, time, pos });
   }
   // rev-list is newest first, so a larger position is an older commit
   rows.sort((a, b) => (a.time === null) - (b.time === null) || (a.time ?? 0) - (b.time ?? 0) || b.pos - a.pos);
@@ -605,6 +620,65 @@ function continuousState(root, job) {
   }
 }
 
+const markerPath = (root, job) => {
+  const dir = planRunDir(root, { throws: true });
+  if (!dir) throw new Error("not a git repository");
+  return join(dir, `run-${job}.json`);
+};
+
+// the marker of a run-plan workflow, in the git common dir: every work tree sees it
+export function mark(root, job, dir, task = null, now = Date.now()) {
+  if (!JOB.test(job || "")) throw new Error(`bad job id: ${job}`);
+  if (!dir) throw new Error("mark needs the workflow transcript dir");
+  const path = markerPath(root, job);
+  mkdirSync(dirname(path), { recursive: true });
+  const marker = { job, dir, task, startedAt: now };
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(marker, null, 2)}\n`);
+  renameSync(tmp, path);
+  return marker;
+}
+
+// never throws: a marker that cannot be read or a repo that is not one reads as no run
+export function unmark(root, job) {
+  try {
+    rmSync(markerPath(root, job), { force: true });
+  } catch {
+    // nothing to remove
+  }
+}
+
+// null when there is no marker, it cannot be parsed, or the run file says completed (then the marker goes);
+// anything else is running, a run file not written yet included: only `completed` ends a run
+export function runMarker(root, job, now = Date.now()) {
+  try {
+    const path = markerPath(root, job);
+    const m = JSON.parse(readFileSync(path, "utf8"));
+    if (typeof m?.dir !== "string") return null;
+    const run = readRun(m.dir, Number(m.startedAt) || 0, now);
+    if (run.status === "completed") {
+      rmSync(path, { force: true });
+      return null;
+    }
+    return { dir: m.dir, task: m.task ?? null, idleMinutes: Math.max(0, Math.floor(run.idle / 60000)) };
+  } catch {
+    return null;
+  }
+}
+
+// what a queue row says about a run of this job: a run-plan marker, else a continuous state that is running or launching
+function runningOf(root, job) {
+  const marker = runMarker(root, job);
+  if (marker) return { kind: "run-plan", idleMinutes: marker.idleMinutes };
+  try {
+    const run = continuousState(root, job);
+    if (run?.running || run?.launching) return { kind: "continuous" };
+  } catch {
+    // not a repo: nothing runs
+  }
+  return null;
+}
+
 export function resume(root, job, plugin) {
   const plan = pickPlan(root, job);
   const commits = commitsOf(root, plan.job);
@@ -625,6 +699,8 @@ export function resume(root, job, plugin) {
     continuousRunning: !!(run?.running || run?.launching),
     ...(run ? { continuousState: run.path } : {}),
   };
+  const running = runMarker(root, plan.job);
+  if (running) out.running = running;
   if (!p.left.length) return out;
   const dir = reviewDir(root);
   mkdirSync(dir, { recursive: true });
@@ -779,6 +855,12 @@ if (isMain(import.meta.url)) {
       console.log(JSON.stringify(queue(projectRoot(process.cwd()))));
     } else if (cmd === "close" && arg) {
       console.log(JSON.stringify(close(projectRoot(process.cwd()), arg, flags.includes("--drop"))));
+    } else if (cmd === "mark" && arg) {
+      const [, , dir, task] = argv.filter((a) => !a.startsWith("--"));
+      console.log(JSON.stringify(mark(projectRoot(process.cwd()), arg, dir && nodePath(dir), task)));
+    } else if (cmd === "unmark" && arg) {
+      unmark(projectRoot(process.cwd()), arg);
+      console.log(JSON.stringify({ job: arg, unmarked: true }));
     } else if (cmd === "scope" && arg) {
       const entries = scope(projectRoot(process.cwd()), arg);
       // --outside: the paths on stdin (one per line) the plan does not cover
@@ -790,7 +872,7 @@ if (isMain(import.meta.url)) {
       if (!existsSync(join(dir, "journal.jsonl"))) throw new Error(`no workflow journal in ${dir}`);
       console.log(liveStatus(dir, Date.now()).join("\n"));
     } else {
-      console.error("usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue | close <job> [--drop] | scope <job> [--outside] | live <dir>");
+      console.error("usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue | close <job> [--drop] | mark <job> <dir> [task id] | unmark <job> | scope <job> [--outside] | live <dir>");
       process.exit(2);
     }
   } catch (e) {
