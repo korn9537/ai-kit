@@ -73,8 +73,8 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `commands/usage.md` | compares kit versions with `usage.mjs views v_kit_compare`, finds the largest driver in the newest versions' views and `digest`, and names the one change that cuts it |
 | `commands/decisions.md` | prints the decider's decision log |
 | `commands/jobs.md` | `jobs.mjs`: lists jobs or shows one job's commits and revert command |
-| `commands/run-plan.md` | runs a multi-commit plan through `workflows/run-plan.js`; writes and closes the plan file with `plan.mjs` (`write`, `live`, `resume`, `close`) |
-| `commands/continuous.md` | runs work to its end unattended: one ask, plan, retries failed committers, one report; state in `continuous.mjs` (`init`, `next`, `started`, `abandon`) |
+| `commands/run-plan.md` | runs a multi-commit plan through `workflows/run-plan.js`; writes and closes the plan file with `plan.mjs` (`write`, `live`, `resume`, `close`, `mark`, `unmark`); `plan` writes only, `queue` runs open plans one at a time |
+| `commands/continuous.md` | runs work to its end unattended: one ask, plan, retries failed committers, one report; state in `continuous.mjs` (`init`, `next`, `started`, `abandon`); `queue` runs every open plan in turn, state in `queue.mjs` |
 
 ### scripts/ (node and shell, run by hooks, commands and the pre-commit)
 
@@ -102,10 +102,12 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
-| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume, close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths) |
+| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker) |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file |
+| `scripts/queue.mjs` | queue state of `/ai-kit:continuous queue`: jobs in order, current job, outcomes, approvals; test `scripts/queue.test.mjs` |
+| `scripts/lib/workflow-run.mjs` | `readRun`: a workflow's run file status and idle time, shared by `continuous.mjs` and `plan.mjs` |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
-| `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders; twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
+| `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders, and `claude-plan-run` (`planRunDir`, no shell twin); twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
 | `scripts/lib/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
 | `scripts/lib/` | note: modules with no CLI; every CLI entry point stays in `scripts/` (commands, hooks and project copies name those paths) |
 | `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
@@ -184,6 +186,8 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `<git-dir>/claude-review/bash-<tool_use_id>` | `post-edit-check.sh mark` (PreToolUse Bash) | `post-edit-check.sh` (PostToolUse and PostToolUseFailure Bash) lists files newer than it, then removes it; one older than a day is removed by the next `mark` |
 | `<git-dir>/claude-review/<session>.reads`, `.handoff` | `handoff-nudge.sh` | `handoff-nudge.sh` (read count, note marks) |
 | `<git-dir>/claude-review/continuous-<job>.json` | `continuous.mjs` | `continuous.mjs`, `/ai-kit:continuous` |
+| `<git-dir>/claude-review/continuous-queue.json` | `queue.mjs` | `queue.mjs`, `/ai-kit:continuous queue` |
+| `<git-common-dir>/claude-plan-run/run-<job>.json` | `plan.mjs mark` (removed by `unmark`, `close`, or a read after its workflow completed) | `plan.mjs resume`, `queue` |
 | `<project>/.claude/ai-kit/run-plan.js` | `plan.mjs write` and `resume`, `continuous.mjs next` (a `run` step), below the command's cwd (inside the session; `projectRoot` can sit above it): a copy of `workflows/run-plan.js`, since Workflow loads no `scriptPath` outside the session's folders; `**/.claude/ai-kit/` in `info/exclude` keeps it out of git status | the main session, as the Workflow's `scriptPath` |
 | `<git-dir>/claude-review/plan-<job>.args.json` | `plan.mjs resume` | the main session, for the Workflow (`commands/run-plan.md`, `commands/continuous.md`) |
 | `<git-dir>/claude-review/continuous-<job>.json.args.json` | `continuous.mjs` | the main session, for the Workflow (`commands/continuous.md`) |
