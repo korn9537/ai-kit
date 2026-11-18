@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.53.0
+
+`plan.mjs mark` records a run-plan workflow's run marker (`unmark` removes it); resume and queue print `running` for
+it and ask the user before a second run. A plan with no base gets it from the plan commit, so plans written by 2.51.0
+no longer say `staleUnknown` once committed. The queue gets an error test, and `/ai-kit:continuous queue` runs the open
+plans unattended. No project needs to edit anything.
+
 ## 2.52.0
 
 `/ai-kit:run-plan plan` writes and commits the plan and stops, with the job id and how to run it later;

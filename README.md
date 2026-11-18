@@ -34,7 +34,9 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
 | `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, one reviewer for the whole job, fixes, one re-check, a second fix for what it leaves; `scripts/run-plan.test.mjs` |
-| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, `queue`, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
+| `scripts/queue.mjs`           | the state of a `/ai-kit:continuous queue` run; test `scripts/queue.test.mjs`                   |
+| `scripts/lib/workflow-run.mjs` | `readRun`, the run file of a workflow, shared by `continuous.mjs` and `plan.mjs`; tested through `continuous.test.mjs` and `plan.test.mjs` |
+| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, `queue`, close, `mark` / `unmark` (the run marker), `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
 | `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`); test `scripts/state-dirs.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record; `usage-hooks.test.mjs`: hook counts and the anchor drift check): `node scripts/<name>.test.mjs` |

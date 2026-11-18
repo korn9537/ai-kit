@@ -74,13 +74,17 @@ one updates a status and no two sessions edit it. All of it runs from the projec
   known ones by id. `--replace` also drops the batches with no commit that the args leave out, for a plan renamed or cut
   after a refusal. A text too long for one line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc
   check; `parse` joins it back.
-- **Base**: each write records HEAD as `base` (kept when the batches are unchanged, a plan with none gets it).
+- **Base**: each write records HEAD as `base` (kept when the batches are unchanged; a plan with none gets the
+  plan commit's parent, `baseFrom`).
   `resume` lists as `stale` the files commits outside the job changed since `base`, within the scope of the batches
-  left, or says `staleUnknown` (no base, or it left the branch's history: plans written by 2.51.0). Briefs are then
+  left, or says `staleUnknown` (no base and no plan commit, or it left the branch's history). Briefs are then
   checked against the code; `write --rebase` records the code now as checked.
+- **Run marker**: `plan.mjs mark <job> <dir> [task]` after the Workflow starts; resume and queue read it as `running`.
+  It is over when the workflow's run file says completed; `plan.mjs unmark <job>` (the user's word) and close remove it.
 - **Plan only**: `/ai-kit:run-plan plan` writes and commits the plan and stops; owner decisions are asked first.
 - **Queue**: `/ai-kit:run-plan queue` (`plan.mjs queue` gives the order, oldest first) runs plans one at a time and
-  stops at one that does not end clean. Several sessions may write plans: each write commits only its plan file and
+  stops at one that does not end clean or has a `running` marker; `/ai-kit:continuous queue` is the unattended form.
+  Several sessions may write plans: each write commits only its plan file and
   refuses while other files are staged (a check, so a narrow race remains).
 - **Status**: `plan.mjs status [job]`. A new session is told of every plan not closed; it says so to the user and
   goes on only on their word.

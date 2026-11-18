@@ -36,7 +36,9 @@ $ARGUMENTS starting with `queue`: follow §Queue.
    project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
    two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath` the printed
    `script` (a copy of the plugin's `workflows/run-plan.js` in `.claude/ai-kit/` below the cwd, which git ignores;
-   Workflow refuses the plugin's own path) and those `args`. While it runs, do not edit the repo; keep answering
+   Workflow refuses the plugin's own path) and those `args`. Right after it starts, run
+   `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs mark <job> <Transcript dir> <task id>`, so resume and queue see the run.
+   While it runs, do not edit the repo; keep answering
    the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from the
    Workflow result>` and answer from its lines (one per batch id, and a `job` line for the review). A batch of `args`
    with no line is not started yet, or skipped because a batch it waits for was not committed in full. Tell the user
@@ -74,8 +76,11 @@ Goes on with a plan a lost or finished session left. From the project root run
 `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs resume [job]` (the job after `resume` in $ARGUMENTS; with none, the one
 plan with batches left), then clear what it prints, in this order:
 
-1. `continuousRunning` true, or another session may still run the plan → ask the user first: a second run commits
-   every batch twice. Their word that it is over, on a continuous run: TaskStop its workflow if it lives in this
+1. `continuousRunning` true, `running` printed (a run-plan Workflow of this job started by some session, with its
+   idle minutes), or another session may still run the plan → ask the user first: a second run commits every batch
+   twice. Their word that a `running` run is over → `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs unmark <job>`, then go
+   on (a close or the run's completion also clears the marker).
+   Their word that it is over, on a continuous run: TaskStop its workflow if it lives in this
    session, then `node ${CLAUDE_PLUGIN_ROOT}/scripts/continuous.mjs abandon <continuousState>`.
 2. `dirty`: edits in the tree, perhaps a dead committer's. Show them and wait: a committer would commit them with its
    batch.
@@ -107,7 +112,8 @@ given order; else its order (oldest plan first). Tell the user the order and eac
 file, so the later one's briefs will be stale. Then one plan at a time, never two at once: §Resume for it, **Run** with
 its `argsFile`, **Report** with its close.
 
-A plan that ends with anything under Open, or a §Resume step that needs the user's word (`continuousRunning`, `dirty`,
-`heldBy`), stops the queue: report the plans not run and how to go on (`/ai-kit:run-plan queue`). After each plan run
+A plan that ends with anything under Open, or a §Resume step that needs the user's word (`running`,
+`continuousRunning`, `dirty`, `heldBy`), stops the queue: report the plans not run and how to go on
+(`/ai-kit:run-plan queue`; `/ai-kit:continuous queue` is the unattended form). After each plan run
 `plan.mjs queue` again, so a plan another session wrote meanwhile joins at the end. One final report per plan, and at
 the end one line per plan of the queue.
