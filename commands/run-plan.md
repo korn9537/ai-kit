@@ -1,5 +1,5 @@
 ---
-description: Run a multi-commit plan as a workflow: a committer per batch, one reviewer for the whole job, fixes, one report
+description: Run a multi-commit plan as a workflow: a committer per batch, one reviewer for the whole job, fixes, one report; `plan` only writes the plan for later, `queue` works through the planned jobs one at a time
 ---
 
 Run the plan through the Workflow tool, so the main session's context does not grow with each batch. Invoking this

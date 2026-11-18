@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.54.0
+
+A request in plain words now reaches the plan and queue modes without the slash command. CLAUDE.core.md maps
+planning now to run later onto `/ai-kit:run-plan plan`, working through the planned jobs onto `/ai-kit:run-plan
+queue`, and the same with nobody watching onto `/ai-kit:continuous queue`, in any language. The descriptions of both
+commands name those modes, so a skill match sees them. No project needs to edit anything.
+
 ## 2.53.0
 
 `plan.mjs mark` records a run-plan workflow's run marker (`unmark` removes it); resume and queue print `running` for

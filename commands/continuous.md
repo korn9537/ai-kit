@@ -1,5 +1,5 @@
 ---
-description: Run work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report
+description: Run work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report; `queue` runs every planned job in turn
 ---
 
 The user starts this and leaves. Invoking it is the user's opt-in to the run-plan workflow and to the schedule below.

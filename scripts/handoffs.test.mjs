@@ -106,7 +106,14 @@ ok("plan-batching names the plan review: risks, tests, claims, findings into the
   has0(read("docs/plan-batching.md"), /## Plan review/, /`risks`/, /`tests`/, /against the code when written/, /findings go into the brief of the batch they name/, /`planReview`/));
 ok("reviewer: a plan review checks failure modes, tests, claims and conflicts",
   has0(read("agents/change-reviewer.md"), /A plan review/, /failure mode `risks` leaves out/, /no test in `tests`/, /the code does not make true/, /`conflict`/));
-ok("run-plan.md reports the plan review", /Plan review: each `planReview` finding/.test(read("commands/run-plan.md")));
+// a request in plain words reaches the plan and queue modes: the core rule names them, the descriptions say them
+const coreText = read("CLAUDE.core.md");
+ok("core maps plain words to run-plan plan and queue and to continuous queue",
+  /Plain words pick the run-plan mode/.test(coreText) && /with `plan`/.test(coreText) && /its\s+`queue`/.test(coreText) &&
+  /continuous\.md` with `queue`/.test(coreText));
+for (const [p, re] of [["commands/run-plan.md", /^description:.*`plan`.*`queue`/m], ["commands/continuous.md", /^description:.*`queue`/m]])
+  ok(`${p} description names its modes`, re.test(read(p)));
+ok("run-plan.md reports the plan review",/Plan review: each `planReview` finding/.test(read("commands/run-plan.md")));
 
 // the other routes, from their docs: each paragraph is sliced out, then every field of its row looked for in it
 const pb = read("docs/plan-batching.md");

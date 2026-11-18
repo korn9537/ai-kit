@@ -125,6 +125,9 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch. Two batches or more → the run-plan
   workflow per `ai-kit/commands/run-plan.md` (the owner's standing opt-in to it); one, or the Workflow call
   refused → the main session as coordinator.
+- **Plain words pick the run-plan mode**, in any language: plan now, run later (`วางแผนไว้ก่อน`, "prepare it, don't
+  build yet") → `ai-kit/commands/run-plan.md` with `plan`; work through the planned jobs (`ไล่ทำที่วางไว้`) → its
+  `queue`; the same with nobody watching (`ทำไปเลยไม่ต้องรอ`) → `ai-kit/commands/continuous.md` with `queue`.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the
   summary reports Done, Checked and Git, plus Decided and Open when they hold anything):
