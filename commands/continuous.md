@@ -71,15 +71,15 @@ file`; its state per job is `<state>` as above.
 
 1. `node <plugin>/scripts/plan.mjs queue` gives the order; jobs named after `queue` in $ARGUMENTS keep only those, in
    their order.
-2. For every plan in it run `node <plugin>/scripts/plan.mjs resume <job>` and clear now each step of
+2. `node <plugin>/scripts/queue.mjs init <qfile> <job...>`; a refusal says a queue is still going: ask the user, and
+   `queue.mjs end <qfile>` gives it up. Init comes first, so `approve` finds the queue.
+3. For every plan in it run `node <plugin>/scripts/plan.mjs resume <job>` and clear now each step of
    `<plugin>/commands/run-plan.md` §Resume that needs the user's word (`running`, `continuousRunning`, `dirty`,
    `heldBy`, an owner's answer into a brief through `write`), all questions in one message, so nothing later waits on
    the user. A `running` marker the user calls over: `node <plugin>/scripts/plan.mjs unmark <job>`. The stale step is
    done for the first plan now. Each yes the user gives that `resume` keeps printing (a `heldBy` batch id, `running`,
    `dirty`) is recorded: `node <plugin>/scripts/queue.mjs approve <qfile> <job> heldBy:<id> running dirty`, because
    `resume` prints it again on that job's turn.
-3. `node <plugin>/scripts/queue.mjs init <qfile> <job...>`; a refusal says a queue is still going: ask the user, and
-   `queue.mjs end <qfile>` gives it up.
 4. The first job: §Start steps 2 to 6 with `resume`'s `argsFile` as the args file (only `init`, no `write`), except
    the cron prompt names the queue: `Continuous queue <qfile>: follow §Queue tick of <plugin>/commands/continuous.md,
    plugin <plugin>.`

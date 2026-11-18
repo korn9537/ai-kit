@@ -74,8 +74,8 @@ one updates a status and no two sessions edit it. All of it runs from the projec
   known ones by id. `--replace` also drops the batches with no commit that the args leave out, for a plan renamed or cut
   after a refusal. A text too long for one line is stored as `{ "lines": [...] }`, so the file fits a 120-column doc
   check; `parse` joins it back.
-- **Base**: each write records HEAD as `base` (kept when the batches are unchanged; a plan with none gets the
-  plan commit's parent, `baseFrom`).
+- **Base**: each write records HEAD as `base` (kept when the batches are unchanged; a plan with none is read
+  against the commit that added the plan file, and `resume` names it in `baseFrom`).
   `resume` lists as `stale` the files commits outside the job changed since `base`, within the scope of the batches
   left, or says `staleUnknown` (no base and no plan commit, or it left the branch's history). Briefs are then
   checked against the code; `write --rebase` records the code now as checked.

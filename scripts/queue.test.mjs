@@ -58,6 +58,11 @@ ok("cli show names the current job and state", JSON.parse(r3.stdout).job === A &
 run("next", qf, A, "clean");
 const r4 = run("next", qf, B, "open");
 ok("cli next ends on open", JSON.parse(r4.stdout).action === "end", r4);
+const qa = join(dir, "approved-queue.json");
+run("init", qa, A, B);
+const ra = run("approve", qa, B, "heldBy:b2", "running");
+const rc = run("check", qa, B, "heldBy:b2", "running");
+ok("cli init, approve, then check prints an empty new", ra.status === 0 && rc.status === 0 && !JSON.parse(rc.stdout).new.length, [ra, rc]);
 ok("cli end and re-init", run("end", qf).status === 0 && run("init", qf, A).status === 0);
 console.log(failed ? `${failed} failed` : "all passed");
 process.exit(failed ? 1 : 0);
