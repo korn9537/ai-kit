@@ -30,11 +30,11 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `refusal` (git hooks) / `digest` / `hooks` (§Commands), over `scripts/lib/usage-collect.mjs`, `scripts/lib/usage-digest.mjs` and `scripts/lib/hook-events.mjs` |
 | `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
-| `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report |
+| `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report; `plan` only writes the plan, `queue` runs the open plans one at a time |
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
 | `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
 | `workflows/run-plan.js`       | Workflow script: a committer per batch, one reviewer for the whole job, fixes, one re-check, a second fix for what it leaves; `scripts/run-plan.test.mjs` |
-| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
+| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, `queue`, close, `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
 | `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`); test `scripts/state-dirs.test.mjs` |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record; `usage-hooks.test.mjs`: hook counts and the anchor drift check): `node scripts/<name>.test.mjs` |

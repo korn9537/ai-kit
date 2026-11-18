@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.52.0
+
+`/ai-kit:run-plan plan` writes and commits the plan and stops, with the job id and how to run it later;
+`/ai-kit:run-plan queue` runs the open plans one at a time, oldest first, and stops at one that does not end clean.
+`plan.mjs` records a base commit at each write; `resume` lists the files other commits changed since then (`stale`)
+and its step has the briefs checked, `write --rebase` accepting the code as checked. The session-start message names
+the queue. No project needs to edit anything; plans written by 2.51.0 have no base, so resume says `staleUnknown`
+for them.
+
 ## 2.51.0
 
 Two changes from the first call-level usage data (kit 2.50.0, 27 sessions). A committer now stages the list of

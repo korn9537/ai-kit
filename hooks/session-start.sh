@@ -54,7 +54,7 @@ fi
 if command -v node >/dev/null 2>&1 && compgen -G "$kit_root/ai/plans/*.md" >/dev/null; then
   plans="$(cd "$kit_root" && node "$kit_plugin/scripts/plan.mjs" status --quick 2>/dev/null || true)"
   if [[ -n "$plans" ]]; then
-    core+=$'\n\n'"Plans in ai/plans not closed, status from their commits:"$'\n'"$plans"$'\n'"Tell the user in your first reply. Go on only when they say so, per ${rep}docs/plan-batching.md §Plan file: another session may be running one."
+    core+=$'\n\n'"Plans in ai/plans not closed, status from their commits:"$'\n'"$plans"$'\n'"Tell the user in your first reply. Go on only when they say so, per ${rep}docs/plan-batching.md §Plan file: another session may be running one. /ai-kit:run-plan queue runs them one at a time."
   fi
 fi
 mem="$(kit_memory_dir)"

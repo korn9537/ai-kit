@@ -64,6 +64,7 @@ PLAN="$PWD/../scripts/plan.mjs"
 (cd "$REPO" && node "$PLAN" write "$TMP/args.json" >/dev/null)
 bash "$HOOK" </dev/null >"$TMP/plan.out"
 check "an open plan is named with its status" "$(grep -q "$job: 0 of 1 batches committed; ready a" "$TMP/plan.out" && echo 0 || echo 1)"
+check "the open-plans message names the queue command" "$(grep -q '/ai-kit:run-plan queue' "$TMP/plan.out" && echo 0 || echo 1)"
 
 echo '{"unattended":true}' >"$REPO/ai/kit/config.json"
 bash "$HOOK" </dev/null >"$TMP/stale.out" 2>/dev/null

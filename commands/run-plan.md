@@ -7,6 +7,12 @@ command is the user's opt-in to that workflow.
 
 $ARGUMENTS starting with `resume`: follow §Resume instead of steps 1 and 2.
 
+$ARGUMENTS starting with `plan`: steps 1 and 2, then the `plan.mjs write` of step 3, and stop with no Workflow. Tell
+the user the job id, that the plan is committed in `ai/plans/<job>.md`, and that `/ai-kit:run-plan resume <job>` or
+`/ai-kit:run-plan queue` runs it. Owner decisions are asked now (step 1), so the run does not stop for them.
+
+$ARGUMENTS starting with `queue`: follow §Queue.
+
 1. **Plan** per `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md` §Before the first edit, for $ARGUMENTS or the plan
    already agreed in this session. An owner decision open → ask, all in one message, and wait for the answers.
 2. **Args**: one JSON value, not a string:
@@ -84,7 +90,24 @@ plan with batches left), then clear what it prints, in this order:
    run reported is gone with it and a review cannot see one, so a clean review is not enough: show the user these
    batches and go on with them only on their word. A commit that is not clean gets a new batch per
    `plan-batching.md` §Plan file (Left work), and `resume` runs again.
-6. `argsFile`: the args of the batches left, committed ids out of `waitsFor`. An owner's answer goes into its brief
+6. `stale` not empty, or `staleUnknown`: the briefs that name those paths (`staleUnknown`: every left brief's paths)
+   are checked against the code now. A path:start-end or a statement that no longer holds is fixed with a plain
+   `write` of the corrected batches (same ids; the others stay), then `resume` again. Nothing to fix: `write
+   --rebase` with the args of `argsFile` records the code now as checked, so `stale` ends, then `resume` again.
+7. `argsFile`: the args of the batches left, committed ids out of `waitsFor`. An owner's answer goes into its brief
    through `write` first, then `resume` again. Pass the file's content and the printed `script` to the Workflow of
    **Run**, with no second `write`; add `repo` to it when the repo is not the session's working directory. No
    `argsFile`: nothing is left, go to the close in **Report**.
+
+## Queue
+
+Runs the plans with batches left, one after the other. From the project root run
+`node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs queue`. Jobs named after `queue` in $ARGUMENTS keep only those, in the
+given order; else its order (oldest plan first). Tell the user the order and each `shared` entry: two plans touch one
+file, so the later one's briefs will be stale. Then one plan at a time, never two at once: §Resume for it, **Run** with
+its `argsFile`, **Report** with its close.
+
+A plan that ends with anything under Open, or a §Resume step that needs the user's word (`continuousRunning`, `dirty`,
+`heldBy`), stops the queue: report the plans not run and how to go on (`/ai-kit:run-plan queue`). After each plan run
+`plan.mjs queue` again, so a plan another session wrote meanwhile joins at the end. One final report per plan, and at
+the end one line per plan of the queue.
