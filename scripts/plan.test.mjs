@@ -349,6 +349,16 @@ try {
     ok("rebase commits the new base", write(b2, args([{ id: "b", brief: "edit src/b.ts, new words" }]), false, true).committed === true);
     ok("resume after the step that records checked prints no stale", resume(b2, JOB, "/p").stale?.length === 0, resume(b2, JOB, "/p"));
 
+    {
+      const b6 = repoAt("bs-rename");
+      touch(b6, "src/a.ts", "seed");
+      write(b6, named);
+      git(b6, "mv", "src/a.ts", "src/z.ts");
+      git(b6, "commit", "-q", "-m", "rename outside");
+      const s = resume(b6, JOB, "/p").stale ?? [];
+      ok("a rename outside the job lists the old path too", s.includes("src/a.ts"), s);
+    }
+
     // a plan file of 2.51.0 has no base
     const b3 = repoAt("bs-nobase");
     mkdirSync(join(b3, "ai", "plans"), { recursive: true });

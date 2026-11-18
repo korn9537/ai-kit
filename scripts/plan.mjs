@@ -497,7 +497,7 @@ export function staleFiles(root, plan) {
   try {
     const commits = commitsOf(root, plan.job);
     const entries = scopePaths(plan.batches.filter((b) => !commits.has(b.id)), root);
-    const log = git("-c", "core.quotePath=false", "log", "-E", "--invert-grep", `--grep=^Job: ${plan.job}$`, "--name-only", "--relative", "--format=", `${plan.base}..HEAD`, "--");
+    const log = git("-c", "core.quotePath=false", "log", "-E", "--invert-grep", `--grep=^Job: ${plan.job}$`, "--name-only", "--no-renames", "--relative", "--format=", `${plan.base}..HEAD`, "--");
     const stale = [...new Set(log.split("\n").filter(Boolean))].sort().filter((f) => inScope(f, entries));
     return { stale };
   } catch (e) {
