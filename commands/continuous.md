@@ -6,6 +6,8 @@ The user starts this and leaves. Invoking it is the user's opt-in to the run-pla
 In this file `<plugin>` is the plugin root (`${CLAUDE_PLUGIN_ROOT}` at the start, named in the prompt on a tick) and
 `<state>` is the absolute path `<git dir>/claude-review/continuous-<job>.json`.
 
+$ARGUMENTS starting with `queue`: follow §Queue.
+
 ## Start
 
 1. **Plan** per `<plugin>/commands/run-plan.md` steps 1 and 2, for $ARGUMENTS, at any batch count; the args carry
@@ -59,6 +61,57 @@ says the workflow did not complete, and act on the printed `action`:
   reported as not run: put the cause under Open. `abandon` stays on this path.
 - `done`: do §Close, each batch in the printed `open` under Open, the printed `dirty` paths as edits a dead agent or
   someone else left in the tree.
+
+## Queue
+
+Runs every planned job one at a time under one cron. `<qfile>` is the output of `node <plugin>/scripts/queue.mjs
+file`; its state per job is `<state>` as above.
+
+**Start**, while the user is here:
+
+1. `node <plugin>/scripts/plan.mjs queue` gives the order; jobs named after `queue` in $ARGUMENTS keep only those, in
+   their order.
+2. For every plan in it run `node <plugin>/scripts/plan.mjs resume <job>` and clear now each step of
+   `<plugin>/commands/run-plan.md` §Resume that needs the user's word (`running`, `continuousRunning`, `dirty`,
+   `heldBy`, an owner's answer into a brief through `write`), all questions in one message, so nothing later waits on
+   the user. A `running` marker the user calls over: `node <plugin>/scripts/plan.mjs unmark <job>`. The stale step is
+   done for the first plan now. Each yes the user gives that `resume` keeps printing (a `heldBy` batch id, `running`,
+   `dirty`) is recorded: `node <plugin>/scripts/queue.mjs approve <qfile> <job> heldBy:<id> running dirty`, because
+   `resume` prints it again on that job's turn.
+3. `node <plugin>/scripts/queue.mjs init <qfile> <job...>`; a refusal says a queue is still going: ask the user, and
+   `queue.mjs end <qfile>` gives it up.
+4. The first job: §Start steps 2 to 6 with `resume`'s `argsFile` as the args file (only `init`, no `write`), except
+   the cron prompt names the queue: `Continuous queue <qfile>: follow §Queue tick of <plugin>/commands/continuous.md,
+   plugin <plugin>.`
+
+**Queue tick**, also on the workflow's notification. `node <plugin>/scripts/queue.mjs show <qfile>` gives `job` and its
+`state`; a tick between `next` and that job's `init` finds no state file there: go to **On action job**. Otherwise do
+§Tick for the job, except each branch that would do §Close ends the job in the queue instead, and §Close runs only on
+action end:
+
+- `running`, or `wait` with a cron: end the turn.
+- `run`: as §Tick. Refused or no Workflow tool: `queue.mjs next <qfile> <job> stopped`.
+- `stopped` with `reason` `log` and no `close`: end the turn, the next tick retries; with `close`, or with no cron:
+  `queue.mjs next <qfile> <job> stopped`, the cause under Open.
+- `wait` with no cron: `queue.mjs next <qfile> <job> open`.
+- `stopped` otherwise: as §Tick (TaskStop, `abandon`, `jobs.mjs` report), then `queue.mjs next <qfile> <job> stopped`.
+- `done` with nothing under Open: `node <plugin>/scripts/plan.mjs close <job>`, then `queue.mjs next <qfile> <job>
+  clean`. A plan already closed (no `ai/plans/<job>.md`, every batch committed) counts as clean: skip `close`. With
+  something under Open: `queue.mjs next <qfile> <job> open`.
+
+`next` takes the job it records and moves nothing when that job is not the current one, so a repeated tick or a turn
+lost after `close` does no harm. Act on the printed `action`:
+
+- **On action job**: `plan.mjs resume <job>`. A step that needs the user's word now (`running`, `continuousRunning`,
+  `dirty`, `heldBy`, loose commits that may hold a batch) stops the queue, but only what `queue.mjs check <qfile> <job>
+  <item...>` prints as `new` against the start's approvals (items as in Start step 2): `queue.mjs next <qfile> <job>
+  stopped`, then the end below. `stale` or `staleUnknown`: re-check those briefs against the code yourself and write
+  the fixes (`plan.mjs write`, or `write --rebase`), then resume again; a fix that needs an owner decision stops the
+  queue the same way, never a guess. Then `node <plugin>/scripts/continuous.mjs init <state> <argsFile>` and §Tick at
+  once.
+- **On action end**: §Close once for the whole queue (CronDelete, `caffeinate`, no `plan.mjs close` here), one final
+  report per job in `ran` from its state file, then each job in `notRun` under Open with how to go on
+  (`/ai-kit:continuous queue`).
 
 ## Close
 
