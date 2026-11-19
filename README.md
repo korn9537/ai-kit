@@ -82,13 +82,14 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   `sonnet`, except a fallback for a kit agent, which passes that agent's frontmatter model and effort (`opus` medium
   for the reviewer, business-analyst and decider, `sonnet` medium for the committer at size `normal`; `sonnet` low
   for `light`, `opus` high for `heavy`).
-- `handoff-nudge.sh` (UserPromptSubmit) adds a
-  note once the context passes `handoff.max_context` tokens: a "Next session" prompt when the task ends. It never
-  blocks and never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every `handoff.max_reads` (4; 0 is off)
-  reads or searches since the last prompt, once the context passes `handoff.reads_from` (0) tokens, a note to send the
-  search to a subagent. A subagent's reads and Bash lines that do not start as a read do not count. A `Read` with no
-  range or a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a note to read a line
-  range, once per prompt in the main session and once per subagent.
+- `handoff-nudge.sh` (UserPromptSubmit) adds a note once the context passes `handoff.max_context` tokens: a "Next
+  session" prompt when the task ends. From `handoff.fresh_after` (100000; 0 is off) tokens further on, once that note
+  was given, a new prompt gets a note to open the reply by offering a fresh session or `/compact`. It never blocks and
+  never stops a plan. PostToolUse on Bash, Read, Grep and Glob: every `handoff.max_reads` (4; 0 is off) reads or
+  searches since the last prompt, once the context passes `handoff.reads_from` (0) tokens, a note to send the search
+  to a subagent. A subagent's reads and Bash lines that do not start as a read do not count. A `Read` with no range or
+  a plain `cat` of a code file of `handoff.big_read` (300; 0 is off) lines or more: a note to read a line range, once
+  per prompt in the main session and once per subagent.
 - `post-edit-check.sh` (PostToolUse on Edit/Write/MultiEdit/Bash) runs the comment and doc checks whose scope holds
   the file and the checks of `ai/kit/post-edit.sh`, all in parallel, and reports the failures in start order. In a
   Node project without `node_modules` (a fresh worktree) only the project's checks are skipped. It also runs after a
@@ -151,7 +152,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
 
 | File                  | Read by                                                                                                                                                                                                                                     |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`max_reads`/`reads_from`/`big_read`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations`; `run-plan`: `committer.maxSize` (`light`, `normal`, `heavy`: no committer runs above it) |
+| `config.json`         | hooks, `check-comments.mjs`, `check-docs.mjs`: `code_dirs`, `comments.include`/`skip`, `docs.include`/`skip`, `build_guard.port`/`build_re`/`hint`, `shared_checkout_doc`, `handoff.max_context`/`fresh_after`/`max_reads`/`reads_from`/`big_read`, `review.skip_lines`/`always`, `usage.enabled`/`prices`/`money`, `decider.enabled`/`always_owner`; agents and `kit.mjs check`: `conventions`; `check-specs.mjs`, agents: `ui`; `scripts/jobs.mjs`: `jobs.migrations`; `run-plan`: `committer.maxSize` (`light`, `normal`, `heavy`: no committer runs above it) |
 | `pre-commit.sh`       | `githooks/pre-commit`: the project's checks, sourced after prettier                                                                                                                                                                         |
 | `post-edit.sh`        | `hooks/post-edit-check.sh`: the project's per-file checks                                                                                                                                                                                   |
 | `review-checklist.md` | `ai-kit:change-reviewer`, `ai-kit:committer`                                                                                                                                                                                                |
@@ -231,7 +232,8 @@ Run from the project root (or `/ai-kit:init` and `/ai-kit:check` inside Claude C
   without the plugin); `init` runs it too, and `check` warns of a stale, hand-edited, ignored or missing copy. Off, it
   writes nothing.
 - `node <plugin>/scripts/kit.mjs unattended` turns a repo on: same section. `--dry-run` writes nothing and exits 1 when
-  the repo is not ready; `--force` passes a listed script or an empty `pre-commit.sh`, never a staged line.
+  the repo is not ready; `--force` passes a listed script, an index read or an empty `pre-commit.sh`, never a staged
+  line.
 - `node <plugin>/scripts/kit.mjs uninstall` reverses what `init` wrote: the `.githooks/pre-commit` and
   `.githooks/commit-msg` shims (only when still the ai-kit shim; a project's own hook there is left and named),
   `core.hooksPath` (only when nothing else is left in `.githooks/`), the `CLAUDE.md` pointer line, the
@@ -376,7 +378,8 @@ Claude ตอบเป็นภาษาไทย (ชื่อหัวข้�
 
 กฎการเขียนโค้ดที่ใช้ได้ทุกโปรเจกต์อยู่ใน `conventions/` (`general.md` ใช้เสมอ, ไฟล์ภาษาเลือกใน
 `ai/kit/config.json` key `conventions` เช่น `["go", "sql"]` หรือ framework เช่น `["typescript", "nestjs", "typeorm"]`
-(มีไฟล์ `python`, `java`, `flutter` ด้วย; `react` ต่อจาก `typescript`, `flutter` ต่อจาก `dart`;
+(มีไฟล์ `python`, `java`, `flutter` ด้วย; `react` ต่อจาก `typescript`, `flutter` ต่อจาก `dart`,
+`efcore` ต่อจาก `csharp` และ `sql`;
 `ui` กฎหน้าจอ web, mobile, tablet สำหรับโปรเจกต์ที่ตั้ง `ui.platforms`)
 ถ้าชื่อไหนไม่มีไฟล์ หรือ config.json ไม่ใช่ JSON object
 `check` จะไม่ผ่าน)

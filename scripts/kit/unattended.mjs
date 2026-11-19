@@ -37,6 +37,31 @@ const rewriteRange = (text) => {
   return { text: out.join("\n"), done };
 };
 
+// an index read that is no diff: an argument `:f` or `:0:f` of git show or cat-file (`:/text` is a commit search), and
+// `git grep --cached`. Under check.sh the index is HEAD, so a check comparing it with HEAD can never fail
+const INDEX_READ = /\bgit\b[^|;&]*?\b(?:show|cat-file)\b[^|;&]*?\s["']?:(?!\/)|\bgit\b[^|;&]*?\bgrep\b[^|;&]*?--cached\b/;
+
+// code lines that read the index outside an AI_KIT_FILES guard: the line itself, or an if or case block whose
+// condition names it; a `\` continuation is joined first
+const indexReads = (lines) => {
+  const out = [];
+  const open = [];
+  for (let i = 0; i < lines.length; i++) {
+    let l = lines[i];
+    const at = i;
+    while (/\\\r?$/.test(l) && i + 1 < lines.length) l = l.replace(/\\\r?$/, " ") + lines[++i];
+    if (/^\s*#/.test(l)) continue;
+    const words = l.replace(/(["'])(?:(?!\1).)*\1/g, (q) => q.replace(/\b(?:if|case|fi|esac)\b/g, "_"));
+    for (const [w] of words.matchAll(/(?<![\w$-])(?:if|case|fi|esac)(?![\w-])/g))
+      if (w === "if" || w === "case") open.push(l.includes("AI_KIT_FILES"));
+      else open.pop();
+    if (!l.includes("AI_KIT_FILES") && !open.includes(true) && INDEX_READ.test(l)) out.push(at + 1);
+  }
+  return out;
+};
+const INDEX_FIX =
+  'read HEAD under check.sh: src=""; [ -z "${AI_KIT_FILES+set}" ] || src=HEAD; git show "$src:$f", git grep ... HEAD; a check against HEAD compares HEAD with $(git merge-base "${AI_KIT_RANGE%...HEAD}" HEAD) there, and pre-commit.sh never assigns base, which check.sh prints';
+
 const SCRIPT = String.raw`\.(?:mjs|cjs|js|ts|sh|py)`;
 
 // paths a shell text runs: [found in the text, a path with a variable, which no reader can follow]
@@ -146,16 +171,18 @@ function unattended(flags) {
   }
   const lines = text.split("\n");
   const kept = lines.flatMap((l, i) => (!/^\s*#/.test(l) && new RegExp(STAGED).test(l) ? [i + 1] : []));
+  const indexAt = indexReads(lines);
   const code = codeLines(text.replace(/\r\n/g, "\n")).join("\n");
   const { readers, unknown } = indexReaders(code);
   const empty = !code.trim();
   for (const n of kept) console.log(`! ai/kit/pre-commit.sh:${n} still reads the staged diff: ${lines[n - 1].trim().slice(0, 100)}`);
+  for (const n of indexAt) console.log(`! ai/kit/pre-commit.sh:${n} reads the index, which is HEAD under check.sh (fix: ${INDEX_FIX}): ${lines[n - 1].trim().slice(0, 100)}`);
   for (const f of readers) console.log(`! ${f} reads the index: read AI_KIT_RANGE from the environment instead`);
   for (const f of unknown) console.log(`! ${f} could not be followed: if it reads the index it passes unchecked, so read it`);
   if (empty) console.log("! ai/kit/pre-commit.sh has no checks: a gate would only run the kit's own");
   if (dry && !existsSync(at("ai", "kit", "requires.txt")))
     console.log(`would write ai/kit/requires.txt: ${toolsIn(code).join(" ") || "no known command"}; a start, add what it does not know`);
-  const blocked = kept.length > 0 || (!force && (readers.length > 0 || unknown.length > 0 || empty));
+  const blocked = kept.length > 0 || (!force && (readers.length > 0 || unknown.length > 0 || indexAt.length > 0 || empty));
   if (dry) {
     console.log(blocked ? "not ready: fix the lines marked !" : "ready");
     process.exit(blocked ? 1 : 0);

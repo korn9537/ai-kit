@@ -23,3 +23,6 @@ Reader: agents writing or reviewing Flutter widgets. Adds to `general.md` and `d
 7. **Themes** — rule: `general.md` item 5. The token source is `Theme.of(context)` (`ColorScheme`, `TextTheme`, or a
    `ThemeExtension` for app tokens), so dark mode follows. Wrong: `Color(0xFF1A73E8)`. Right:
    `Theme.of(context).colorScheme.primary`.
+8. **Dialog dismissal** — rule: `ui.md` item 24. `barrierDismissible: false` (`showDialog`), or `isDismissible: false`
+   and `enableDrag: false` (`showModalBottomSheet`), for the Form, Confirmation and Work rows, and a `PopScope` that
+   asks before discarding a dirty form or refuses while busy; the others keep the default `true`.

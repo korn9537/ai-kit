@@ -39,7 +39,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review; passes small, comment-only, moved-only changes, and mid-plan stops whose changed paths all lie in `plan.mjs scope` |
 | `hooks/review-snapshot.sh` | PostToolUse Agent, Task, SendMessage; also `--tree` from session-start | records the work tree when the main session calls a review, so the Stop hook can diff against it |
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
-| `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`; send searches to a subagent; read a line range instead of a whole file |
+| `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`, a fresh session or `/compact` offered `handoff.fresh_after` further on; send searches to a subagent; read a line range instead of a whole file |
 | `hooks/kit-log.sh` | Stop (`stop`, `subagent-stop`), SubagentStop (`subagent-stop`), SessionEnd (`session-end`) | calls `usage.mjs` (`record`, `end`) and `decider.mjs sync`; buffers each round's token use; starts a detached send to the usage server at session end; logs decider verdicts until sent |
 | `hooks/*.test.sh` | n/a | fixture tests, one per hook that has one |
 
@@ -149,7 +149,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | File | Role |
 |---|---|
 | `conventions/general.md` | rules for every repo; read by committer and reviewer |
-| `conventions/csharp.md`, `dart.md`, `flutter.md` (adds to `dart.md`), `go.md`, `java.md`, `nestjs.md`, `python.md`, `react.md` (adds to `typescript.md`), `sql.md`, `typeorm.md`, `typescript.md` | per-language rules, applied when named in `config.json` `conventions` |
+| `conventions/csharp.md`, `dart.md`, `efcore.md` (adds to `csharp.md` and `sql.md`), `flutter.md` (adds to `dart.md`), `go.md`, `java.md`, `nestjs.md`, `python.md`, `react.md` (adds to `typescript.md`), `sql.md`, `typeorm.md`, `typescript.md` | per-language rules, applied when named in `config.json` `conventions` |
 | `conventions/ui.md` | UI rules for web, mobile and tablet screens, applied when `ui` is named in `config.json` `conventions` |
 | `conventions/unattended.md` | rules for a run with no person watching and no plugin |
 | `templates/ai-kit-project/` | starter `ai/kit/` files copied by `init` when missing: `config.json`, `pre-commit.sh`, `post-edit.sh`, `review-checklist.md`, `analysis-sources.md` |

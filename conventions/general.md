@@ -57,3 +57,10 @@ on a conflict and is where a repo writes an exception, with its reason.
     request body. Wrong: `Refund(amount, approved_by)` as the body of `POST /orders/{id}/refunds`, the handler
     resetting `approved_by`. Right: `RefundRequest(amount)`, and one mapper builds the internal `Refund` with the
     actor the server sets.
+16. **Secret link codes** — a code in a link that grants access on its own (password reset, invitation, sign-in
+    link) comes from a CSPRNG with at least 128 bits, is stored only as a hash, and is consumed only by a POST: the
+    GET page shows a button that posts it, because mail scanners prefetch every link with GET or HEAD. The link is
+    built from a configured base URL, never from the request's `Host` header, which a caller can set. Wrong: an
+    8-character code from `Math.random`, redeemed by `GET /reset?code=...` with the host taken from the request.
+    Right: 32 random bytes, base64url, a SHA-256 of them in the table, `POST /reset` redeems it, the link from
+    `PUBLIC_BASE_URL`. Source: OWASP Forgot Password and Session Management cheat sheets.

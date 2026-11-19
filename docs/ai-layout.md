@@ -33,8 +33,10 @@ For a project with `claude -p` runs that do not load the plugin (a CI job, a que
 
 - `kit.mjs unattended` turns a repo on: it rewrites `git diff --cached` to `git diff $AI_KIT_RANGE` in
   `ai/kit/pre-commit.sh`, writes `ai/kit/requires.txt` from the commands it finds, sets the key and runs `sync`. A
-  `--staged` flag, a script it runs or imports that reads the index, a script it cannot follow, or a `pre-commit.sh`
-  with no checks leaves the repo off and is listed: a gate acts on `check.sh` as soon as it exists, so a repo that
+  `--staged` flag, a line of `pre-commit.sh` that reads the index another way (`git show ":<path>"`,
+  `git grep --cached`: under `check.sh` the index is HEAD, so a check comparing the two never fails), a script it
+  runs or imports that reads the index, a script it cannot follow, or a `pre-commit.sh` with no checks leaves the
+  repo off and is listed with its fix: a gate acts on `check.sh` as soon as it exists, so a repo that
   cannot pass stays without one. `--force` passes all of these but a `--staged` line. `--dry-run` shows the same.
 - `kit.mjs sync` (and `init`) writes `ai/kit/conventions/` (`general.md`, `unattended.md`, the `conventions` files,
   what each adds to), `ai/kit/checks/`, `ai/kit/review-prompt.md`, `ai/kit/check.sh`, and one line in `CLAUDE.md` that

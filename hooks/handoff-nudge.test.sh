@@ -49,6 +49,21 @@ check "50k further, on a prompt: the note again under UserPromptSubmit" \
 ctx 300000
 run Stop
 check "another event: nothing" "$(t test -z "$OUT")" "$OUT"
+ctx 260000
+run UserPromptSubmit
+check "fresh_after (100k) past the limit, the Next session note given before: the fresh-session note" \
+  "$(t jq -e '.hookSpecificOutput.additionalContext | test("Context is about 260k") and test("fresh session") and test("/compact")' <<<"$OUT")" "$OUT"
+run UserPromptSubmit
+check "the same 50k step: no repeat" "$(t test -z "$OUT")" "$OUT"
+MARK="$REPO/.git/claude-review/s1.handoff"
+rm -f "$MARK"
+run UserPromptSubmit
+check "first crossing already far past: the Next session note first" "$(t jq -e '.hookSpecificOutput.additionalContext | test("Do not stop")' <<<"$OUT")" "$OUT"
+echo '{"handoff": {"fresh_after": 0}}' >"$REPO/ai/kit/config.json"
+echo 1 >"$MARK"
+run UserPromptSubmit
+check "fresh_after 0: the Next session note" "$(t jq -e '.hookSpecificOutput.additionalContext | test("Do not stop")' <<<"$OUT")" "$OUT"
+rm -f "$REPO/ai/kit/config.json"
 
 # read <tool> [command] → one PostToolUse of that tool, stdout in $OUT
 read_tool() {

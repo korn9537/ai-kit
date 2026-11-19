@@ -361,6 +361,18 @@ try {
   writeFileSync(join(on, "ai", "kit", "own.mjs"), 'x("--cached");\n');
   eq("unattended: a project script under ai/kit is read", reads("node ai/kit/own.mjs").includes("! ai/kit/own.mjs reads the index"), true);
   rmSync(join(on, "ai", "kit", "own.mjs"));
+  const indexNote = "reads the index, which is HEAD under check.sh";
+  eq("unattended: git show of an index path is named", reads('blob="$(git show ":$f")"').includes(`pre-commit.sh:1 ${indexNote}`), true);
+  eq("unattended: git show :0: and git grep --cached are named", [reads("git show :0:list").includes(indexNote), reads("git grep -q --cached -e x -- y").includes(indexNote)], [true, true]);
+  eq("unattended: the fix names HEAD, the merge base and base", ["src=HEAD", "git merge-base", "never assigns base"].every((w) => reads('git show ":list"').includes(w)), true);
+  eq("unattended: a read of HEAD or a guarded line is not named", [reads('git show "$src:$f"'), reads("git show HEAD:list"), reads('[ -n "${AI_KIT_FILES+set}" ] || git show ":$f"'), reads("# git show :x")].some((o) => o.includes(indexNote)), false);
+  eq("unattended: cat-file with a type and a second git show argument are named", [reads("git cat-file blob :f").includes(indexNote), reads("git show HEAD:a :b").includes(indexNote)], [true, true]);
+  eq("unattended: a git show continued on the next line is named", reads('git show \\\n  ":list" >/dev/null').includes(`pre-commit.sh:1 ${indexNote}`), true);
+  eq("unattended: git show :/text is a commit search, not named", reads("git show :/fix").includes(indexNote), false);
+  eq("unattended: a read in an if block on AI_KIT_FILES is not named", reads('if [ -z "${AI_KIT_FILES+set}" ]; then\n  blob=$(git show ":$f")\nfi\ngit show HEAD:x').includes(indexNote), false);
+  eq("unattended: a read after that block is named", reads('if [ -z "${AI_KIT_FILES+set}" ]; then\n  x=1\nfi\nblob=$(git show ":$f")').includes(`pre-commit.sh:4 ${indexNote}`), true);
+  eq("unattended: a read in another if block is named", reads('if [ -f x ]; then\n  git show ":x"\nfi').includes(`pre-commit.sh:2 ${indexNote}`), true);
+  eq("unattended --dry-run: an index read is not ready", (writeFileSync(pcOn, 'git show ":list" >/dev/null\n'), turn("--dry-run")).status, 1);
   eq("unattended: a revision after a continuation is left", rw("git diff --cached \\\n  HEAD | grep -q x").split("\n")[0], "git diff --cached \\");
   eq("unattended: options after a continuation are rewritten", rw("x=$(git diff --cached -U0 \\\n  --no-color | grep -q y)").split("\n")[0], "x=$(git diff $AI_KIT_RANGE -U0 \\");
   eq("unattended: a path that nothing runs is no script", reads("printf '%s' b/apps/a.controller.ts >x").includes("could not be followed"), false);

@@ -26,3 +26,8 @@ Reader: agents writing or reviewing React components. Adds to `general.md` and `
    type on every render, so its subtree remounts and loses its state.
 9. **Raw HTML** — `dangerouslySetInnerHTML` only with a value sanitized by a maintained library (DOMPurify), with
    the call site naming it. User text is rendered as children.
+10. **Dialog dismissal** — rule: `ui.md` item 24. One wrapper around the dialog primitive (such as
+    `FormDialogContent`) blocks the backdrop for the Form, Confirmation and Work rows; the others use the plain
+    content. With Radix or shadcn, block `onPointerDownOutside`, not `onInteractOutside`, which also covers focus
+    moving outside and is more than the backdrop rule needs. The same wrappers handle `onEscapeKeyDown`: the form
+    wrapper asks when dirty, the work wrapper calls `preventDefault` while busy and disables its close button.

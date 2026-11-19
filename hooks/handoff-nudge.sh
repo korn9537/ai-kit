@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # UserPromptSubmit: once the main session's context passes handoff.max_context tokens (ai/kit/config.json), add a
-# note asking for a "Next session" prompt after the task. Never stops a plan; never blocks;
+# note asking for a "Next session" prompt after the task; from handoff.fresh_after tokens further on, once that note
+# was given, a note to open the reply by offering a fresh session or /compact. Never stops a plan; never blocks;
 # repeats only every further 50k.
 # PostToolUse on Bash|Read|Grep|Glob: every handoff.max_reads reads or searches since the last prompt, past
 # handoff.reads_from tokens, a note to send the search to a subagent (CLAUDE.core.md, heavy reads). max_reads 0: off.
@@ -103,9 +104,20 @@ mark="$rdir/$session.handoff"
 # below the limit (again, after /compact): forget earlier nudges so the next crossing nudges
 ((used >= max)) || { rm -f "$mark"; exit 0; }
 step=$(((used - max) / 50000))
-[[ -f "$mark" && "$(cat "$mark")" -ge "$step" ]] && exit 0
+prev=""
+[[ -f "$mark" ]] && prev="$(cat "$mark")"
+[[ -n "$prev" && "$prev" -ge "$step" ]] && exit 0
 mkdir -p "$rdir"
 printf '%s\n' "$step" >"$mark"
+
+# far past the limit, with the Next session prompt asked for at an earlier crossing: a new request costs less in a
+# fresh session, so the reply offers one first (handoff.fresh_after tokens past max_context; 0 = off)
+fresh="$(kit_conf '.handoff.fresh_after' 100000)"
+if [[ -n "$prev" ]] && ((fresh > 0 && used >= max + fresh)); then
+  note="Context is about $((used / 1000))k tokens. Open the reply with one line: this request continues in a fresh session at a fraction of the cost per call; paste the Next session prompt from the last report followed by the request, nothing is lost (the repo and git hold the rest). Mid-task with state not in the repo: /compact naming what to keep. Leave the line out while a plan is still running, while debugging step by step with the user, or for a small follow-up fix to the work just done. Then do the request."
+  jq -n --arg n "$note" --arg e "$event" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $n}}'
+  exit 0
+fi
 
 note="This session's context is about $((used / 1000))k tokens. Do not stop or shorten work for it: finish the current task or plan. When it is done, end the final report with the \"Next session\" item (CLAUDE.core.md) so the user can continue in a fresh session: a paste-ready prompt in a code block holding the goal, the job id (docs/shared-checkout.md §Jobs), the steps left, decisions made here and not in the repo, files to read first and open items; nothing the repo or git log already holds."
 jq -n --arg n "$note" --arg e "$event" '{hookSpecificOutput: {hookEventName: $e, additionalContext: $n}}'

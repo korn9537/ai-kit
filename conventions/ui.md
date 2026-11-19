@@ -75,10 +75,10 @@ Items 13 and 14 apply in a product with Thai copy (a `th` column in a spec's `##
 
 ## Web
 
-15. **Keyboard** — every action works with the keyboard: tab order follows the visual order, Enter and Space
-    activate, Escape closes a dialog or menu. Focus is always visible (an `outline` removed has a replacement) and
-    never fully hidden under a sticky header or a banner. A dialog keeps focus inside and returns it to the control
-    that opened it. Source: WCAG 2.1.1, 2.4.3, 2.4.7, 2.4.11.
+15. **Keyboard** — every action works with the keyboard: tab order follows the visual order, Enter and Space activate,
+    Escape closes a dialog or menu (a dialog as item 24 says). Focus is always visible (an `outline` removed has a
+    replacement) and never fully hidden under a sticky header or a banner. A dialog keeps focus inside and returns it
+    to the control that opened it. Source: WCAG 2.1.1, 2.4.3, 2.4.7, 2.4.11.
 16. **Native elements** — an action is a `<button>`, a navigation is an `<a href>`, an input is in a `<form>` so
     Enter submits. Wrong: `<div onClick={save}>`. Right: `<button type="submit">`. Source: WCAG 4.1.2.
 17. **Nothing only on hover** — hover may add a hint; the same content and actions are reachable by tap and by
@@ -97,9 +97,9 @@ Items 13 and 14 apply in a product with Thai copy (a `th` column in a spec's `##
     targets. A web layout below the medium width (item 23) or under `(pointer: coarse)` uses 44 CSS px; the 24 px of
     `general.md` item 5 is the floor for fine-pointer layouts only. Source: Apple Human Interface Guidelines,
     Android accessibility guidelines.
-21. **Platform behavior** — back works the platform's way (Android system and predictive back, iOS edge swipe) and
-    is blocked only by the unsaved-edits guard of item 7. Date and time use the platform pickers unless the design
-    system defines its own.
+21. **Platform behavior** — back works the platform's way (Android system and predictive back, iOS edge swipe) and is
+    blocked only by the unsaved-edits guard of item 7 or a busy dialog (item 24). Date and time use the platform
+    pickers unless the design system defines its own.
 22. **Safe areas and the keyboard** — content stays inside the safe area (`SafeArea`,
     `env(safe-area-inset-*)`). A focused input scrolls above the on-screen keyboard, and the keyboard's action key
     moves to the next field or submits.
@@ -109,3 +109,22 @@ Items 13 and 14 apply in a product with Thai copy (a `th` column in a spec's `##
     its detail sit side by side, a navigation rail replaces the bottom bar, and a text column is at most 840 dp
     wide instead of stretching the phone layout. Both orientations work. A tablet with a keyboard or pointer also
     follows items 15 and 17. Source: Android window size classes, Material Design 3; WCAG 1.3.4.
+
+## Dialogs
+
+24. **Dismissal follows what the dialog holds** — judge each dialog by its content at that moment; a viewer that
+    switches to an edit mode follows the Form row while in it. One shared wrapper per row is picked at the call
+    site; no call site passes its own handler. How: `react.md` item 10, `flutter.md` item 8.
+
+    | Dialog holds | Backdrop click or tap | Escape, system back | Close button |
+    |---|---|---|---|
+    | Form: input typed or picked and not saved (create, edit, note, wizard) | does not close | closes when clean; when dirty, asks before discarding (item 7) | yes, plus Cancel |
+    | Confirmation of a destructive or committing action (item 6) | does not close | means Cancel | Cancel and Confirm only |
+    | Work in progress (saving, uploading, a step that must finish) | does not close | does not close while busy | disabled while busy |
+    | View: detail, history, preview, help | closes | closes | yes |
+    | Picker: search, then pick one item, which closes it | closes | closes | yes |
+    | Filter sheet: its only state is filter values | closes | closes | yes |
+
+    Wrong: an "Edit address" dialog that closes on one click past its edge and drops six typed fields; a "Change
+    history" dialog that ignores a click outside. Right: the first uses the form wrapper (backdrop ignored, Escape
+    on a dirty form asks "Discard changes?"), the second the plain one.

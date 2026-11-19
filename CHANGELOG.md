@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.55.0
+
+Harvest of proposals #52, #53, #55, #56 and #57. No project needs to edit anything.
+
+- `handoff-nudge.sh` (#57): from `handoff.fresh_after` (new key, default 100000; 0 is off) tokens past
+  `handoff.max_context`, once the Next session note was given, a new prompt gets a note to open the reply by
+  offering a fresh session (paste the Next session prompt and the request; nothing is lost) or `/compact`, except
+  while a plan runs, while debugging step by step, or for a small follow-up fix.
+- `conventions/efcore.md` (#56, in part), new: soft delete by an opt-in read in lists and pickers, never
+  `HasQueryFilter`; no `Remove` rewritten into a flag while Cascade FKs exist; the flag's shape (partial unique
+  index, seeders unfiltered, audit action `deleted`).
+- `conventions/general.md` item 16 (#55): secret link codes of 128 bits from a CSPRNG, stored hashed, consumed by
+  POST only, built from a configured base URL.
+- `conventions/ui.md` item 24 (#53, in part): dialog dismissal follows what the dialog holds, one table for web and
+  mobile; `react.md` item 10 (block pointer-down-outside, not interact-outside) and `flutter.md` item 8
+  (`barrierDismissible`, `PopScope`).
+- `kit.mjs unattended` (#52, in part): a `pre-commit.sh` line that reads the index without a diff
+  (`git show ":<path>"`, `git grep --cached`) is listed as not ready, with the HEAD and merge-base fix; `--force`
+  passes it. `check.sh` still runs such lines, as since 2.27.0.
+
 ## 2.54.1
 
 On Windows, a session's start and end no longer flash terminal windows (#58). The detached `usage.mjs send` has no
