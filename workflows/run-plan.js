@@ -1,7 +1,7 @@
 export const meta = {
   name: 'ai-kit-run-plan',
   description: 'Run a multi-commit plan: one ai-kit:committer per batch, one change-reviewer for the whole job after the last commit, CONFIRMED fixes, a re-check and one more round',
-  whenToUse: 'Launched by /ai-kit:run-plan with the planned batches as args (commands/run-plan.md)',
+  whenToUse: 'Launched by /ai-kit:run-plan from the staged copy that carries the planned batches (commands/run-plan.md)',
   phases: [
     { title: 'Plan review', detail: 'one change-reviewer reads the plan before the first commit: failure modes, tests, claims' },
     { title: 'Commit', detail: 'one ai-kit:committer per batch, one at a time' },
@@ -13,10 +13,14 @@ export const meta = {
 // args: { request, plugin, job, repo?, batches: [{ id, title, brief, accept?: [check], verify?, waitsFor?: [id],
 //   alsoInScope?: [item], risks: [failure mode], tests: [test the batch adds] }] }
 // in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
-const batches = (args && args.batches) || []
-if (!batches.length || !args.plugin || !args.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
+// The staged copy carries the args here (scripts/plan.mjs stageScript), so the session launches it with no args and
+// its context does not grow by the plan's briefs on every run; args passed at launch (a `repo`) still win.
+const STAGED = null
+const input = { ...(STAGED || {}), ...((typeof args !== "undefined" && args) || {}) }
+const batches = input.batches || []
+if (!batches.length || !input.plugin || !input.job) throw new Error('run-plan needs args.plugin, args.job and args.batches')
 // the same format githooks/commit-msg accepts: a bad id would fail every committer's commit
-if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(args.job)) throw new Error(`run-plan args.job is not <yyyy-mm-dd>-<slug>: ${args.job}`)
+if (!/^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/.test(input.job)) throw new Error(`run-plan args.job is not <yyyy-mm-dd>-<slug>: ${input.job}`)
 
 // the committer's size per batch (docs/plan-batching.md): normal passes no keys, so the agent's frontmatter holds
 // (sonnet, medium); never xhigh or max
@@ -25,9 +29,9 @@ const TIERS = { light: { model: 'sonnet', effort: 'low' }, normal: {}, heavy: { 
 // a size the workflow does not know (args written by hand) runs as normal
 const sizeOf = (s) => (SIZES.includes(s) ? s : 'normal')
 const rank = (s) => SIZES.indexOf(sizeOf(s))
-// args.maxSize clamps every committer call down to it; an unknown one is ignored, not used as an index
-const cap = args.maxSize === undefined ? null : SIZES.includes(args.maxSize) ? args.maxSize : null
-if (args.maxSize !== undefined && !cap) log(`maxSize ${JSON.stringify(args.maxSize)} is not light, normal or heavy: ignored, no clamp`)
+// input.maxSize clamps every committer call down to it; an unknown one is ignored, not used as an index
+const cap = input.maxSize === undefined ? null : SIZES.includes(input.maxSize) ? input.maxSize : null
+if (input.maxSize !== undefined && !cap) log(`maxSize ${JSON.stringify(input.maxSize)} is not light, normal or heavy: ignored, no clamp`)
 if (cap) log(`maxSize ${cap}: every committer call runs at ${cap} or below`)
 // one tier above, stopping at heavy
 const raise = (s) => SIZES[Math.min(rank(s) + 1, SIZES.length - 1)]
@@ -107,10 +111,10 @@ const exclusive = (fn) => {
   editor = run.catch(() => {})
   return run
 }
-const needed = `bash "${args.plugin}/scripts/review-needed.sh"`
-const where = args.repo ? `Repo: ${args.repo} (run every command there).` : ''
+const needed = `bash "${input.plugin}/scripts/review-needed.sh"`
+const where = input.repo ? `Repo: ${input.repo} (run every command there).` : ''
 // one job per user request: every commit of the plan, fixes included, ends with this trailer (shared-checkout.md §Jobs)
-const job = `End the commit message with the trailer line \`Job: ${args.job}\` (before any Co-Authored-By line).`
+const job = `End the commit message with the trailer line \`Job: ${input.job}\` (before any Co-Authored-By line).`
 const report = [
   `After the commit run \`${needed} <hash>\` from the project root and put the word it prints in \`review\`.`,
   'Report in the structured output: hash ("" when nothing was committed), files, choices, owner (owner decisions',
@@ -168,12 +172,12 @@ let base = ''
 let jobFiles = []
 const jobRange = (hash) =>
   [`\`git diff ${base}..${hash} -- ${jobFiles.map((f) => `':(literal)${f}'`).join(' ') || '.'} ':(exclude)ai/usage'\``,
-    `Only this job's commits are in scope (\`git log --format=%h --grep '^Job: ${args.job}$' ${base}..${hash}\`): a hunk`,
+    `Only this job's commits are in scope (\`git log --format=%h --grep '^Job: ${input.job}$' ${base}..${hash}\`): a hunk`,
     'another job\'s commit made in these files is not reviewed and not fixed.'].join('\n')
 const reviewPrompt = (b, hash) =>
   [
-    `The user's request: ${args.request || b.title}`,
-    `This review covers the whole job ${args.job}: ${batches.map((x) => `${x.id}: ${x.title}`).join('; ')}`,
+    `The user's request: ${input.request || b.title}`,
+    `This review covers the whole job ${input.job}: ${batches.map((x) => `${x.id}: ${x.title}`).join('; ')}`,
     where,
     scope(b),
     done(b),
@@ -193,7 +197,7 @@ const list = (fs) => fs.map((f, i) => `${i + 1}. ${f.where} · ${f.what} · ${f.
 // the batch's brief and later batches: the fix agent is fresh, and planned work must not read as a blocker
 const fixPrompt = (b, hash, fs) =>
   [
-    `Review findings on the job ${args.job}, last commit ${hash}. Fix only these, verify the same way and make one`,
+    `Review findings on the job ${input.job}, last commit ${hash}. Fix only these, verify the same way and make one`,
     `commit "${fixSubject(b.title)}". The rules were read for the job: read only the rule a finding names.`,
     job,
     where,
@@ -214,8 +218,8 @@ const fixPrompt = (b, hash, fs) =>
 const recheckPrompt = (b, hash, fixHash, fs, fresh) =>
   fresh
     ? [
-        `The user's request: ${args.request || b.title}`,
-        `Job ${args.job}`,
+        `The user's request: ${input.request || b.title}`,
+        `Job ${input.job}`,
         where,
         scope(b),
         done(b),
@@ -345,7 +349,7 @@ async function reviewChain(b, r, need) {
 // does not do (docs/plan-batching.md §Plan review). Its findings go into the briefs of the batches they name; a
 // failed review is noted and the plan runs
 const planPrompt = [
-  `The user's request: ${args.request || batches[0].title}`,
+  `The user's request: ${input.request || batches[0].title}`,
   where,
   'Plan review: no code is written yet. Read this plan, not a commit, and read the code each batch touches.',
   'Size check: each batch header names its size. heavy fits only code-level difficulty: a migration or data change on live',
@@ -425,7 +429,7 @@ if (made.length) {
   base = `${made[0].hash}^`
   jobFiles = [...new Set(made.flatMap((r) => r.files || []))]
   const jb = {
-    id: 'job', isJob: true, title: `review findings of ${args.job}`, brief: batches.map((b) => `${b.id}: ${b.title}\n${b.brief}`).join('\n\n'),
+    id: 'job', isJob: true, title: `review findings of ${input.job}`, brief: batches.map((b) => `${b.id}: ${b.title}\n${b.brief}`).join('\n\n'),
     accept: batches.flatMap((b) => b.accept || []), tests: batches.flatMap((b) => b.tests || []),
     risks: batches.flatMap((b) => b.risks || []), verify: [...new Set(batches.map((b) => b.verify).filter(Boolean))].join(' && '),
     alsoInScope: batches.flatMap((b) => b.alsoInScope || []),

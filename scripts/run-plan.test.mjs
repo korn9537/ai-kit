@@ -215,5 +215,19 @@ ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
   ok("unknown maxSize: no clamp, logged", u.calls.find((c) => /^commit/.test(c.label)).o.model === "opus" && u.logs.some((l) => /maxSize "bogus"/.test(l)));
 }
 
+// the staged copy (plan.mjs stageScript) carries the args; the session launches it with none, or with only `repo`
+{
+  const carried = { plugin: "/p", job: "2026-11-07-x", request: "r", batches: one };
+  const staged = source.replace("const STAGED = null\n", () => `const STAGED = ${JSON.stringify(carried)}\n`);
+  const prompts = [];
+  const s = script([[]]);
+  const res = await new AsyncFunction("agent", "log", staged)(async (p, o) => (prompts.push(p), s(o.label)), () => {});
+  ok("staged copy: runs with no args at all", res && prompts.some((p) => p.includes("Job: 2026-11-07-x")));
+  prompts.length = 0;
+  const s2 = script([[]]);
+  await new AsyncFunction("args", "agent", "log", staged)({ repo: "/elsewhere" }, async (p, o) => (prompts.push(p), s2(o.label)), () => {});
+  ok("staged copy: a repo passed at launch joins the carried args", prompts.some((p) => p.includes("Repo: /elsewhere")));
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

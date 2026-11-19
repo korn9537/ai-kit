@@ -261,8 +261,9 @@ writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plug
 cli("init", st, join(tmp, "args.json"));
 const step = JSON.parse(cli("next", st));
 ok("cli: run after init, args in a file", step.action === "run" && !step.args && existsSync(step.argsFile), step);
-ok("cli: run names the workflow copy in the project",
-  step.script === join(repo, ".claude", "ai-kit", "run-plan.js") && readFileSync(step.script, "utf8") === readFileSync(join(import.meta.dirname, "..", "workflows", "run-plan.js"), "utf8"), step);
+ok("cli: run names the job's workflow copy in the project, carrying the args file's batches",
+  step.script === join(repo, ".claude", "ai-kit", "run-plan-2026-11-05-z.js") &&
+    readFileSync(step.script, "utf8").includes(`const STAGED = ${JSON.stringify(JSON.parse(readFileSync(step.argsFile, "utf8")))}\n`), step);
 
 rmSync(st, { force: true });
 writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"], tests: ["t"] }], repo: nogit }));

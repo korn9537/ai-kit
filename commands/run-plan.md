@@ -35,8 +35,9 @@ $ARGUMENTS starting with `queue`: follow §Queue.
 3. **Run**: write the args to a temp file and run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs write <file>` from the
    project root (`plan-batching.md` §Plan file; a refusal names what to fix; a `shared` key in its output lists files
    two briefs name: merge those batches per §Plan file before going on). Then Workflow with `scriptPath` the printed
-   `script` (a copy of the plugin's `workflows/run-plan.js` in `.claude/ai-kit/` below the cwd, which git ignores;
-   Workflow refuses the plugin's own path) and those `args`. Right after it starts, run
+   `script` and no `args` (the job's copy of the plugin's `workflows/run-plan.js` in `.claude/ai-kit/` below the cwd,
+   which git ignores and Workflow loads, unlike the plugin's own path; it carries the args, so they never enter this
+   session's context a second time). Right after it starts, run
    `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs mark <job> <Transcript dir> <task id>`, so resume and queue see the run.
    While it runs, do not edit the repo; keep answering
    the user. Asked how it is going: run `node ${CLAUDE_PLUGIN_ROOT}/scripts/plan.mjs live <Transcript dir from the
@@ -100,8 +101,9 @@ plan with batches left), then clear what it prints, in this order:
    `write` of the corrected batches (same ids; the others stay), then `resume` again. Nothing to fix: `write
    --rebase` with the args of `argsFile` records the code now as checked, so `stale` ends, then `resume` again.
 7. `argsFile`: the args of the batches left, committed ids out of `waitsFor`. An owner's answer goes into its brief
-   through `write` first, then `resume` again. Pass the file's content and the printed `script` to the Workflow of
-   **Run**, with no second `write`; add `repo` to it when the repo is not the session's working directory. No
+   through `write` first, then `resume` again. The Workflow of **Run** gets the printed `script`, which carries the
+   file's content, with no second `write` and no read of the file; `args` only `{"repo": ...}`, when the repo is not
+   the session's working directory. No
    `argsFile`: nothing is left, go to the close in **Report**.
 
 ## Queue

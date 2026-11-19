@@ -3,7 +3,7 @@
 // Usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue
 //        | close <job> [--drop] | mark <job> <workflow transcript dir> [task id] | unmark <job> | live <workflow transcript dir>
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
@@ -711,12 +711,18 @@ export function resume(root, job, plugin) {
 }
 
 // Workflow loads no scriptPath outside the session (plugin cache, a worktree's .git, a git top above it): the run uses
-// a copy below the cwd, refreshed each call to match the plugin, kept out of git status by info/exclude
+// a copy below the cwd, refreshed each call to match the plugin, kept out of git status by info/exclude.
+// With args, the copy is the job's own and carries them in its STAGED line: the session launches it with no args, so
+// the plan's briefs (10-15k tokens) enter its context neither as a Workflow input nor as a read of the args file.
 const STAGED_IGNORE = "**/.claude/ai-kit/";
-export function stageScript(root, plugin) {
-  const to = join(root, ".claude", "ai-kit", "run-plan.js");
+const STAGED_LINE = "const STAGED = null\n";
+export function stageScript(root, plugin, args) {
+  const to = join(root, ".claude", "ai-kit", args ? `run-plan-${args.job}.js` : "run-plan.js");
   mkdirSync(dirname(to), { recursive: true });
-  copyFileSync(join(plugin, "workflows", "run-plan.js"), to);
+  const source = readFileSync(join(plugin, "workflows", "run-plan.js"), "utf8");
+  if (args && !source.includes(STAGED_LINE)) throw new Error("workflows/run-plan.js has no STAGED line to carry the args");
+  // a function replacement: a `$` in a brief is text, not a replace pattern
+  writeFileSync(to, args ? source.replace(STAGED_LINE, () => `const STAGED = ${JSON.stringify(args)}\n`) : source);
   try {
     // relative to root on every git version; --path-format=absolute needs 2.31
     const exclude = resolve(root, gitIn(root)("rev-parse", "--git-path", "info/exclude").trim());
@@ -843,14 +849,15 @@ if (isMain(import.meta.url)) {
     if (cmd === "write" && arg) {
       const args = JSON.parse(readFileSync(arg, "utf8"));
       // staged first: a copy that fails must not hide a plan already committed
-      const script = stageScript(process.cwd(), plugin);
+      const script = stageScript(process.cwd(), plugin, args);
       console.log(JSON.stringify({ ...write(args.repo || projectRoot(process.cwd()), args, flags.includes("--replace"), flags.includes("--rebase")), script }));
     } else if (cmd === "status") {
       status(projectRoot(process.cwd()), arg, flags.includes("--quick") ? 2000 : 0).forEach((l) => console.log(l));
     } else if (cmd === "resume") {
       const root = projectRoot(process.cwd());
       const out = resume(root, arg, plugin);
-      console.log(JSON.stringify(out.argsFile ? { ...out, script: stageScript(process.cwd(), plugin) } : out));
+      const staged = out.argsFile && stageScript(process.cwd(), plugin, JSON.parse(readFileSync(out.argsFile, "utf8")));
+      console.log(JSON.stringify(out.argsFile ? { ...out, script: staged } : out));
     } else if (cmd === "queue") {
       console.log(JSON.stringify(queue(projectRoot(process.cwd()))));
     } else if (cmd === "close" && arg) {

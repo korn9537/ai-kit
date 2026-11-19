@@ -412,6 +412,10 @@ run_case "block: a job sharing the prefix is not this one" block "no review yet"
   "$(line Bash "$(jq -cn --arg c "git commit -m x -m 'Job: $J-login'" '{command: $c}')")"
 run_case "pass: a Workflow run of the job names it" pass - "$(edit src/a.ts)" \
   "$(line Workflow "$(jq -cn --arg j "$J" '{scriptPath: "w.js", args: {job: $j, batches: []}}')")"
+run_case "pass: a Workflow run from the job's staged copy names it, with no args" pass - "$(edit src/a.ts)" \
+  "$(line Workflow "$(jq -cn --arg p "$REPO/.claude/ai-kit/run-plan-$J.js" '{scriptPath: $p}')")"
+run_case "block: a staged copy of a job sharing the prefix is not this one" block "no review yet" "$(edit src/a.ts)" \
+  "$(line Workflow "$(jq -cn --arg p "$REPO/.claude/ai-kit/run-plan-$J-login.js" '{scriptPath: $p}')")"
 run_case "pass: a committer brief carrying the trailer names it" pass - "$(edit src/a.ts)" \
   "$(line Agent "$(jq -cn --arg p "End with the trailer line \`Job: $J\` please" '{subagent_type: "ai-kit:committer", description: "commit: a", prompt: $p}')")"
 # an edit the plan does not name goes to the normal review, naming the path; a path of the job's commits is covered

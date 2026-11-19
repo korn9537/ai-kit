@@ -541,14 +541,16 @@ try {
   const run = (...a) => spawnSync("node", [SCRIPT, ...a], { cwd: cli, encoding: "utf8" });
   const wrote = JSON.parse(run("write", file).stdout);
   ok("cli: write", wrote.committed === true);
-  ok("cli: write prints the workflow copy in the project", wrote.script === join(cli, ".claude", "ai-kit", "run-plan.js") && existsSync(wrote.script), wrote);
+  ok("cli: write prints the job's workflow copy in the project, carrying the args", wrote.script === join(cli, ".claude", "ai-kit", `run-plan-${JOB}.js`) &&
+    readFileSync(wrote.script, "utf8").includes(`const STAGED = ${JSON.stringify(args())}\n`), wrote);
   ok("cli: status", run("status").stdout.startsWith(JOB));
   const res = JSON.parse(run("resume").stdout);
-  ok("cli: resume with work left prints the workflow copy", res.argsFile && res.script === wrote.script, res);
+  ok("cli: resume with work left prints the job's copy, carrying the args file", res.argsFile && res.script === wrote.script &&
+    readFileSync(res.script, "utf8").includes(`const STAGED = ${JSON.stringify(JSON.parse(readFileSync(res.argsFile, "utf8")))}\n`), res);
   mkdirSync(join(cli, "web"));
   const fromSub = JSON.parse(spawnSync("node", [SCRIPT, "resume"], { cwd: join(cli, "web"), encoding: "utf8" }).stdout);
   ok("cli: a session below the git top gets the copy under its own cwd, not the top",
-    fromSub.script === join(cli, "web", ".claude", "ai-kit", "run-plan.js") && existsSync(fromSub.script), fromSub);
+    fromSub.script === join(cli, "web", ".claude", "ai-kit", `run-plan-${JOB}.js`) && existsSync(fromSub.script), fromSub);
   ok("cli: resume fills in the plugin root", JSON.parse(readFileSync(res.argsFile, "utf8")).plugin === join(import.meta.dirname, ".."), res);
   ok("cli: a refusal exits 1 with the reason", run("close", JOB).status === 1 && run("close", JOB).stderr.includes("batches left"));
   writeFileSync(file, JSON.stringify(args([{ id: "x" }])));
@@ -599,6 +601,13 @@ try {
   const below = stageScript(join(stageRepo, "app"), plugin);
   ok("stageScript: a project below the git top gets its own copy, also unlisted",
     below.startsWith(join(stageRepo, "app", ".claude")) && git(stageRepo, "status", "--porcelain") === "", git(stageRepo, "status", "--porcelain"));
+  const carried = { job: "2026-11-19-x", plugin: "/p", batches: [{ id: "a", title: "t", brief: "costs $& and $1", risks: ["r"], tests: ["t"] }] };
+  const own = stageScript(stageRepo, plugin, carried);
+  const ownText = readFileSync(own, "utf8");
+  ok("stageScript: with args the job gets its own copy, the args in its STAGED line, `$` kept as text",
+    own === join(stageRepo, ".claude", "ai-kit", "run-plan-2026-11-19-x.js") && ownText.startsWith("export const meta") &&
+      ownText.includes(`const STAGED = ${JSON.stringify(carried)}\n`) && plain(copy) && git(stageRepo, "status", "--porcelain") === "",
+    own);
   const tree = join(tmp, "stage-tree");
   git(stageRepo, "worktree", "add", "-q", tree);
   const inTree = stageScript(tree, plugin);

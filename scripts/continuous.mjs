@@ -213,11 +213,14 @@ if (isMain(import.meta.url)) {
         if (!stashed) state.stashes.pop();
         ({ state, step } = next(state, run, { ...readRepo(cwd, old.args.job), noStash: true }));
       }
+      // the run's own copy carries its args, so the tick launches it with none (plan.mjs stageScript); staged before
+      // the state saves the run as launching
+      const runScript = step.args ? stageScript(process.cwd(), plugin, step.args) : script;
       write(path, state);
       // the plan with its briefs is too long for command output, which is cut
       if (step.args) write(`${path}.args.json`, step.args);
       const { args, ...shown } = step;
-      console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json`, script } : shown));
+      console.log(JSON.stringify(args ? { ...shown, argsFile: `${path}.args.json`, script: runScript } : shown));
     } else {
       console.error("usage: continuous.mjs init <state> <args.json> | next <state> [failed] | started <state> <dir> <task> | abandon <state>");
       process.exit(2);

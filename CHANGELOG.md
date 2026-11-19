@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.56.0
+
+The run-plan workflow's args travel in its staged script, not through the main session. No project needs to edit
+anything.
+
+- `plan.mjs write` and `resume`, `continuous.mjs next` (a `run` step) stage `.claude/ai-kit/run-plan-<job>.js` with
+  the job's args in its `STAGED` line. The session launches Workflow with `scriptPath` alone: the plan's briefs
+  (10-15k tokens a launch) no longer enter its context as Workflow input, nor, on a continuous tick, as a read of
+  `argsFile` first. On kit 2.54.0 one session that ran jobs back to back reached a 674k main-context peak, its
+  coordinator $33.82 of the session's $140.
+- `workflows/run-plan.js` reads `{...STAGED, ...args}`: args passed at launch (`{"repo": ...}`) still win; a run
+  with no args at all works.
+- `review-before-stop.sh` counts a Workflow launched from the job's staged copy as naming the job, as it did a
+  Workflow whose args carried it.
+- `commands/run-plan.md`, `commands/continuous.md`, `docs/spec.md` follow.
+
 ## 2.55.0
 
 Harvest of proposals #52, #53, #55, #56 and #57. No project needs to edit anything.

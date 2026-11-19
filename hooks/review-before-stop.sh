@@ -207,7 +207,8 @@ else
 fi
 # mid-job: the job of the last commit has a plan.mjs plan with batches left, and this session itself named that job
 # → the job's one review comes after its last batch, not at this stop. Named = one of its own tool calls: a Bash
-# `git commit` carrying the trailer, a committer brief carrying it, or a Workflow run of that job; the exact id, so
+# `git commit` carrying the trailer, a committer brief carrying it, or a Workflow run of that job (its args, or the
+# job's staged copy `run-plan-<job>.js` it was launched from with none); the exact id, so
 # `git log` output in a tool result or a job sharing its prefix does not count, and another session's plan never does.
 # Only while every path changed since the snapshot is one the plan names (its briefs, accept, tests, alsoInScope) or a
 # file the job's commits touched (plan.mjs scope): an edit outside it goes to the normal review, naming the paths.
@@ -220,7 +221,8 @@ read -r -d '' named_jq <<'JQ' || true
   | select((.name == "Bash" and (($i.command // "") | test("git( +-[Cc] +\\S+)* +commit") and test($re)))
       or ((.name == "Agent" or .name == "Task") and ((($i.subagent_type // "") | test("committer"))
         or (($i.description // "") | test("^\\s*commit:"; "i"))) and (($i.prompt // "") | test($re)))
-      or (.name == "Workflow" and (($i.args // "") | tostring | test("\"job\": *\"" + $job + "\""))))
+      or (.name == "Workflow" and ((($i.args // "") | tostring | test("\"job\": *\"" + $job + "\""))
+        or (($i.scriptPath // "") | test("(^|[/\\\\])run-plan-" + $job + "\\.js$")))))
   | "named"
 JQ
 if command -v node >/dev/null 2>&1 && compgen -G "$project/ai/plans/*.md" >/dev/null; then
