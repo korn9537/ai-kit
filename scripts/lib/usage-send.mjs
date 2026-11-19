@@ -295,6 +295,7 @@ export function spawnSend(root, bufDir, args) {
   const fd = openSync(logPath, "a");
   try {
     const child = spawn(process.execPath, [USAGE_CLI, "send", ...args], {
+      windowsHide: true,
       cwd: root, env: { ...process.env, CLAUDE_PROJECT_DIR: root }, detached: true, stdio: ["ignore", "ignore", fd],
     });
     child.on("error", () => {});

@@ -11,7 +11,7 @@ export const endpointOf = (usageConf = {}) =>
 
 const git = (cwd, args) => {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, { windowsHide: true, cwd, encoding: "utf8", timeout: 5000, stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }

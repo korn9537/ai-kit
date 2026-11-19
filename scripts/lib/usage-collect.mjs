@@ -23,6 +23,7 @@ export function transcriptsDir(repoRoot) {
   let main = repoRoot;
   try {
     const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      windowsHide: true,
       cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     if (common) main = common.replace(/\/\.git$/, "");

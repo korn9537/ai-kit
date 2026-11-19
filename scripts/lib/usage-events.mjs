@@ -217,7 +217,7 @@ function fileRows(entries, agent, session, roundAt, acc) {
 
 const gitOut = (root, args, input) => {
   try {
-    return execFileSync("git", args, { cwd: root, encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024, stdio: ["pipe", "pipe", "ignore"], timeout: 30000 });
+    return execFileSync("git", args, { windowsHide: true, cwd: root, encoding: "utf8", input, maxBuffer: 64 * 1024 * 1024, stdio: ["pipe", "pipe", "ignore"], timeout: 30000 });
   } catch {
     return "";
   }

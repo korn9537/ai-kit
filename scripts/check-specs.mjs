@@ -10,6 +10,7 @@ const flag = (n) => args.includes(`--${n}`);
 const git = (...a) => {
   try {
     return execFileSync("git", ["-c", "core.quotePath=false", ...a], {
+      windowsHide: true,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
       maxBuffer: 1 << 28,

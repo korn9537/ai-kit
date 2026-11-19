@@ -21,7 +21,7 @@ const suites = [
 
 const run = (s) =>
   new Promise((resolve) => {
-    const child = spawn(s.cmd, s.args, { cwd: root, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(s.cmd, s.args, { windowsHide: true, cwd: root, stdio: ["ignore", "pipe", "pipe"] });
     let out = "";
     child.stdout.on("data", (d) => (out += d));
     child.stderr.on("data", (d) => (out += d));

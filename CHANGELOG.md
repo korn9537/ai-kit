@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.54.1
+
+On Windows, a session's start and end no longer flash terminal windows (#58). The detached `usage.mjs send` has no
+console, so each `git` it ran opened a new one. Every child_process call in `scripts/` now passes `windowsHide`
+(ignored elsewhere), and `scripts/is-main.test.mjs` fails on a call without it. No project needs to edit anything.
+
 ## 2.54.0
 
 A request in plain words now reaches the plan and queue modes without the slash command. CLAUDE.core.md maps

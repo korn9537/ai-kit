@@ -8,13 +8,13 @@ import { basename, join } from "node:path";
 
 const root = (() => {
   try {
-    return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return process.cwd();
   }
 })();
 const git = (...args) =>
-  execFileSync("git", args, { cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync("git", args, { windowsHide: true, cwd: root, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "pipe"] });
 const tryGit = (...args) => {
   try {
     return git(...args);

@@ -206,7 +206,7 @@ function statusLine(plan, commits) {
 
 // logFailed: the log could not be read, so `commits` says nothing; an unborn HEAD is not that
 export function readRepo(cwd, job, { timeout, dirty = true } = {}) {
-  const git = (...a) => execFileSync("git", a, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
+  const git = (...a) => execFileSync("git", a, { windowsHide: true, cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] });
   const commits = new Map();
   const loose = [];
   let logFailed = false;
@@ -309,7 +309,7 @@ export function planWarnings(root) {
 }
 
 const gitIn = (root) => (...a) =>
-  execFileSync("git", a, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  execFileSync("git", a, { windowsHide: true, cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
 // the whole index, from the top of the repo: the commit takes all of it, wherever root sits; the excludes are root's
 // no paths on the commit (a path-limited one leaves the pre-commit's records behind), so anything else staged would
@@ -432,7 +432,7 @@ export function scope(root, job) {
   const plan = parse(text);
   if (!plan) throw new Error(`${relPath(job)} is not a plan this script wrote`);
   const entries = new Set(scopePaths(plan.batches, root));
-  const log = execFileSync("git", ["log", "-E", `--grep=^Job: ${job}$`, "--name-only", "--format="], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  const log = execFileSync("git", ["log", "-E", `--grep=^Job: ${job}$`, "--name-only", "--format="], { windowsHide: true, cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
   for (const f of log.split("\n").filter(Boolean)) entries.add(f);
   return [...entries];
 }

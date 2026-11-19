@@ -89,6 +89,7 @@ exit 0
 // every call runs at the repo top, so pathspecs and output are root-relative from a subdirectory too
 const gitIn = (cwd, a) =>
   execFileSync("git", a, {
+    windowsHide: true,
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],

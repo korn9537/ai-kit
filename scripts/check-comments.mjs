@@ -12,13 +12,13 @@ const flag = (n) => args.includes(`--${n}`);
 const range = args.find((a) => a.startsWith("--range="))?.slice("--range=".length);
 const MAX_BLOCK = 2;
 const git = (...a) =>
-  execFileSync("git", a, { encoding: "utf8" }).split("\n").filter(Boolean);
+  execFileSync("git", a, { windowsHide: true, encoding: "utf8" }).split("\n").filter(Boolean);
 // NUL-separated path lists: git C-quotes a name with `"`, `\` or non-ASCII otherwise
 const gitz = (...a) =>
-  execFileSync("git", [...a, "-z"], { encoding: "utf8" }).split("\0").filter(Boolean);
+  execFileSync("git", [...a, "-z"], { windowsHide: true, encoding: "utf8" }).split("\0").filter(Boolean);
 const gitText = (...a) => {
   try {
-    return execFileSync("git", a, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 28 });
+    return execFileSync("git", a, { windowsHide: true, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], maxBuffer: 1 << 28 });
   } catch {
     return null;
   }
@@ -185,7 +185,7 @@ const generatedGo = (f, lines, cl) => {
 // --size: see the header
 if (flag("size")) {
   const LIMIT = 40 * 1024;
-  const gitRaw = (...a) => execFileSync("git", a, { encoding: "utf8", maxBuffer: 1 << 30 });
+  const gitRaw = (...a) => execFileSync("git", a, { windowsHide: true, encoding: "utf8", maxBuffer: 1 << 30 });
   if (process.env.ALLOW_LARGE_EDIT === "1") process.exit(0);
   // a merge, cherry-pick or revert brings in lines the committer did not write
   const has = (h) => {

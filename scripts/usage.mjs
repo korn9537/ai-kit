@@ -24,7 +24,7 @@ const REFUSAL_BUDGET_MS = 1500;
 const git = (cwd, ...args) => gitWithin(5000, cwd, ...args);
 const gitWithin = (timeout, cwd, ...args) => {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return execFileSync("git", args, { windowsHide: true, cwd, encoding: "utf8", timeout, stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch {
     return "";
   }
@@ -292,7 +292,7 @@ async function migrateCmd() {
   }
   const project = projectId(root);
   await postLegacy(endpointOf(readConfig(root).usage ?? {}), project, legacy);
-  execFileSync("git", ["rm", "-r", "-q", "--ignore-unmatch", "--", "ai/usage"], { cwd: root, stdio: ["ignore", "ignore", "pipe"] });
+  execFileSync("git", ["rm", "-r", "-q", "--ignore-unmatch", "--", "ai/usage"], { windowsHide: true, cwd: root, stdio: ["ignore", "ignore", "pipe"] });
   const left = existsSync(join(root, "ai", "usage")) ? " (untracked files left in ai/usage/: sent too, delete them by hand)" : "";
   process.stdout.write(`sent to ${project}: ${legacy.records.length} records, ${legacy.refusals.length} refusals, ${legacy.decisions.length} decisions`
     + `${legacy.dropped ? `, ${legacy.dropped} unusable lines skipped` : ""}; ai/usage/ removal staged${left}\n`

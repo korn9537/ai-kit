@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 const git = (cwd, args, { timeout, throws } = {}) => {
   try {
-    return execFileSync("git", args, { cwd, encoding: "utf8", ...(timeout ? { timeout } : {}), stdio: ["ignore", "pipe", "pipe"] }).trim();
+    return execFileSync("git", args, { windowsHide: true, cwd, encoding: "utf8", ...(timeout ? { timeout } : {}), stdio: ["ignore", "pipe", "pipe"] }).trim();
   } catch (e) {
     if (throws) throw e;
     return "";

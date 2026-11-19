@@ -14,6 +14,7 @@ const staged = flag("staged") || !!rangeArg;
 const git = (...a) => {
   try {
     return execFileSync("git", ["-c", "core.quotePath=false", ...a], {
+      windowsHide: true,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
       maxBuffer: 1 << 28,
@@ -243,6 +244,7 @@ const heads = (paths) => {
   let buf;
   try {
     buf = execFileSync("git", ["cat-file", "--batch"], {
+      windowsHide: true,
       input: paths.map((p) => `${oldRev}:${p}\n`).join(""),
       stdio: ["pipe", "pipe", "ignore"],
       maxBuffer: 1 << 28,

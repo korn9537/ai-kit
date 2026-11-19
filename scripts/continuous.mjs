@@ -179,7 +179,7 @@ const write = (p, v) => {
 function stash(cwd, name) {
   try {
     const args = ["stash", "push", "--include-untracked", "-m", name, "--", ".", ":(exclude)ai/usage"];
-    execFileSync("git", args, { cwd, stdio: "ignore" });
+    execFileSync("git", args, { windowsHide: true, cwd, stdio: "ignore" });
     return true;
   } catch {
     return false;
