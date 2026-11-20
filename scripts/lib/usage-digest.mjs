@@ -26,7 +26,7 @@ const rawTokens = (a) => (a.input ?? 0) + (a.read ?? 0) + (a.write_5m ?? 0) + (a
 const LIMIT = 200;
 const DESC_MAX = 200;
 const COUNTED = ["calls", "input", "read", "write_5m", "write_1h", "output"];
-const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", decider: "decider", other: "other" };
+const ROLE_LABEL = { coordinator: "main", commit: "commit", reviewer: "review", ba: "ba", decider: "decider", explore: "explore", other: "other" };
 
 // Delta of every agent against the sum of its fields in prior records; peak and largest_result stay cumulative maxima.
 function deltaAgents(session, prior) {

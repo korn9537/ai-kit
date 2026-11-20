@@ -21,6 +21,11 @@ Before the first edit, read what the reviewer checks your commit against, so its
 that the batch touches, with the files each of those says it adds to. Each is read once; a missing file is skipped.
 The brief's `Done when` list is the result the commit must reach: meet every item; one you could not meet is
 reported as unmet, with why. A fix brief (review findings) skips these reads: read only the rule each finding names.
+Also before the first edit, size the code files the brief names (`git cat-file -s HEAD:<path>`): the pre-commit
+refuses an edit to one over 40 KB at HEAD unless the commit only moves lines out (`conventions/general.md` item 12).
+Such a file gets its move-only split as a commit of its own before the batch's commit, same trailers; when the brief
+did not plan that split, report it under Open as unmet and leave the file alone. In kit 2.47–2.55 this rule refused
+64 commits, each after the batch was already built.
 
 Context is the cost. Every result you read stays in your context and is re-read on each later call:
 
@@ -32,11 +37,11 @@ Context is the cost. Every result you read stays in your context and is re-read 
   its last lines (`2>&1 | tail -n 20`); on a failure, rerun the one failing file or test, not the whole suite.
 - A lint or type check over a whole app prints every finding: filter it to the files you changed
   (`| grep -F -e <file> ...`) or to the rule you are fixing, and cap it (`| head -n 40`).
-- Edit code with the Edit tool: each edit then gets the comment and doc checks the pre-commit runs. A file you wrote
-  through Bash (python3, sed -i, a heredoc) got none: before staging, run
-  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-comments.mjs --strict <those files>` and
-  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-docs.mjs --strict <those files>` and fix what they print, so the
-  commit does not fail on them.
+- Right before staging, whatever tool wrote the files (Edit, sed -i, python3, a heredoc), run
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-comments.mjs --strict <the files you will stage>` and
+  `node ${CLAUDE_PLUGIN_ROOT}/scripts/check-docs.mjs --strict <the same files>` in one call and fix what they
+  print. The post-edit hook covers some writes and misses others (a background call, a file written in the marker's
+  timestamp tick); in kit 2.47–2.55 these two rules refused 161 of 243 commits, each costing a retry.
 - Do not print a file, diff or log you have already seen; `git diff --stat` before the commit, not the full diff.
 
 Commit: stage the files you changed by name, written out in the command (`git add a.ts b.ts`), read

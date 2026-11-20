@@ -29,7 +29,8 @@ Run only read-only commands (`grep`, `git log`, `git show`). Do not edit files.
 Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
 Reply with exactly these sections, terse, every claim with its source (path:start-end, requirement id, decision
-id, URL):
+id, URL). The whole report stays under 80 lines: the main session reads it in full and pays for it again on every
+later call, so cite a range instead of pasting code, and give one line per item:
 
 1. **The ask** — the problem behind the request, in one or two lines; the requirements it touches.
 2. **Today** — what the code does now, from the code.

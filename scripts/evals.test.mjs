@@ -25,6 +25,8 @@ const samples = {
   "decider-owner-money": { good: block("OWNER", "money"), bad: block("DECIDED", "-") },
   "decider-format": { good: block("DECIDED", "-"), bad: block("DECIDED", "-") + "\nextra text after" },
   "reviewer-finds-bug": { good: "1. CONFIRMED off by one", bad: "looks fine" },
+  "reviewer-no-findings": { good: "No findings. Checked: the three callers, Done when.", bad: "1. src/users.ts:4 · CONFIRMED rename" },
+  "reviewer-plan-review": { good: "b1 · failure-mode · insert and delete not one transaction · CONFIRMED", bad: "No findings" },
   "ba-summary": { good: BA.map((h, i) => `${i + 1}. **${h}** - x`).join("\n"), bad: "no headings here" },
 };
 // A per-field grader fails only on its own missing line; the whole-block graders must reject the broken sample.
@@ -53,7 +55,7 @@ for (const c of readdirSync(root, { withFileTypes: true }).filter((d) => d.isDir
       const hit = (t) => re.test(t);
       const passes = (t) => (f.match === "not_contains" ? !hit(t) : hit(t));
       ok(`${id}: passes the valid sample`, passes(s.good));
-      if (c.name === "decider-format" ? g === "order.md" : wholeBlock.has(g) || c.name === "ba-summary" || c.name === "reviewer-finds-bug")
+      if (c.name === "decider-format" ? g === "order.md" : wholeBlock.has(g) || /^(ba-summary|reviewer-)/.test(c.name))
         ok(`${id}: fails the broken sample`, !passes(s.bad));
     } else if (f.type === "tool_used") {
       ok(`${id}: tool is Agent`, f.tool === "Agent");

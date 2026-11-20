@@ -15,6 +15,7 @@ export function roleOf(desc, type) {
   if (/decider/.test(type ?? "") || /\bdecider\b|^\s*decide\b/i.test(desc ?? "")) return "decider";
   if (/change-reviewer/.test(type ?? "") || /review/i.test(desc ?? "")) return "reviewer";
   if (/business-analyst/.test(type ?? "")) return "ba";
+  if (/explorer/.test(type ?? "")) return "explore";
   return "other";
 }
 

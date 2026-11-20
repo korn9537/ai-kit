@@ -62,6 +62,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `agents/change-reviewer.md` | opus medium | read-only fresh review of a change (findings CONFIRMED or PLAUSIBLE), re-check mode, plan-review mode |
 | `agents/committer.md` | sonnet medium | implements one batch, verifies once, makes one commit; reports hash, files, choices, open items |
 | `agents/decider.md` | opus medium | decides a question the main session would put to the owner: DECIDED or OWNER with one recommendation; its verdict lines are logged |
+| `agents/explorer.md` | sonnet medium | read-only code search for the main session: where the code is, what it does, the path from an entry point to the deciding line; returns `path:start-end` facts, no judgment |
 
 ### commands/ (slash commands)
 
@@ -146,7 +147,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `evals/<case>/prompt.md`, `evals/<case>/graders/*.md` | one case each: `decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `ba-summary`; regex, tool_used and llm graders; every run costs model calls |
+| `evals/<case>/prompt.md`, `evals/<case>/graders/*.md` | one case each: `decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `reviewer-no-findings`, `reviewer-plan-review`, `ba-summary`; regex, tool_used and llm graders; every run costs model calls |
 | `evals/results/` | run output, git-ignored |
 | `scripts/evals.test.mjs` | offline test of the grader files: known match modes, each regex on a valid and a broken sample |
 
@@ -218,7 +219,8 @@ Each step names the file that does it.
 2. A question for the owner goes to `decider` first. `ask-guard.sh` blocks AskUserQuestion until it returned OWNER
    for each asked question; `decider.mjs guard` reads the verdict from the decider's own transcript.
 3. A change over `review.skip_lines` code lines, or a new file, or a `review.always` path goes to `committer` batches;
-   the main session edits only the rest.
+   the main session edits only the rest. A code search a summary or brief needs goes to `explorer`, which returns
+   `path:start-end` facts.
 4. Every Edit runs `post-edit-check.sh`. Every Bash line passes `bash-guard.sh`; every subagent launch passes
    `agent-model-guard.sh`; memory writes pass `memory-guard.sh`.
 5. `review-snapshot.sh` records the work tree when the main session calls a review. Before the final reply

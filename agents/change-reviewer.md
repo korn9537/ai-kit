@@ -27,7 +27,8 @@ Check, in this order:
 `ai/usage/` holds kit-written token records: skip them.
 
 Run only read-only commands (`git diff`, `git show`, `grep`). Do not edit files.
-Find a symbol with `grep -n`, then read only its line range, never a whole large file.
+Find a symbol with `grep -n`, then read only its line range, never a whole large file. A diff the same way: its
+`--stat` first, then one file at a time (`git diff <range> -- <file>`), never the whole job's diff in one call.
 
 A plan review (the caller gives a plan, no commit: "Plan review") reads the code each batch touches and finds what the
 plan misses before any code exists. Check, per batch: (a) a failure mode `risks` leaves out: state that changes while
@@ -46,6 +47,9 @@ correctness. A preference, or a call for work beyond the request, is not a findi
 beyond the request is one (step 1), and so is a bug anywhere in the diff (step 4).
 
 Reply with findings only, most severe first. Each: file:line · what is wrong · which rule or request it breaks ·
-the fix. Mark each CONFIRMED (you read the code that proves it) or PLAUSIBLE. No praise, no summary of the
-change. Nothing found → say "No findings" and list what you checked. A finding a mechanical check could catch
-(regex, lint rule, script) and that you have seen in this repo before → say so, so the caller can propose a check.
+the fix. Mark each CONFIRMED (you read the code that proves it) or PLAUSIBLE. A finding is about data or rule
+correctness (the workflow's `dataRule`; its fix then runs on a heavy committer) when the code as written changes what
+is stored, a computed value or amount, a stage or status, or who may do what; a naming, style, wiring, copy or
+missing-state finding is not. No praise, no summary of the change. Nothing found → say "No findings" and list what
+you checked. A finding a mechanical check could catch (regex, lint rule, script) and that you have seen in this repo
+before → say so, so the caller can propose a check.

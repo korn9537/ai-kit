@@ -161,6 +161,7 @@ eq("cache: second run reads only appended lines, same totals", [s3.agents.main.c
 
 eq("roleOf", ["commit: x", "Review y", ""].map((d, i) => roleOf(d, ["", "", "ai-kit:business-analyst"][i])), ["commit", "reviewer", "ba"]);
 eq("roleOf: an ai-kit:committer is commit whatever its description", roleOf("fix review items", "ai-kit:committer"), "commit");
+eq("roleOf: an ai-kit:explorer is explore; a bare Explore stays other", [roleOf("find callers", "ai-kit:explorer"), roleOf("find callers", "Explore")], ["explore", "other"]);
 process.env.CLAUDE_CONFIG_DIR = join(dir, "cfg");
 eq("transcriptsDir slug", transcriptsDir("/Users/a.b/My Repo"), join(dir, "cfg", "projects", "-Users-a-b-My-Repo"));
 eq("unreadable cache file loads empty", Object.keys(loadCache(main).files), []);

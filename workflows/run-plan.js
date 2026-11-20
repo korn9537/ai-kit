@@ -352,6 +352,8 @@ const planPrompt = [
   'data; transactions, concurrency or idempotency. Business rules or calculations that a BA report and the brief already',
   'settle stay normal. light fits docs-only, copy, config values, a codemod run, a rename or a move-only change. A size',
   'that does not fit is a PLAUSIBLE finding (kind claim) naming the batch.',
+  'File size: a batch that edits a code file over 40 KB at HEAD (`git cat-file -s HEAD:<path>`) without a move-only split',
+  'planned before it is a CONFIRMED finding (kind claim): the pre-commit refuses such an edit (conventions/general.md item 12).',
   ...batches.flatMap((b) => [
     '', `Batch ${b.id} (size ${sizeOf(b.size)}): ${b.title}${(b.waitsFor || []).length ? ` (waits for ${b.waitsFor.join(', ')})` : ''}`,
     b.brief, done(b), plan(b), scope(b),

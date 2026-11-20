@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.58.0
+
+The four agents learn what the usage data of kit 2.47–2.55 (983 rounds, 243 refused commits) showed they met too
+late, and a fifth agent takes the code searches. No project needs to edit anything.
+
+- `agents/committer.md`: the comment and doc checks run on the files about to be staged whatever tool wrote them
+  (the Edit-tool rule lost to the auto-mode harness: committers wrote with sed and python3, and these two rules
+  refused 161 of 243 commits); the 40 KB rule is read before the first edit, with the split as its own commit or an
+  unmet item (64 refusals, each after the batch was built).
+- `agents/change-reviewer.md`: `dataRule` has a definition (what is stored, a computed value, a stage, who may do
+  what), since it alone sends a fix to a heavy committer; a diff is read `--stat` first, then per file (one review
+  read a 92k-character diff in one call).
+- `agents/business-analyst.md`: the report stays under 80 lines; it enters the main session's context and is paid
+  again on every later call.
+- `agents/explorer.md`, new: `ai-kit:explorer`, sonnet, read-only, one question per launch, returns `path:start-end`
+  facts and the traced path from an entry point; replaces the general-purpose or Explore search that
+  `agent-model-guard.sh` blocked until a model was passed. `CLAUDE.core.md`, the guard's and `handoff-nudge.sh`'s
+  messages name it; usage records it as role `explore`.
+- Plan review (`workflows/run-plan.js`, `docs/plan-batching.md`): a batch that edits a code file over 40 KB at HEAD
+  with no move-only split planned first is a CONFIRMED finding.
+- `evals/`: `reviewer-no-findings` (a clean rename must get "No findings": a false finding costs a fix committer and
+  a re-check) and `reviewer-plan-review` (a plan whose insert and delete are not one transaction).
+- `agents/decider.md` unchanged: 44 launches cost $5.83 in ten days, and a wrong owner-kind call is dearer than opus.
+
 ## 2.57.0
 
 The kit keeps the rules it enforces on every project, and CI runs its suites. No project needs to edit anything.
