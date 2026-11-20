@@ -1,9 +1,11 @@
 // Tests for check-specs.mjs: each case commits `head`, writes `work`, stages `stage`, then compares `!` lines.
 // Usage: node scripts/check-specs.test.mjs
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 
 const SCRIPT = join(import.meta.dirname, "check-specs.mjs");
 const conf = (ui) => JSON.stringify({ ui });
@@ -239,8 +241,7 @@ const put = (dir, files) => {
   }
 };
 
-let fail = 0;
-for (const c of CASES) {
+for (const c of CASES) test(c.desc, () => {
   const dir = mkdtempSync(join(tmpdir(), "check-specs-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
@@ -261,18 +262,11 @@ for (const c of CASES) {
       .split("\n")
       .filter((l) => l.startsWith("!"))
       .map((l) => l.replace(/\s*[;(].*$/, "").replace(/:\s*(one line|endpoint links).*$/, ""));
-    const ok =
-      c.rawLine
-        ? out.split("\n").filter(Boolean).length === 1 && c.rawLine.test(out)
-        : JSON.stringify(got) === JSON.stringify(c.want);
-    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
-    if (!ok) {
-      fail++;
-      console.log(`       want ${JSON.stringify(c.want)}\n       got  ${JSON.stringify(got)}`);
-    }
+    if (c.rawLine) {
+      assert.equal(out.split("\n").filter(Boolean).length, 1);
+      assert.match(out, c.rawLine);
+    } else assert.deepStrictEqual(got, c.want);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-console.log(`\n${CASES.length - fail} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+});

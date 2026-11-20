@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.57.0
+
+The kit keeps the rules it enforces on every project, and CI runs its suites. No project needs to edit anything.
+
+- `.github/workflows/test.yml`: `scripts/test-all.mjs` on ubuntu and windows (Git Bash) plus `shellcheck` on the
+  hooks, for every push to `main` and every pull request; `evals.yml` runs `claude plugin eval` by hand.
+  `.shellcheckrc` lets shellcheck follow `lib.sh`; the hooks and their tests are shellcheck-clean at warning level.
+- `.githooks/pre-commit` of the clone runs the kit's own comment and 40 KB checks on staged kit code. `scripts/plan.mjs`
+  (42 KB) is split move-only: the plan file format in `scripts/lib/plan-file.mjs`, `live` in
+  `scripts/lib/plan-live.mjs`, both re-exported. 23 scripts had comment blocks over two lines; each is two lines now.
+- `review-before-stop.sh` gets 60 s instead of 10 s in `hooks/hooks.json`: Claude Code kills a hook at its timeout
+  and the stop then passes unreviewed, with no trace in the transcript; a fast run costs nothing more.
+- `review-before-stop.sh` judges a Bash write per simple command with `kit_split_cmd` (`hooks/lib.sh`, new
+  `kit_bash_writes`), the splitter `bash-guard.sh` already used, instead of its own raw-text regex; the regex stays as
+  the fallback for a command the splitter cannot follow. Closed: `sed -i` whose script names `/tmp/`, an escaped `;`
+  before `-i`, a repo path held in a variable; no longer counted: a `sed -i` quoted inside a commit message, a write
+  under `/tmp` after `cd`, a `.md`-only write beside a `.ts` name. 12 new cases; about 0.1 s more per stop.
+- `scripts/*.test.mjs` run on `node:test` (TAP output, `--test-name-pattern`); `test-all.mjs` reads its summary.
+- `README.md`: the hook reference moves to `docs/hooks.md` (README points there, `CLAUDE.core.md` too).
+  `docs/superpowers/` (three finished design docs of another tool's format) is removed; `CHANGELOG.md` holds what
+  they decided.
+
 ## 2.56.0
 
 The run-plan workflow's args travel in its staged script, not through the main session. No project needs to edit

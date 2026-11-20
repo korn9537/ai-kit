@@ -1,24 +1,11 @@
-// Tests for is-main.mjs: each CLI runs through a symlinked path, and no script compares process.argv[1] by hand.
-// Also: every child_process call in scripts/ passes windowsHide (a detached send has no console, so on Windows each
-// git it runs would open a terminal window).
-// Usage: node scripts/is-main.test.mjs
+// Tests for is-main.mjs (every CLI through a symlinked path, no hand compare of argv[1]) and windowsHide on every
+// child_process call in scripts/ (else Windows opens a terminal per git). Usage: node scripts/is-main.test.mjs
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-
-let passed = 0;
-let failed = 0;
-const ok = (desc, cond, extra = "") => {
-  if (cond) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc} ${extra}`);
-  }
-};
+import { ok } from "./lib/test-util.mjs";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), "is-main-"));
@@ -60,5 +47,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

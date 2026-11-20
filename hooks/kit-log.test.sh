@@ -2,7 +2,7 @@
 # Tests for kit-log.sh: a throwaway repo and a hand-built transcript; part 1 (stop) checks the buffer file under the
 # git dir, stdout and the exit code; part 2 the detached sends of session-end and session-start.sh to a mock usage API.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/kit-log.sh"
 PLUGIN_JSON="$PWD/../.claude-plugin/plugin.json"
 TMP="$(mktemp -d)" || exit 1

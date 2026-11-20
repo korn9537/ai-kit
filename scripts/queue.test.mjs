@@ -5,12 +5,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { approve, end, fresh, init, next, step } from "./queue.mjs";
+import { ok } from "./lib/test-util.mjs";
 
-let failed = 0;
-function ok(desc, cond, out) {
-  if (!cond) failed++;
-  console.log(cond ? `ok   - ${desc}` : `FAIL - ${desc}\n${JSON.stringify(out, null, 2)}`);
-}
 const throws = (f) => {
   try {
     f();
@@ -68,5 +64,3 @@ const ra = run("approve", qa, B, "heldBy:b2", "running");
 const rc = run("check", qa, B, "heldBy:b2", "running");
 ok("cli init, approve, then check prints an empty new", ra.status === 0 && rc.status === 0 && !JSON.parse(rc.stdout).new.length, [ra, rc]);
 ok("cli end and re-init", run("end", qf).status === 0 && run("init", qf, A).status === 0);
-console.log(failed ? `${failed} failed` : "all passed");
-process.exit(failed ? 1 : 0);

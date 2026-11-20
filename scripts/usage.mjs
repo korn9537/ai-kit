@@ -160,9 +160,8 @@ function flushCmd(args) {
   spawnSend(root, bufDir, sessions.flatMap((s) => ["--session", s]));
 }
 
-// send [--session <id>]...: posts each session's events, then the refusal buffer and the decider logs. The heavy part,
-// run detached by end and flush; a failure leaves .sent as it was, so a session start after 6 h idle retries it; a
-// PERMANENT_STATUS (400, 413) marks that transcript size rejected in .sent; a 429 ends the pass, the rest waits.
+// send [--session <id>]...: each session's events, then the refusal buffer and decider logs; run detached by end and
+// flush. A failure leaves .sent (a start after 6 h idle retries); PERMANENT_STATUS marks the size rejected; 429 ends it
 async function sendCmd(args) {
   const root = usageRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
   if (!root) return;

@@ -4,21 +4,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { eq } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "kit.mjs");
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
 // HOME in the fixture: the user's settings and memory dir never reach the result
 const run = (cwd, cmd) =>
   spawnSync("node", [SCRIPT, cmd], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, CLAUDE_CONFIG_DIR: "" } }).stdout;
@@ -166,6 +154,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exitCode = failed ? 1 : 0;

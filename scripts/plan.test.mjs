@@ -6,28 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { planRunDir } from "./lib/state-dirs.mjs";
 import { checkBatch, close, merge, ordered, parse, planWarnings, progress, projectRoot, readRepo, render, resume, resumeArgs, mark, queue, runMarker, unmark, scope, scopePaths, inScope, sharedFiles, stageScript, staleFiles, status, write } from "./plan.mjs";
+import { ok, throws } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "plan.mjs");
 const DOCS = join(import.meta.dirname, "check-docs.mjs");
-let passed = 0;
-let failed = 0;
-function ok(desc, cond, out) {
-  if (cond) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n${JSON.stringify(out, null, 2)}`);
-  }
-}
-const throws = (desc, fn, re) => {
-  try {
-    fn();
-    ok(desc, false, "did not throw");
-  } catch (e) {
-    ok(desc, re.test(e.message), e.message);
-  }
-};
 
 const JOB = "2026-11-05-invoice-export";
 const args = (batches = [{ id: "a", title: "A" }, { id: "b", title: "B", waitsFor: ["a"] }, { id: "c", title: "C" }]) => ({
@@ -616,6 +598,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

@@ -4,18 +4,13 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { init, next } from "./continuous.mjs";
 import { merge, parse, render, resumeArgs } from "./plan.mjs";
+import { ok } from "./lib/test-util.mjs";
 
 const root = join(import.meta.dirname, "..");
 const read = (p) => readFileSync(join(root, p), "utf8");
 const source = read("workflows/run-plan.js").replace("export const meta", "const meta");
 const AsyncFunction = (async () => {}).constructor;
-let pass = 0;
-let fail = 0;
 const has0 = (text, ...res) => res.every((r) => r.test(text));
-const ok = (name, cond) => {
-  console.log(`${cond ? "ok  " : "FAIL"} - ${name}`);
-  cond ? pass++ : fail++;
-};
 
 const commit = (hash, extra = {}) => ({ hash, files: ["a"], choices: [], owner: [], blockers: [], unmet: [], notes: [], review: "review", ...extra });
 const finding = (what, dataRule) => ({ where: "a.ts:1", what, rule: "r", fix: "f", verdict: "CONFIRMED", dataRule });
@@ -184,6 +179,3 @@ ok("decider brief names the BA's Owner decisions item in CLAUDE.core.md and ask-
 const kinds = ["evident intent", "becomes permanent once published", "public contact", "production deploy", "paid service", "nobody wrote down"];
 for (const p of ["CLAUDE.core.md", "agents/business-analyst.md", "agents/decider.md", "agents/committer.md", "hooks/ask-guard.sh"])
   ok(`${p} points to owner-kinds.md, restates none of it`, /owner-kinds\.md/.test(read(p)) && kinds.every((k) => !read(p).includes(k)));
-
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

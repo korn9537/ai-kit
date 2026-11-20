@@ -1,12 +1,6 @@
 #!/usr/bin/env node
-// Decision log CLI. Verdicts are read from each ai-kit:decider subagent's own transcript
-// (<session>/subagents/agent-<id>.jsonl beside the session transcript), so a background call counts as a foreground
-// one. `sync` (SubagentStop, Stop) writes a finished decider's verdict blocks once to
-// <git-common-dir>/claude-decider/log/<session>.<agent>.jsonl, which `usage.mjs send` posts; on SubagentStop from the
-// hook's agent_id and last_assistant_message. `guard` (ask-guard.sh) matches each asked question to a verdict block of
-// the last 30 minutes and prints owner, decided, pending, unmatched or none, then one detail line per question; owner
-// marks those blocks used. `report [--since YYYY-MM-DD]` prints the usage API's log of this project plus the unsent
-// ones as markdown. Never fails: an error is one stderr line.
+// Decision log CLI: sync | guard | report [--since YYYY-MM-DD] (docs/hooks.md ask-guard.sh, kit-log.sh). Verdicts come
+// from each decider's own subagent transcript, so a background call counts too. Never fails: an error is a stderr line
 import { execFileSync } from "node:child_process";
 import { existsSync, linkSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
@@ -209,10 +203,8 @@ export function features(text) {
   return out;
 }
 
-// Shared features over the smaller side. A match needs MATCH_MIN of it: the decider restates a question in its own
-// words, so most of the shorter text must reappear, but one shared word out of two stays a miss (that is "which
-// order?" against "which database?" once stop words are gone, and any single common word out of a long question).
-// Tested with a rephrased English pair and a rephrased Thai pair against unrelated ones.
+// share of the shorter side's features a match needs: a restated question keeps most, while one shared word of two
+// ("which order?" vs "which database?") stays a miss; tested with rephrased English and Thai pairs
 const MATCH_MIN = 0.5;
 export function overlap(a, b) {
   const x = features(a);
@@ -228,9 +220,8 @@ const askedQuestions = (input) =>
     .map((q) => [q?.question, q?.header].filter((s) => typeof s === "string").join(" "))
     .filter((s) => s.trim());
 
-// A lock directory beside the state file serialises the read-match-write: two parallel AskUserQuestion calls would
-// otherwise both read the same used list and spend one block twice. A lock older than 10 s is stale (a crashed
-// hook); not getting it in 2 s runs unlocked, as before, rather than trap the owner's answer.
+// lock dir beside the state file: two parallel asks would spend one block twice; older than 10 s is stale (crashed
+// hook), and not getting it in 2 s runs unlocked rather than trap the owner's answer
 function withStateLock(dir, fn) {
   mkdirSync(dir, { recursive: true });
   const lock = join(dir, ".lock");
@@ -275,17 +266,8 @@ function writeState(path, s) {
   renameSync(tmp, path);
 }
 
-// What the ask-guard needs: {state, detail}. Each asked question (tool_input.questions[].question and header) takes
-// the best matching block of the unused decider calls of the last 30 minutes, an OWNER block before a DECIDED one,
-// and a block serves one question once ("<call id>#<index>" kept as used).
-//   owner     every question has an OWNER block (all of them are now used up)
-//   pending   a question has none and the newest call has no verdict lines yet (running, or replied without them)
-//   decided   a question matches a DECIDED block; detail: one "Question => Choice" line each
-//   unmatched a question matches no block; detail: one line each
-//   none      no unused call at all
-// An ask with no questions in its input falls back to the old rule: the newest unused call with an OWNER block
-// serves it whole. Without a git dir to keep the used list in, owner is never used up. Gap: a decider continued by
-// SendMessage keeps its id, so its later verdicts are neither logged nor counted once used.
+// {state, detail}: each question takes its best unused verdict block of the last 30 minutes, OWNER before DECIDED,
+// a block serving one question once; the states and the gaps: docs/spec.md P6 Decisions
 export function check(input, now = Date.now()) {
   const c = context(input);
   if (!c) return { state: "owner", detail: [] };

@@ -2,7 +2,7 @@
 # Tests for ask-guard.sh and kit-log.sh subagent-stop: a throwaway repo and session transcript dir; each case checks
 # that an AskUserQuestion is blocked (exit 2) or let through (exit 0) given the decider subagents the session holds.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 GUARD="$PWD/ask-guard.sh"
 LOG="$PWD/kit-log.sh"
 TMP="$(mktemp -d)" || exit 1

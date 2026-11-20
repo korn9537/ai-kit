@@ -2,7 +2,7 @@
 # Tests for post-edit-check.sh: project checks from ai/kit/post-edit.sh run in parallel, failures are reported in
 # start order, a filter keeps only lines naming the file, and a passing edit stays silent.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/post-edit-check.sh"
 # physical path: the hook matches the file against git's toplevel, which resolves /var -> /private/var
 REPO="$(cd "$(mktemp -d)" && pwd -P)"

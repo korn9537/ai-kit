@@ -2,7 +2,7 @@
 # Tests for review-before-stop.sh: a throwaway repo and hand-built transcripts; each case checks block or pass and,
 # when blocked, a phrase of the reason.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/review-before-stop.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
@@ -165,7 +165,7 @@ run_case "pass: > inside quotes is no redirect" pass - \
 run_case "block: a quoted relative target" block - "$(incwd 'echo x > "lib/a.ts"')"
 run_case "pass: the same relative redirect from a cwd outside the repo" pass - \
   "$(line Bash "$(jq -cn '{command: "seq 40 > lib/a.ts"}')" | jq -c '.cwd = "/elsewhere"')"
-rm -rf "$REPO/lib"
+rm -rf "${REPO:?}/lib"
 reset
 
 # a reviewer test is the word review, not preview; a type claude counts like general-purpose
@@ -214,6 +214,17 @@ for cmd in 'grep -rn "sed -i" hooks' 'grep -rn "sed -i" hooks | head' "echo 'per
   $'cat <<EOF\nx\nEOF\npatch --version' "perl -ne 'print' src/a.ts" "sed -n 1,5p src/a.ts; grep -i foo src/a.ts" \
   "sed -n 1p src/a.ts | grep -i foo" "sed -n 1p src/a.ts; lsof -iTCP:3000" "sed -n 1p src/a.ts; find . -print" \
   "sed -n 1p src/a.ts; git grep -il foo"; do
+  bashw "pass: $cmd" pass "$cmd"
+done
+# judged per simple command (lib.sh kit_bash_writes): a sed script naming /tmp/, an escaped ; or | before -i, a
+# variable holding the repo path; a write named only in a quoted message, after cd out of the repo or to /tmp is none
+for cmd in 'sed -i s#/tmp/a#b# src/a.ts' 'sed -e s/a\;b/c/ -i src/a.ts' 'sed -e s/a\|b/c/ -i src/a.ts' \
+  'perl -pe s/a\;b/c/ -i src/a.ts' "V=$REPO/src; cp /tmp/x \$V/" 'D=src && { git log; } > $D/a.ts'; do
+  bashw "block: $cmd" block "$cmd"
+done
+for cmd in 'git commit -m "fix: sed -i on files"' 'gh pr create --body "run prettier --write, then patch"' \
+  "cd /tmp && echo x > a.ts" "cp $REPO/src/a.ts /tmp/x" "sed -i '' s/a/b/ docs/a.md; cat src/a.ts" \
+  "S=/tmp/s; cd $REPO && rm -rf \$S/lo && echo x > \$S/a.ts"; do
   bashw "pass: $cmd" pass "$cmd"
 done
 reset

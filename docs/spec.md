@@ -2,8 +2,8 @@
 
 Reader: agents changing the kit. What each file does and which process calls it. Behavior detail lives in the
 file named; this file is the map. `scripts/spec.test.mjs` fails when a file below `agents/`, `commands/`, `hooks/`,
-`githooks/`, `scripts/`, `workflows/`, `docs/`, `templates/` or `conventions/` (any depth; `docs/superpowers/` by
-folder) is not named here, when a file named here does not exist, and on a prose line over 120 characters.
+`githooks/`, `scripts/`, `workflows/`, `docs/`, `templates/` or `conventions/` (any depth)
+is not named here, when a file named here does not exist, and on a prose line over 120 characters.
 
 Shape: a Claude Code plugin. `hooks/hooks.json` wires hooks, `commands/` are slash commands, `agents/` are subagents,
 `CLAUDE.core.md` is injected at session start. Every hook exits 0 in a project without `ai/kit/` (`kit_enabled`).
@@ -20,23 +20,26 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report; injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest) |
 | `CHANGELOG.md` | one entry per version |
 | `README.md` | install, settings, commands, editing the kit |
+| `.shellcheckrc` | lets `shellcheck` follow `lib.sh` into each hook (CI) |
 | `.gitattributes`, `.gitignore`, `LICENSE` | `.gitattributes` forces LF (the scripts must run from a Windows checkout); the others as named |
 | `.github/ISSUE_TEMPLATE/proposal.md` | body of a kit proposal issue (`docs/kit-proposals.md`) |
-| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap check; runs the handoff and run-plan tests when a route changes |
+| `.github/workflows/test.yml` | CI: `scripts/test-all.mjs` on ubuntu and windows, `shellcheck` on the hooks; push to `main`, pull requests |
+| `.github/workflows/evals.yml` | CI by hand only: `claude plugin eval` over `evals/` (a real session per case; needs an API key secret) |
+| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the handoff and run-plan tests when a route changes |
 
 ### hooks/ (Claude Code hooks)
 
 | File | Event | What it does |
 |---|---|---|
 | `hooks/hooks.json` | n/a | wires every script below to its event and matcher |
-| `hooks/lib.sh` | sourced | `kit_enabled`, `kit_conf` (reads `ai/kit/config.json`), project root, path spelling, `kit_core` and `kit_inject` (the core text), `kit_memory_dir`, `kit_memory_re` and `kit_memory_msg` (the memory-dir regex and block message shared by `memory-guard.sh` and `bash-guard.sh`), `kit_state_dir` (the review, usage-cache, usage and decider state folders; twin of `scripts/lib/state-dirs.mjs`), `kit_split_cmd` (splits a Bash line into simple commands; quote characters removed, a quoted text stays one word; heredoc bodies and comments dropped; a `\006`` line marks a backtick), `kit_code_lines`, `kit_review_skippable`, `KIT_REVIEWER_JQ` (the reviewer test shared by `review-snapshot.sh` and `review-before-stop.sh`) |
+| `hooks/lib.sh` | sourced | `kit_enabled`, `kit_conf` (reads `ai/kit/config.json`), project root, path spelling, `kit_core` and `kit_inject` (the core text), `kit_memory_dir`, `kit_memory_re` and `kit_memory_msg` (the memory-dir regex and block message shared by `memory-guard.sh` and `bash-guard.sh`), `kit_state_dir` (the review, usage-cache, usage and decider state folders; twin of `scripts/lib/state-dirs.mjs`), `kit_split_cmd` (splits a Bash line into simple commands; quote characters removed, a quoted text stays one word; heredoc bodies and comments dropped; a `\006`` line marks a backtick; a `\036` line between commands batches them), `kit_bash_writes` (per command of a batch: w, - or r, whether a simple command of it writes into the repo; used by `review-before-stop.sh`), `kit_code_lines`, `kit_review_skippable`, `KIT_REVIEWER_JQ` (the reviewer test shared by `review-snapshot.sh` and `review-before-stop.sh`) |
 | `hooks/session-context.sh` | SessionStart | injects the first half of `CLAUDE.core.md` |
 | `hooks/session-start.sh` | SessionStart | injects the second half plus notes (unfiled proposals, open plans, auto-memory files, stale unattended copies); writes `<git-common-dir>/ai-kit-root`; records the work tree as the review snapshot; flushes idle usage buffers |
 | `hooks/bash-guard.sh` | PreToolUse Bash | blocks a sweeping `git add`/`git commit -a` (also `xargs git add`, `sh -c "..."` scripts, `git add $(...)`), a build command while `build_guard.port` listens, and a Bash write into the auto-memory dir |
 | `hooks/memory-guard.sh` | PreToolUse Write, Edit, MultiEdit, NotebookEdit | blocks writes into the auto-memory dir (Bash writes: `bash-guard.sh`) |
 | `hooks/agent-model-guard.sh` | PreToolUse Agent, Task | blocks a general-purpose or Explore subagent launched without `model` |
 | `hooks/ask-guard.sh` | PreToolUse AskUserQuestion | blocks an ask until `ai-kit:decider` returned OWNER within 30 minutes for each asked question (questions matched to verdict blocks by word overlap; a block serves one question once; verdict read by `decider.mjs guard`); lets it through when `decider.enabled` is false, the question matches `decider.always_owner`, or node is missing |
-| `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review; passes small, comment-only, moved-only changes, and mid-plan stops whose changed paths all lie in `plan.mjs scope` |
+| `hooks/review-before-stop.sh` | Stop | blocks the final reply until `ai-kit:change-reviewer` reviewed the code edited since the last review (Edit/Write paths, and Bash commands judged per simple command by `kit_bash_writes`, the raw-text regex where the splitter cannot follow); passes small, comment-only, moved-only changes, and mid-plan stops whose changed paths all lie in `plan.mjs scope` |
 | `hooks/review-snapshot.sh` | PostToolUse Agent, Task, SendMessage; also `--tree` from session-start | records the work tree when the main session calls a review, so the Stop hook can diff against it |
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
 | `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`, a fresh session or `/compact` offered `handoff.fresh_after` further on; send searches to a subagent; read a line range instead of a whole file |
@@ -102,13 +105,16 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
-| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker) |
+| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker); the file format is in `scripts/lib/plan-file.mjs` and `live` in `scripts/lib/plan-live.mjs`, both re-exported |
+| `scripts/lib/plan-file.mjs` | the plan file format and batch rules: `render`, `parse`, `merge`, `ordered`, `checkBatch`, `checkMaxSize`, `progress`, `resumeArgs`, `JOB`, `SIZES` |
+| `scripts/lib/plan-live.mjs` | `plan.mjs live`: `liveStatus` (one line per batch from a workflow transcript dir), `parseLabel`, `nodePath` |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file |
 | `scripts/queue.mjs` | queue state of `/ai-kit:continuous queue`: jobs in order, current job, outcomes, approvals; test `scripts/queue.test.mjs` |
 | `scripts/lib/workflow-run.mjs` | `readRun`: a workflow's run file status and idle time, shared by `continuous.mjs` and `plan.mjs` |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
 | `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders, and `claude-plan-run` (`planRunDir`, no shell twin); twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
 | `scripts/lib/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
+| `scripts/lib/test-util.mjs` | node:test helpers of the `*.test.mjs` suites: `check`, `ok`, `eq`, `match`, `throws` |
 | `scripts/lib/` | note: modules with no CLI; every CLI entry point stays in `scripts/` (commands, hooks and project copies name those paths) |
 | `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
 | `scripts/fixtures/plan-gaps-and-measurement.md` | a copy of a real plan file: `plan.test.mjs` reads the scope of its briefs |
@@ -125,6 +131,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | File | Role |
 |---|---|
 | `docs/spec.md` | this file |
+| `docs/hooks.md` | what each hook blocks, passes or notes, per event; the reader's view of `hooks/` (README points here) |
 | `docs/ai-docs.md` | form of every doc under `ai/`: AI readers only, token-minimal |
 | `docs/ai-layout.md` | the `ai/` layout, one template per doc type; §Runs without the plugin |
 | `docs/code-comments.md` | the comment rule `check-comments.mjs` enforces |
@@ -134,7 +141,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `docs/owner-kinds.md` | the one list of what only the owner decides |
 | `docs/kit-proposals.md` | filing and landing kit proposals |
 | `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set; route check when `ui.api` is set |
-| `docs/superpowers/` | design specs and plans of the kit's own features |
 
 ### evals/ (agent evals for `claude plugin eval`, run by hand, not by `scripts/test-all.mjs`)
 
@@ -264,6 +270,11 @@ Each step names the file that does it.
 2. `kit-log.sh subagent-stop` runs `decider.mjs sync`: it logs finished calls in the git common dir
    until `usage.mjs send` posts them.
    `/ai-kit:decisions` runs `decider.mjs report`.
+3. `decider.mjs guard` (for `ask-guard.sh`) prints `owner` (every asked question has an unused OWNER block, now used),
+   `pending` (a question has none and the newest call has no verdict lines yet), `decided` (detail: one
+   `Question => Choice` line each), `unmatched` (detail: one line per question) or `none` (no unused call). An ask with
+   no questions takes the newest unused call with an OWNER block whole; with no git dir, owner is never used up.
+   Gap: a decider continued by SendMessage keeps its id, so its later verdicts are neither logged nor counted once used.
 
 ### P6b Jobs and memory
 
@@ -284,7 +295,8 @@ Each step names the file that does it.
 ### P8 Editing the kit
 
 1. Cross-repo improvements arrive as `proposal` issues; `/ai-kit:harvest` lands the accepted ones.
-2. In the clone `.githooks/pre-commit` runs the wrap check, and the handoff and run-plan tests when a route changes.
+2. In the clone `.githooks/pre-commit` runs the wrap, comment and 40 KB checks, and the handoff and run-plan tests when
+   a route changes; `.github/workflows/test.yml` runs every suite on ubuntu and windows.
    Work on a branch, `node scripts/test-all.mjs`, review, bump `plugin.json`, add a `CHANGELOG.md`
    entry, add the new file to this spec, `git merge --ff-only`, tag `vX.Y.Z`, push `main` with the tag
    (`README.md` §Editing the kit).

@@ -1,0 +1,18 @@
+# Agent evals (evals/<case>): each case is a real claude -p session, so this runs only by hand, never on push.
+# Needs the ANTHROPIC_API_KEY repository secret; `claude plugin eval` is early access and exits 1 without it.
+name: evals
+on:
+  workflow_dispatch:
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: claude plugin validate .
+      - run: claude plugin eval .
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

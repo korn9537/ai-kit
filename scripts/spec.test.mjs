@@ -4,26 +4,16 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { ok } from "./lib/test-util.mjs";
 
 const root = join(import.meta.dirname, "..");
 const spec = readFileSync(join(root, "docs/spec.md"), "utf8");
-let passed = 0;
-let failed = 0;
-function ok(desc, cond) {
-  if (cond) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}`);
-  }
-}
 
 const isTest = (f) => /\.test\.(sh|mjs)$/.test(f);
 // a file in a sub-folder (scripts/lib, scripts/kit) must be named by its full path, not its basename
 const named = (path) => spec.includes(path) || (!/^scripts\/(kit|lib)\//.test(path) && spec.includes(`\`${path.split("/").pop()}\``));
 // folders named as a whole; their files are not listed one by one
-const byFolder = new Set(["docs/superpowers"]);
+const byFolder = new Set();
 
 const repoFiles = [];
 function walk(rel) {
@@ -84,6 +74,3 @@ function cyclic(n) {
   return hit;
 }
 ok("scripts/kit/ modules have no import cycle", ![...graph.keys()].some(cyclic));
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exitCode = failed ? 1 : 0;

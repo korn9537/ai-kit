@@ -10,18 +10,7 @@ import { abandon, HUNG_AFTER, init as initState, MAX_TRIES, next, readRun, RETRY
 const init = (args, ...rest) =>
   initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", risks: ["r"], tests: ["t"], ...b })) }, ...rest);
 import { readRepo } from "./plan.mjs";
-
-let passed = 0;
-let failed = 0;
-function ok(desc, cond, out) {
-  if (cond) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n${JSON.stringify(out, null, 2)}`);
-  }
-}
+import { ok } from "./lib/test-util.mjs";
 
 const plan = () =>
   init({
@@ -296,6 +285,3 @@ writeFileSync(st, '{"args":');
 const torn = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "next", st], { cwd: repo, encoding: "utf8" });
 ok("cli: a truncated state is one error line, not a stack", torn.status === 1 && !torn.stderr.includes("    at ") && torn.stderr.trim().split("\n").length === 1, torn);
 rmSync(tmp, { recursive: true, force: true });
-
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

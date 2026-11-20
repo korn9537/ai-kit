@@ -1,6 +1,5 @@
-// True when the module with this import.meta.url is the script node was started with. import.meta.url is a realpath,
-// process.argv[1] is not (a symlinked plugin root), so compare real paths. Every CLI guard uses this, never a raw
-// compare against process.argv[1] (scripts/is-main.test.mjs greps for one).
+// True when the module with this import.meta.url is node's entry script, compared by real path (argv[1] may be a
+// symlink); every CLI guard uses this, never a raw argv[1] compare (scripts/is-main.test.mjs greps for one)
 import { realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 

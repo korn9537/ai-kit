@@ -1,10 +1,11 @@
-// Tests for check-comments.mjs: each case writes `files` and `ai/kit/config.json`, then compares reported issues.
-// The SIZE cases commit a 115 KB file, stage an edit and compare the exit code of --size.
-// Usage: node scripts/check-comments.test.mjs
+// Tests for check-comments.mjs: each case writes `files` and `ai/kit/config.json`, then compares reported issues; SIZE
+// cases: a committed 115 KB file, a staged edit, --size's exit code. Usage: node scripts/check-comments.test.mjs
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 
 const SCRIPT = join(import.meta.dirname, "check-comments.mjs");
 const ALL = { comments: { include: "\\.(ts|py|sh|ya?ml)$" } };
@@ -303,8 +304,7 @@ const put = (dir, files) => {
   }
 };
 
-let fail = 0;
-for (const c of CASES) {
+for (const c of CASES) test(c.desc, () => {
   const dir = mkdtempSync(join(tmpdir(), "check-comments-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
@@ -317,17 +317,12 @@ for (const c of CASES) {
       .map((l) => /^(.+?:\d+ [^:]+?)(:|$)/.exec(l)?.[1])
       .filter(Boolean)
       .sort();
-    const ok = JSON.stringify(got) === JSON.stringify(c.want);
-    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
-    if (!ok) {
-      fail++;
-      console.log(`       want ${JSON.stringify(c.want)}\n       got  ${JSON.stringify(got)}`);
-    }
+    assert.deepStrictEqual(got, c.want);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-for (const c of STAGED) {
+});
+for (const c of STAGED) test(c.desc, () => {
   const dir = mkdtempSync(join(tmpdir(), "check-comments-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
@@ -342,14 +337,12 @@ for (const c of STAGED) {
       rc = e.status;
       if (c.out && (String(e.stdout).split("\n").length > 2 || !c.out.test(String(e.stdout)))) rc = -1;
     }
-    const ok = rc === c.want;
-    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
-    if (!ok) fail++;
+    assert.equal(rc, c.want);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-for (const c of SIZE) {
+});
+for (const c of SIZE) test(c.desc, () => {
   const dir = mkdtempSync(join(tmpdir(), "check-size-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
@@ -367,15 +360,8 @@ for (const c of SIZE) {
     } catch (e) {
       rc = e.status;
     }
-    const ok = rc === c.want;
-    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
-    if (!ok) {
-      fail++;
-      console.log(`       want rc ${c.want}, got ${rc}`);
-    }
+    assert.equal(rc, c.want);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-console.log(`\n${CASES.length + STAGED.length + SIZE.length - fail} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+});

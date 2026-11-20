@@ -267,9 +267,8 @@ export function commitRows(root, session, found, { since, until, roundAt }) {
 // git toplevel of a dir that still exists; "" otherwise
 const topOf = (dir) => (typeof dir === "string" && dir && existsSync(dir) ? gitOut(dir, ["rev-parse", "--show-toplevel"]).trim() : "");
 
-// Every events row of the session; null when the main transcript cannot be read. bytes: main plus subagent files read;
-// dropped: rows missing a key the server needs. ctx: { session, root, user, host, kit, kits: [{ts, kit}] }; root is the
-// session's own worktree (else its transcript's cwd), and a root gone from disk gives no commit rows.
+// Every events row of the session, null if the main transcript is unreadable; bytes: files read; dropped: rows short of
+// a key. ctx: { session, root (worktree, else transcript cwd; gone: no commits), user, host, kit, kits: [{ts, kit}] }
 export function buildEvents(transcript, ctx) {
   const main = readEntries(transcript, true);
   if (!main) return null;

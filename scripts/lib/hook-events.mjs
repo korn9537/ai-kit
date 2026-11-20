@@ -1,6 +1,5 @@
-// Counts the kit hooks' firings in one project's Claude Code transcripts. HOOK_EVENTS is the one table: a hook
-// message edited without its entry counts 0 silently, so scripts/usage-hooks.test.mjs checks `anchor` against `file`.
-// A kit version whose hook text differed from this table is undercounted: `no firing` is not proof of no use.
+// Counts kit hook firings in a project's transcripts. HOOK_EVENTS is the one table: scripts/usage-hooks.test.mjs checks
+// `anchor` against `file`; a kit version whose hook text differs is undercounted, so `no firing` is no proof of no use
 import { createReadStream, readdirSync, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join, sep } from "node:path";

@@ -3,7 +3,7 @@
 # the real :3000 (which may have a real dev server on it); the git add check pipes a command and reads the exit
 # code (2 = blocked).
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 GUARD="$PWD/bash-guard.sh"
 TEST_PORT=39173
 # a project with an empty ai/kit/ (hooks skip projects without it): the test covers the kit default config
@@ -41,7 +41,7 @@ fail=0
 
 run_case() {
   local desc="$1" expected="$2" cmd="$3" extra_env="${4:-}"
-  local payload actual
+  local actual
   actual=$(jq -n --arg cmd "$cmd" '{tool_name:"Bash", tool_input:{command:$cmd}}' |
     env -i PATH="${CASE_PATH:-$PATH}" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" $extra_env \
       "$GUARD" >/tmp/build-guard-out.$$ 2>/tmp/build-guard-err.$$; echo $?)
@@ -392,6 +392,7 @@ mem_case() {
     fail=$((fail + 1))
   fi
 }
+# shellcheck disable=SC2088  # the literal word a command would carry
 M='~/.claude/projects/p/memory'
 mem_case "block: redirect into the memory dir" 2 "echo x > $M/a.md"
 mem_case "block: append into the memory dir" 2 "echo x >> $M/a.md"

@@ -6,20 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { HOOK_EVENTS, formatHooks, scanHooks } from "./lib/hook-events.mjs";
 import { transcriptsDir } from "./lib/usage-collect.mjs";
-
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
+import { eq } from "./lib/test-util.mjs";
 
 const repo = join(import.meta.dirname, "..");
 const tmp = mkdtempSync(join(tmpdir(), "usage-hooks-"));
@@ -170,5 +157,3 @@ for (const e of HOOK_EVENTS) {
 eq("table ids are unique", new Set(HOOK_EVENTS.map((e) => e.id)).size, HOOK_EVENTS.length);
 
 rmSync(tmp, { recursive: true, force: true });
-console.log(`\n${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

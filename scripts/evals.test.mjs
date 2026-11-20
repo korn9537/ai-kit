@@ -3,13 +3,9 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ok } from "./lib/test-util.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "evals");
-let failed = 0;
-const check = (ok, msg) => {
-  console.log(`${ok ? "ok  " : "FAIL"} - ${msg}`);
-  if (!ok) failed++;
-};
 
 const front = (file) => {
   const m = readFileSync(file, "utf8").match(/^---\n([\s\S]*?)\n---/);
@@ -37,35 +33,34 @@ const wholeBlock = new Set(["order.md", "one-block.md", "verdict.md", "kind.md"]
 for (const c of readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== "results")) {
   const dir = join(root, c.name);
   const p = front(join(dir, "prompt.md"));
-  check(p.name === c.name, `${c.name}: prompt name matches the folder`);
-  check(/Agent/.test(p.allowed_tools || ""), `${c.name}: Agent is allowed`);
+  ok(`${c.name}: prompt name matches the folder`, p.name === c.name);
+  ok(`${c.name}: Agent is allowed`, /Agent/.test(p.allowed_tools || ""));
   const s = samples[c.name];
-  check(!!s, `${c.name}: has a fixture sample`);
+  ok(`${c.name}: has a fixture sample`, !!s);
   for (const g of readdirSync(join(dir, "graders"))) {
     const f = front(join(dir, "graders", g));
     const id = `${c.name}/${g}`;
     if (f.type === "regex") {
-      check(/^(contains|not_contains|count:\d+)$/.test(f.match), `${id}: match mode ${f.match} is known`);
-      check(f.target === "last_message", `${id}: target is last_message`);
+      ok(`${id}: match mode ${f.match} is known`, /^(contains|not_contains|count:\d+)$/.test(f.match));
+      ok(`${id}: target is last_message`, f.target === "last_message");
       let re;
       try {
         re = new RegExp(f.pattern, f.flags);
       } catch (e) {
-        check(false, `${id}: regex compiles (${e.message})`);
+        ok(`${id}: regex compiles (${e.message})`, false);
         continue;
       }
       const hit = (t) => re.test(t);
       const passes = (t) => (f.match === "not_contains" ? !hit(t) : hit(t));
-      check(passes(s.good), `${id}: passes the valid sample`);
+      ok(`${id}: passes the valid sample`, passes(s.good));
       if (c.name === "decider-format" ? g === "order.md" : wholeBlock.has(g) || c.name === "ba-summary" || c.name === "reviewer-finds-bug")
-        check(!passes(s.bad), `${id}: fails the broken sample`);
+        ok(`${id}: fails the broken sample`, !passes(s.bad));
     } else if (f.type === "tool_used") {
-      check(f.tool === "Agent", `${id}: tool is Agent`);
+      ok(`${id}: tool is Agent`, f.tool === "Agent");
       const re = new RegExp(f.input_match);
       const name = f.input_match.match(/\)\?([\w-]+)"/)[1];
-      check(re.test(`{"subagent_type":"ai-kit:${name}"}`) && re.test(`{"subagent_type":"${name}"}`), `${id}: matches with and without prefix`);
-      check(!re.test('{"subagent_type":"other"}'), `${id}: rejects another agent`);
-    } else check(f.type === "llm" && !!f.criteria, `${id}: llm grader has criteria`);
+      ok(`${id}: matches with and without prefix`, re.test(`{"subagent_type":"ai-kit:${name}"}`) && re.test(`{"subagent_type":"${name}"}`));
+      ok(`${id}: rejects another agent`, !re.test('{"subagent_type":"other"}'));
+    } else ok(`${id}: llm grader has criteria`, f.type === "llm" && !!f.criteria);
   }
 }
-process.exit(failed ? 1 : 0);

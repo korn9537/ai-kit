@@ -1,8 +1,5 @@
-// Reports added doc lines breaking docs/ai-docs.md: emoji, bold, filler, dates, Thai; skips and exemptions there.
-// Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs [--staged] [--strict: exit 1 on an issue] [files...]
-// --range=<a...b>: the lines and files of that range, read from the index (ai/kit/check.sh, a clean clone: index = HEAD).
-// --wrap [--staged]: instead, the kit clone's check: added prose lines over 120 characters in *.md and *.sh (tables,
-// frontmatter and shell code skipped), exit 1 on a hit; run by .githooks/pre-commit.
+// Reports added doc lines breaking docs/ai-docs.md. Usage, cwd in the repo: node <plugin>/scripts/check-docs.mjs
+// [--staged] [--strict: exit 1] [--range=<a...b>: from the index] [--wrap: kit clone, prose over 120 chars] [files]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -83,11 +80,8 @@ const counts = (name, all, t) => {
   }
   return c;
 };
-// the closing line index of a leading frontmatter block, -1 when there is none: a `---` rule opening a doc with a
-// later `---` is no frontmatter unless the first non-blank line is a key and every line between reads as YAML (a key,
-// quoted or of at most three words; an indented, list or comment line; a line inside an open [ ] / { } flow
-// collection), with every flow collection closed. Not a YAML parser; its limits: the line after the opening `---`
-// must not be blank, and a block of one key whose value holds `<` (`Note: <200 chars>`) is prose unless a second key joins.
+// closing line index of leading frontmatter, -1 if none: line 2 is a key and every line to the next `---` reads as YAML
+// (key, indented, list, comment, closed [ ]/{ } flow); a lone key whose value holds `<` is prose. Not a YAML parser
 const KEY = /^("[^"]+"|'[^']+'|[A-Za-z_][\w -]*?)\s*:(\s|$)/;
 const isKey = (l) => {
   const m = KEY.exec(l);
@@ -225,9 +219,8 @@ if (flag("wrap")) {
   if (hits.length) console.log(`lines over ${WRAP} characters (rewrap):\n${hits.join("\n")}`);
   process.exit(hits.length ? 1 : 0);
 }
-// keep only removed lines the rules saw in HEAD; their text marks a moved line
-// an old path out of scope saw nothing: no removed line excuses a hit, every line counts as added
-// generated copies of the kit's text, outside any repo's docs.skip
+// in scope: removed HEAD lines excuse a moved line; a path out of scope at HEAD excuses nothing (every line is added);
+// ai/kit/conventions/ and review-prompt.md are generated copies of the kit's text, outside any repo's docs.skip
 const inScope = (f) =>
   INCLUDE.test(f) && !SKIP.test(f) && !f.startsWith("ai/kit/conventions/") && f !== "ai/kit/review-prompt.md";
 // the diff's old side: HEAD, or a range's merge base, where HEAD is its new side

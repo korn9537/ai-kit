@@ -1,19 +1,12 @@
-// Tests for scripts/lib/state-dirs.mjs and kit_state_dir in hooks/lib.sh: both print the same four folders, in the
-// main work tree (from a subfolder) and in a linked one, equal to the literal git paths; empty outside a repo.
-// Usage: node scripts/state-dirs.test.mjs
+// Tests: scripts/lib/state-dirs.mjs and hooks/lib.sh kit_state_dir print the same folders, main work tree (from a
+// subfolder) and linked, equal to the literal git paths; empty outside a repo. Usage: node scripts/state-dirs.test.mjs
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deciderDir, planRunDir, reviewDir, usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
-
-let failed = 0;
-function eq(desc, got, want) {
-  const ok = JSON.stringify(got) === JSON.stringify(want);
-  if (!ok) failed++;
-  console.log(ok ? `ok   - ${desc}` : `FAIL - ${desc}\n  got:  ${JSON.stringify(got)}\n  want: ${JSON.stringify(want)}`);
-}
+import { eq } from "./lib/test-util.mjs";
 
 const kitRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const lib = join(kitRoot, "hooks", "lib.sh");
@@ -78,5 +71,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-console.log(failed ? `${failed} failed` : "all passed");
-process.exit(failed ? 1 : 0);

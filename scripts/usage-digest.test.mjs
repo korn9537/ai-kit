@@ -8,29 +8,7 @@ import { join } from "node:path";
 import {
   baselineRecords, buildRecord, compare, dec, digest, enc, loadRecords, loadRefusals, modelShort, sameCommit, summaryLine, uniqueCommits, validRecord, weight,
 } from "./lib/usage-digest.mjs";
-
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
-function match(desc, got, re) {
-  if (re.test(got)) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${JSON.stringify(got)}\n  want: ${re}`);
-  }
-}
+import { eq, match } from "./lib/test-util.mjs";
 
 const P = { "claude-opus-5-5": 4, "claude-sonnet-5-5": 2 };
 const OPUS = "claude-opus-5-5";
@@ -425,6 +403,3 @@ eq("a record whose commits hold a non-string or a too-short hash is invalid",
     rmSync(dir, { recursive: true, force: true });
   }
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

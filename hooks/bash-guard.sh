@@ -237,6 +237,7 @@ mem_re=""
 # auto-memory dir
 in_memory() {
   local w="$1" cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+  # shellcheck disable=SC2088  # a pattern on the word, not an expansion
   case "$w" in
     "~" | "~/"*) w="$HOME${w#\~}" ;;
     '$HOME' | '$HOME/'*) w="$HOME${w#\$HOME}" ;;
@@ -463,10 +464,10 @@ listening() {
     lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
   elif command -v ss >/dev/null 2>&1; then
     out="$(ss -ltn 2>/dev/null || true)"
-    grep -qE "[:.]$port[[:space:]]" <<<"$out"
+    grep -qE "[:.]${port}[[:space:]]" <<<"$out"
   elif command -v netstat >/dev/null 2>&1; then
     [[ "$(uname -s 2>/dev/null)" =~ ^(MINGW|MSYS|CYGWIN) ]] && flags=-ano
-    out="$(netstat "$flags" 2>/dev/null | grep -E "[:.]$port[[:space:]]" || true)"
+    out="$(netstat "$flags" 2>/dev/null | grep -E "[:.]${port}[[:space:]]" || true)"
     grep -qiE 'LISTEN|[[:space:]](0\.0\.0\.0:0|\[::\]:0)[[:space:]]' <<<"$out"
   elif command -v nc >/dev/null 2>&1; then
     nc -z 127.0.0.1 "$port" >/dev/null 2>&1

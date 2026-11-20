@@ -5,20 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rename
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { check, deciders, guard, overlap, loadDecisions, parseBlocks, report, subagentsDir, sync } from "./decider.mjs";
-
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
+import { eq } from "./lib/test-util.mjs";
 
 const block = (v, q, conf = "high") =>
   `Verdict: ${v}\nKind: ${v === "OWNER" ? "money" : "-"}\nQuestion: ${q}\nChoice: c-${q}\nReason: r\nConfidence: ${conf}\nUndo: u\nSources: a.ts:1; D3`;
@@ -183,6 +170,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exitCode = failed ? 1 : 0;

@@ -1,7 +1,5 @@
-// Lists jobs (the `Job:` commit trailer, one per user request) and, for one job, what reverting it involves.
-//   node scripts/jobs.mjs              recent jobs: id, commits, dates, first subject
-//   node scripts/jobs.mjs <id|text>    that job's commits, files, migrations, later commits on the same files, revert
-// Run inside the project; ai/kit/config.json `jobs.migrations` (regex on the path) overrides the migration default.
+// Lists jobs (the `Job:` trailer, one per request): no args = recent jobs; <id|text> = that job's commits, files,
+// migrations, later commits on its files, revert. Run in the project; ai/kit/config.json `jobs.migrations` (path regex)
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -39,8 +37,7 @@ try {
 const LIST_MAX = 40;
 const LATER_MAX = 30;
 
-// the body, not %(trailers): a Co-Authored-By in its own paragraph would hide the Job line from it (continuous.mjs
-// reads the body too); a repo with no commit yet has no jobs
+// the body, not %(trailers), which a Co-Authored-By paragraph hides the Job line from (continuous.mjs reads it too);
 // only a paragraph made entirely of `Key: value` lines counts, so a `Job: x` line in prose is no job
 const trailers = (body, key) =>
   body

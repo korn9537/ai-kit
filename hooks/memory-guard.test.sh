@@ -2,7 +2,7 @@
 # Tests for memory-guard.sh: Write/Edit into the auto-memory dir is blocked (exit 2), with POSIX and Windows paths
 # and under CLAUDE_CONFIG_DIR; other paths pass. Bash commands are not inspected.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/memory-guard.sh"
 REPO="$(mktemp -d)" || exit 1
 trap 'rm -rf "$REPO"' EXIT

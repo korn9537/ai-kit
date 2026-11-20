@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for agent-model-guard.sh: each case checks that an Agent launch is blocked (exit 2) or let through (exit 0).
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/agent-model-guard.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT

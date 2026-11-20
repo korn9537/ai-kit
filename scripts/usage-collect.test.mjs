@@ -4,20 +4,8 @@ import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync,
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { collectSession, loadCache, mergeCommits, frontmatterEffort, roleOf, saveCache, toolKey, transcriptsDir } from "./lib/usage-collect.mjs";
+import { eq } from "./lib/test-util.mjs";
 
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
 const pick = (o, keys) => Object.fromEntries(keys.split(" ").map((k) => [k, o[k]]));
 
 const usage = (input, read, w5, w1, output) => ({
@@ -239,5 +227,3 @@ eq("frontmatterEffort: ai-kit agent reads its effort line", [frontmatterEffort("
 }
 
 rmSync(dir, { recursive: true, force: true });
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

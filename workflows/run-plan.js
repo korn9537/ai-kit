@@ -10,11 +10,8 @@ export const meta = {
   ],
 }
 
-// args: { request, plugin, job, repo?, batches: [{ id, title, brief, accept?: [check], verify?, waitsFor?: [id],
-//   alsoInScope?: [item], risks: [failure mode], tests: [test the batch adds] }] }
-// in plan order. The coordinator rules this replaces: docs/plan-batching.md §Coordinator pipeline.
-// The staged copy carries the args here (scripts/plan.mjs stageScript), so the session launches it with no args and
-// its context does not grow by the plan's briefs on every run; args passed at launch (a `repo`) still win.
+// args: { request, plugin, job, repo?, batches } in plan order, batch fields as scripts/lib/plan-file.mjs checkBatch;
+// STAGED is filled by plan.mjs stageScript, launch args win. Rules: docs/plan-batching.md §Coordinator pipeline
 const STAGED = null
 const input = { ...(STAGED || {}), ...((typeof args !== "undefined" && args) || {}) }
 const batches = input.batches || []
@@ -345,9 +342,8 @@ async function reviewChain(b, r, need) {
   log(`${b.title}: fix ${(r.fix2 || fx).hash}, ${left.length} CONFIRMED left`)
 }
 
-// the plan is read before any code: what can fail, what tests answer it, what the briefs and docs claim that the code
-// does not do (docs/plan-batching.md §Plan review). Its findings go into the briefs of the batches they name; a
-// failed review is noted and the plan runs
+// the plan review runs before any code (docs/plan-batching.md §Plan review): its findings go into the briefs of the
+// batches they name; a failed review is noted and the plan runs
 const planPrompt = [
   `The user's request: ${input.request || batches[0].title}`,
   where,
@@ -404,9 +400,8 @@ for (const [i, b] of batches.entries()) {
   needs[b.id] = c.review
 }
 
-// a finding's size: per file it names (file:line, file:12:5, a list split on , or ;), that of the batches whose
-// commit holds the file (partial included), else of a batch with no commit whose brief names it, else normal; the
-// highest of them. Never the heaviest batch of the whole job for that alone
+// highest size over the files a finding names: the batches whose commit holds the file, else a batch whose brief names
+// it, else normal; never the job's heaviest batch for that alone
 const findingSize = (where, list, res) => {
   const esc = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const sizes = (bs) => bs.reduce((m, x) => higher(m, x.size), 'light')

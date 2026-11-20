@@ -1,9 +1,11 @@
 // Tests for check-docs.mjs: each case commits `head`, applies `work` (and `run`), then compares reported issues.
 // Usage: node scripts/check-docs.test.mjs
+import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { test } from "node:test";
 
 const SCRIPT = join(import.meta.dirname, "check-docs.mjs");
 const B = "```";
@@ -290,8 +292,7 @@ const put = (dir, files) => {
   }
 };
 
-let fail = 0;
-for (const c of CASES) {
+for (const c of CASES) test(c.desc, () => {
   const dir = mkdtempSync(join(tmpdir(), "check-docs-"));
   const git = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe" });
   try {
@@ -321,15 +322,8 @@ for (const c of CASES) {
           .split("\n")
           .map((l) => /^(.+?:\d+ [^:]+):/.exec(l)?.[1])
           .filter(Boolean);
-    const ok = JSON.stringify(got) === JSON.stringify(c.want);
-    console.log(`${ok ? "ok  " : "FAIL"} - ${c.desc}`);
-    if (!ok) {
-      fail++;
-      console.log(`       want ${JSON.stringify(c.want)}\n       got  ${JSON.stringify(got)}`);
-    }
+    assert.deepStrictEqual(got, c.want);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}
-console.log(`\n${CASES.length - fail} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);
+});

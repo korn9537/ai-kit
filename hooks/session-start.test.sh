@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests for session-start.sh: the session id is read from stdin with a bounded wait.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/session-start.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT

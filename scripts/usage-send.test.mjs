@@ -9,20 +9,7 @@ import { formatTable, normalizeRemote, projectId } from "./lib/usage-api.mjs";
 import { buildEvents, chunkEvents, jobBatch } from "./lib/usage-events.mjs";
 import { postLegacy, readSent, saveTranscriptPath, sendDecisions, sendRefusals, sendSession } from "./lib/usage-send.mjs";
 import { loadAllDecisions } from "./decider.mjs";
-
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
+import { eq } from "./lib/test-util.mjs";
 
 // the mock API: keeps every request; `fail` > 0 answers that many POSTs with `failStatus` (500)
 const mock = { reqs: [], fail: 0, failStatus: 500, records: [], decisions: [], views: [] };
@@ -568,5 +555,3 @@ try {
   server.close();
   rmSync(tmp, { recursive: true, force: true });
 }
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

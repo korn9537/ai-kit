@@ -1,188 +1,20 @@
 #!/usr/bin/env node
 // The plan file: batches in ai/plans/<job>.md, status from the job's commits, so a lost session loses no batch.
-// Usage: plan.mjs write <args.json> [--replace] [--rebase] | status [job] [--quick] | resume [job] | queue
-//        | close <job> [--drop] | mark <job> <workflow transcript dir> [task id] | unmark <job> | live <workflow transcript dir>
+// Usage: the usage line at the end of this file (write, status, resume, queue, close, mark, unmark, scope, live).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
 import { planRunDir, reviewDir as reviewDirOf } from "./lib/state-dirs.mjs";
 import { readRun } from "./lib/workflow-run.mjs";
+import { COLUMNS, JOB, SIZES, checkBatch, checkMaxSize, merge, ordered, parse, progress, render, resumeArgs } from "./lib/plan-file.mjs";
+import { liveStatus, nodePath } from "./lib/plan-live.mjs";
 
-export const JOB = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*$/;
+export { JOB, checkBatch, checkMaxSize, merge, ordered, parse, progress, render, resumeArgs, SIZES } from "./lib/plan-file.mjs";
+export { liveStatus, nodePath, parseLabel } from "./lib/plan-live.mjs";
 const relPath = (job) => `ai/plans/${job}.md`;
-// what a repo's doc check allows
-const COLUMNS = 120;
-const width = (s) => JSON.stringify(s).length - 2;
-const wrapped = (v) => Array.isArray(v?.lines) && Object.keys(v).length === 1;
-
-// cut at whitespace, inside a word only when it alone is too wide (Thai has no spaces); joined, it is the text again
-function chunks(text, max) {
-  const out = [""];
-  for (const word of text.split(/(?<=\s)/)) {
-    for (const piece of width(word) > max ? [...word] : [word]) {
-      if (width(out.at(-1) + piece) > max) out.push("");
-      out[out.length - 1] += piece;
-    }
-  }
-  return out;
-}
-
-// a string that passes COLUMNS where JSON.stringify would put it, as { lines }: lead is its quoted key and ": ", 3 is
-// its own quotes and comma, 4 the indent of the items
-function fold(v, indent = 0, lead = 0) {
-  if (typeof v === "string") {
-    return indent + lead + width(v) + 3 > COLUMNS ? { lines: chunks(v, COLUMNS - indent - 4 - 3) } : v;
-  }
-  if (Array.isArray(v)) return v.map((x) => fold(x, indent + 2));
-  if (v && typeof v === "object") {
-    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, fold(x, indent + 2, width(k) + 4)]));
-  }
-  return v;
-}
-
-// every word a person wrote stays in the fence: check-docs reads ai/*.md strictly (Thai, dates, bold) outside one;
-// a JSON string cannot wrap, so a long one is written as { lines } and parse joins it
-export function render(plan) {
-  const title = plan.job.replace(/^\d{4}-\d{2}-\d{2}-/, "");
-  const { job, request, base, batches } = plan;
-  return [
-    `# Plan ${title}`,
-    "",
-    "goal: the request in the block below, one commit per batch.",
-    `job: \`${job}\``,
-    "status: the commits of this job, by their Batch trailer (`plan.mjs status`); never edited here.",
-    "",
-    "```json",
-    JSON.stringify(fold({ job, request, ...(base ? { base } : {}), batches }), null, 2),
-    "```",
-    "",
-  ].join("\n");
-}
-
-// null for a plan written by hand: it has no job and no batches to run
-export function parse(text) {
-  const m = /^```json\r?\n([\s\S]*?)\r?\n```\r?$/m.exec(text);
-  if (!m) return null;
-  try {
-    const plan = JSON.parse(m[1], (_, v) => (wrapped(v) ? v.lines.join("") : v));
-    const fine = JOB.test(plan?.job ?? "") && Array.isArray(plan.batches) && plan.batches.every(
-      (b) => typeof b?.id === "string" && (b.waitsFor === undefined || Array.isArray(b.waitsFor)),
-    );
-    return fine ? plan : null;
-  } catch {
-    return null;
-  }
-}
-
-// plan order with each batch after what it waits for, otherwise as given: run-plan.js skips a batch whose waitsFor
-// has not run yet, and a batch added to an old plan comes last in the file
-export function ordered(batches) {
-  const byId = new Map(batches.map((b) => [b.id, b]));
-  const out = [];
-  const state = new Map();
-  const visit = (b) => {
-    if (state.get(b.id) === "done") return;
-    if (state.get(b.id) === "open") throw new Error(`waitsFor goes in a circle at ${b.id}`);
-    state.set(b.id, "open");
-    for (const w of b.waitsFor || []) if (byId.has(w)) visit(byId.get(w));
-    state.set(b.id, "done");
-    out.push(b);
-  };
-  batches.forEach(visit);
-  return out;
-}
-
-// args are what the workflow will run, so a mistake here would surface as a skipped batch long after the start;
-// replace: old batches with no commit that the args leave out are gone, for a plan fixed after a refusal
-export const SIZES = ["light", "normal", "heavy"];
-
-// the fields of one batch that run-plan.js reads; continuous.mjs init checks args with it too
-export function checkBatch(b) {
-  if (typeof b?.id !== "string" || !b.id || /\s/.test(b.id)) throw new Error(`batch id is empty or holds a space: ${b?.id}`);
-  // run-plan.js and plan.mjs live name the job review `job`
-  if (b.id === "job") throw new Error("batch id job is the job review's, pick another");
-  if (!b.title || !b.brief) throw new Error(`batch ${b.id} needs a title and a brief`);
-  if (b.accept !== undefined && !(Array.isArray(b.accept) && b.accept.every((a) => typeof a === "string" && a.trim()))) {
-    throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
-  }
-  // set before the work: the plan review reads them, and the committer builds to them (plan-batching.md §Plan review)
-  for (const k of ["risks", "tests"]) {
-    if (!(Array.isArray(b[k]) && b[k].length && b[k].every((a) => typeof a === "string" && a.trim()))) {
-      throw new Error(`batch ${b.id}: ${k} is a list of strings, not empty (a batch with none says "none: <why>")`);
-    }
-    // a bare "none", "n/a" or "-" is the boilerplate the gate exists to stop: the why is the content
-    if (b[k].some((a) => /^\s*(none|n\/?a|nil|-+)\s*[.:]?\s*$/i.test(a))) {
-      throw new Error(`batch ${b.id}: a ${k} entry of "none" says why: "none: <why>"`);
-    }
-  }
-  // absent is normal: a plan or args file from before sizes stays valid
-  if (b.size !== undefined && !SIZES.includes(b.size)) throw new Error(`batch ${b.id}: size is light, normal or heavy`);
-  for (const k of ["waitsFor", "alsoInScope"])
-    if (b[k] !== undefined && !Array.isArray(b[k])) throw new Error(`batch ${b.id}: ${k} is a list`);
-}
-
-// the job-level cap on a committer's size; plan.mjs write and continuous.mjs init both refuse another value
-export function checkMaxSize(args) {
-  if (args.maxSize !== undefined && !SIZES.includes(args.maxSize)) throw new Error(`maxSize is light, normal or heavy: ${args.maxSize}`);
-}
-
-export function merge(old, args, commits = new Map(), replace = false) {
-  checkMaxSize(args);
-  if (!JOB.test(args.job || "")) throw new Error(`job is not <yyyy-mm-dd>-<slug>: ${args.job}`);
-  if (!args.batches?.length) throw new Error("args need batches");
-  const seen = new Set();
-  for (const b of args.batches) {
-    checkBatch(b);
-    // the job's one review checks every batch against these, and a batch with none leaves it only the request to go
-    // by; a batch a plan file from before 2.44.0 already holds without them may be re-written (an owner's answer)
-    const prev = old?.batches?.find((o) => o.id === b.id);
-    if (!b.accept?.length && !(prev && !prev.accept?.length)) throw new Error(`batch ${b.id}: accept is empty: give the summary's Done when checks it must meet`);
-    if (seen.has(b.id)) throw new Error(`batch id appears twice: ${b.id}`);
-    if (commits.has(b.id)) throw new Error(`batch ${b.id} already has commit ${commits.get(b.id)}, pick a new id`);
-    for (const w of b.waitsFor || []) {
-      if (seen.has(w)) continue;
-      if (args.batches.some((x) => x.id === w)) throw new Error(`${b.id} waits for ${w}, planned after it`);
-      if (commits.has(w)) throw new Error(`${b.id} waits for ${w}, committed: drop it from waitsFor once the job review is clean`);
-      // run-plan.js counts an id outside the run as not committed and would skip this batch
-      throw new Error(`${b.id} waits for ${w}, not in this run`);
-    }
-    seen.add(b.id);
-  }
-  const given = new Map(args.batches.map((b) => [b.id, b]));
-  const kept = (old?.batches || [])
-    .filter((b) => !replace || given.has(b.id) || commits.has(b.id))
-    .map((b) => given.get(b.id) ?? b);
-  const known = new Set((old?.batches || []).map((b) => b.id));
-  const batches = ordered([...kept, ...args.batches.filter((b) => !known.has(b.id))]);
-  const ids = new Set(batches.map((b) => b.id));
-  for (const b of batches) {
-    for (const w of b.waitsFor || []) {
-      if (!ids.has(w) && !commits.has(w)) throw new Error(`${b.id} waits for ${w}, not in the plan`);
-    }
-  }
-  return { job: args.job, request: args.request || old?.request || "", batches };
-}
-
-// left: batches with no commit of their own; ready: those of them no other left batch holds back
-export function progress(plan, commits) {
-  const left = plan.batches.filter((b) => !commits.has(b.id));
-  const open = new Set(left.map((b) => b.id));
-  return {
-    done: plan.batches.filter((b) => commits.has(b.id)).map((b) => ({ id: b.id, hash: commits.get(b.id) })),
-    left: left.map((b) => b.id),
-    ready: left.filter((b) => !(b.waitsFor || []).some((w) => open.has(w))).map((b) => b.id),
-  };
-}
-
-// run-plan.js counts a waitsFor id outside the run as not committed, so a committed one leaves the list
-export function resumeArgs(plan, commits, plugin, maxSize) {
-  const batches = plan.batches
-    .filter((b) => !commits.has(b.id))
-    .map((b) => ({ ...b, waitsFor: (b.waitsFor || []).filter((w) => !commits.has(w)) }));
-  return { request: plan.request, plugin, job: plan.job, ...(maxSize ? { maxSize } : {}), batches };
-}
+const short = (h) => (h || "").slice(0, 7);
 
 // committer.maxSize of the project's config: missing file, bad JSON or no committer = none; a bad value is a warning
 function configMaxSize(root) {
@@ -311,9 +143,8 @@ export function planWarnings(root) {
 const gitIn = (root) => (...a) =>
   execFileSync("git", a, { windowsHide: true, cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 
-// the whole index, from the top of the repo: the commit takes all of it, wherever root sits; the excludes are root's
-// no paths on the commit (a path-limited one leaves the pre-commit's records behind), so anything else staged would
-// ride along: refused instead. The Plan-File trailer keeps it out of continuous.mjs's commits with no batch
+// commits the whole index, no paths (a path-limited commit leaves the pre-commit's records behind), so other staged
+// files are refused; the Plan-File trailer keeps it out of continuous.mjs's commits with no batch
 function commit(root, job, subject, kind, stage, undo) {
   const git = gitIn(root);
   const prefix = git("rev-parse", "--show-prefix").trim();
@@ -710,10 +541,8 @@ export function resume(root, job, plugin) {
   return { ...out, ...staleFiles(root, plan), argsFile, ...(warning ? { warnings: [warning] } : {}) };
 }
 
-// Workflow loads no scriptPath outside the session (plugin cache, a worktree's .git, a git top above it): the run uses
-// a copy below the cwd, refreshed each call to match the plugin, kept out of git status by info/exclude.
-// With args, the copy is the job's own and carries them in its STAGED line: the session launches it with no args, so
-// the plan's briefs (10-15k tokens) enter its context neither as a Workflow input nor as a read of the args file.
+// Workflow loads no scriptPath outside the session: run a copy below the cwd, kept out of git status by info/exclude;
+// with args the copy carries them in its STAGED line, so the briefs never enter the session's context
 const STAGED_IGNORE = "**/.claude/ai-kit/";
 const STAGED_LINE = "const STAGED = null\n";
 export function stageScript(root, plugin, args) {
@@ -749,96 +578,6 @@ export function status(root, job, budget = 0) {
     });
 }
 
-const IDLE_MIN = 15;
-
-const short = (h) => (h || "").slice(0, 7);
-const mtime = (p) => {
-  try {
-    return statSync(p).mtimeMs;
-  } catch {
-    return 0;
-  }
-};
-
-// Git Bash hands Node on Windows /c/Users/...; Node needs C:/Users/... (as hooks/lib.sh kit_path)
-export const nodePath = (p, platform = process.platform) =>
-  platform === "win32" ? p.replace(/^\/([a-zA-Z])(?=\/|$)/, "$1:") : p;
-
-// label → { key, title, step }; a label run-plan.js does not set is its own key and title
-export function parseLabel(label) {
-  const m = /^(commit|review): \[([^\]\s]+)(?: (fix|recheck))?\] (.*)$/.exec(label || "");
-  const step = m && (m[3] ? (m[1] === "commit") === (m[3] === "fix") && m[3] : m[1]);
-  if (!step) return { key: label || "(no label)", title: label || "(no label)", step: "agent" };
-  return { key: m[2], title: m[4], step };
-}
-
-function agentDone(step, raw) {
-  let r = raw;
-  if (typeof r === "string") {
-    try {
-      r = JSON.parse(r);
-    } catch {}
-  }
-  if (r === null || r === undefined) return `${step} failed or skipped`;
-  if (typeof r !== "object") return `${step} done`;
-  if (step === "commit" || step === "fix") {
-    if (!r.hash) return `${step}: not committed${r.blockers?.length ? ` (${r.blockers[0]})` : ""}`;
-    const open = [...(r.owner || []).map((o) => `owner: ${o}`), ...(r.blockers || []).map((b) => `blocker: ${b}`)];
-    const skip = step === "commit" && r.review === "skip" ? " · review skipped, move-only or comment-only" : "";
-    return `${step} ${short(r.hash)}${open.length ? ` ⚠ ${open.join("; ")}` : ""}${skip}`;
-  }
-  if (step === "review" || step === "recheck") {
-    if (!r.reviewed) return `${step}: not reviewed${r.checked ? ` (${r.checked})` : ""}`;
-    const c = (r.findings || []).filter((f) => f.verdict === "CONFIRMED").length;
-    const p = (r.findings || []).length - c;
-    return c || p ? `${step} ${c} CONFIRMED, ${p} PLAUSIBLE` : `${step} clean`;
-  }
-  return `${step} done`;
-}
-
-// live: one line per batch id (`commit: [<id>]`) and one `job` line for the job review (`review: [job]`,
-// `commit: [job fix]`, `review: [job recheck]`), from the agent labels run-plan.js sets; a batch not started yet, or skipped, has no agent and so no line.
-// dir: the workflow transcript dir (journal.jsonl, agent-<id>.jsonl); now: ms, for the idle time of running agents
-export function liveStatus(where, now) {
-  const dir = resolve(where);
-  const journal = join(dir, "journal.jsonl");
-  const events = readFileSync(journal, "utf8").split("\n").filter(Boolean).flatMap((l) => {
-    try {
-      return [JSON.parse(l)];
-    } catch {
-      return [];
-    }
-  });
-  const agents = new Map();
-  for (const e of events) {
-    if (e.type === "started" && e.agentId) agents.set(e.agentId, { ...parseLabel(e.label), id: e.agentId, running: true });
-    if (e.type === "result" && agents.has(e.agentId)) Object.assign(agents.get(e.agentId), { running: false, result: e.result });
-  }
-  // <session>/subagents/workflows/<runId> → <session>/workflows/<runId>.json, holding the run's status
-  const run = join(dirname(dirname(dirname(dir))), "workflows", `${basename(dir)}.json`);
-  let state = "";
-  try {
-    state = JSON.parse(readFileSync(run, "utf8")).status || "";
-  } catch {}
-  const over = state && state !== "running";
-  const batches = new Map();
-  let running = 0;
-  for (const a of agents.values()) {
-    let text;
-    if (a.running && over) text = `${a.step} stopped, no result`;
-    else if (a.running) {
-      running++;
-      const idle = Math.max(0, Math.round((now - (mtime(join(dir, `agent-${a.id}.jsonl`)) || now)) / 60000));
-      text = idle >= IDLE_MIN ? `${a.step} ⚠ no transcript write for ${idle}m` : `${a.step} running`;
-    } else text = agentDone(a.step, a.result);
-    if (!batches.has(a.key)) batches.set(a.key, { title: a.title, steps: [] });
-    batches.get(a.key).steps.push(text);
-  }
-  const finished = [...agents.values()].filter((a) => !a.running).length;
-  const lines = [`${basename(dir)}: ${state || (running ? "running" : "no agent running")}, ${finished} agent(s) done, ${running} running`];
-  for (const [key, b] of batches) lines.push(`${key === b.title ? key : `${key} ${b.title}`}: ${b.steps.join(" · ")}`);
-  return lines;
-}
 
 if (isMain(import.meta.url)) {
   const argv = process.argv.slice(2);

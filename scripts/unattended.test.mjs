@@ -5,22 +5,10 @@ import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as wait } from "node:timers/promises";
+import { eq } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "kit.mjs");
 const TEMPLATE = join(import.meta.dirname, "..", "templates", "ai-kit-project", "pre-commit.sh");
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), "unattended-")));
 const repo = join(tmp, "repo");
 const kitCmd = (cmd) =>
@@ -437,6 +425,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exitCode = failed ? 1 : 0;

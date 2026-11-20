@@ -8,9 +8,8 @@ import {
 import { join } from "node:path";
 import { LINE, MARK, PLUGIN, at, eolOf, isObj, isShim, jsonText, msgShimPath, ownHooksPath, read, shimPath, tryGit } from "./shared.mjs";
 
-// reverses initFiles() and the plugin flag; never touches user scope (~/.claude/settings.json) or ai/kit/ content
-// unless --purge. Left-as-is files (a hook that is not the kit shim, .githooks/ still used by another hook) are
-// reported, not forced.
+// reverses initFiles() and the plugin flag; never user scope (~/.claude/settings.json), ai/kit/ only with --purge;
+// a file left as is (a hook not the kit shim, .githooks/ used by another hook) is reported, not forced
 function uninstall(args = []) {
   const purge = args.includes("--purge");
   const left = [];

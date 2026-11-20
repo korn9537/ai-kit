@@ -4,11 +4,11 @@
 # that subagent_type, or a general-purpose one whose description contains review (not preview) and does not
 # start "commit:" (fallback; lib.sh kit_is_reviewer). A launch whose tool_result is an error was denied and is no
 # review; one with no result yet (background) counts. Docs (*.md), ai/usage records and files outside the repo do
-# not count; a Bash command that writes
-# into the repo counts (auto mode edits that way), and so does a formatter, fixer, codemod, mv, cp or rm; a
-# .md-only Bash write does not; a relative redirect, tee, mv, cp or rm target counts when the line's cwd is in the
-# repo. Edits by a finished commit subagent (ai-kit:committer or description "commit: ...") count too; one still
-# running is skipped until it ends.
+# not count; a Bash command that writes into the repo counts (auto mode edits that way), judged per simple command
+# (lib.sh kit_bash_writes on kit_split_cmd; the raw-text regex below when the splitter cannot follow the line): a
+# redirect, tee, mv, cp or rm target in the repo (relative while the cwd, or a cd, is in it), sed/perl -i, a
+# formatter, fixer, codemod or patch; a write naming only .md files does not. Edits by a finished commit subagent
+# (ai-kit:committer or description "commit: ...") count too; one still running is skipped until it ends.
 #
 # A main-session reply with `Review closed: re-checked once` (not quoted) right after a re-check (the last review was
 # a SendMessage) counts as a review. Gap: an unreviewed commit closed right after the previous re-check passes.
@@ -19,8 +19,8 @@
 # last review's tree, else the one session-start.sh took), or since the commit before the session began without one → no
 # review. A Bash write is judged by those changed lines, not by the files its command names. Small: at most config
 # review.skip_lines changed code lines, no new file, no path matching review.always, nothing reviewed yet (a fix
-# after a review always goes to its re-check) → no review. Gap: sed -i whose script names /tmp/ is not counted, nor a
-# change to a path no Edit named when no Bash write was seen (a user hook's formatter, an unrecognized rename).
+# after a review always goes to its re-check) → no review. Gap: a change to a path no Edit named is not counted when
+# no Bash write was seen (a user hook's formatter, an unrecognized rename, a script that writes files).
 set -euo pipefail
 
 if ! command -v jq >/dev/null 2>&1; then
@@ -41,15 +41,22 @@ project="${CLAUDE_PROJECT_DIR:-$(jq -r '.cwd // empty' <<<"$input")}"
 project="${project//\\//}"
 project="${project%/}"
 
-read -r -d '' events_jq <<'JQ' || true
+# norm, re_escape, only_md and code_write: shared by the transcript walk and the raw fallback below
+read -r -d '' common_jq <<'JQ' || true
   # Windows: backslashes as / and the drive letter upper-case, so C:\repo and c:/repo compare equal
   def norm: gsub("\\\\"; "/") | if test("^[a-z]:/") then (.[0:1] | ascii_upcase) + .[1:] else . end;
   def re_escape: gsub("(?<c>[\\\\^$.|?*+()\\[\\]{}])"; "\\\(.c)");
+  def only_md: [scan("[A-Za-z0-9_./-]+\\.[A-Za-z]{1,6}\\b")] | length > 0 and all(test("\\.md$"));
+  # a write in code text (python -c, a heredoc body), which the splitter drops or keeps as one word
+  def code_write: test("git apply|apply_patch|write_text|writeFileSync")
+    or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']");
+JQ
+# raw_jq: the raw-text regex, only for a command kit_split_cmd could not follow (verdict r)
+read -r -d '' raw_jq <<'JQ' || true
   ($root | norm) as $root
   | ($root | re_escape) as $r
   # cd into the root, spelled with or without its trailing slash
   | ("cd [\"']?" + ($r | rtrimstr("/")) + "([/\"' ;&]|$)") as $cd
-  # $in: the command ran with its cwd in the repo, as a cd into the root does
   | def ro_stage: test("^\\s*(grep|rg|ag|cat|ls|head|tail|wc|echo|printf|git +(log|show|diff|status|grep))(\\s|$)");
     # plainly read-only: one read-only command, or a pipe of them; no ; && || & newline, substitution, process
     # substitution or backtick, and no rg --pre (it runs a command)
@@ -62,7 +69,7 @@ read -r -d '' events_jq <<'JQ' || true
     def inplace($re): test($re) or (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test($re));
     def raw_write:
       # sed and perl: -i within one command, read raw and with quoted text blanked (sed -e 's/a;b/c/' -i f): a later
-      # command's flag is not sed's (sed -n 1p f; grep -i x). Known gap: an escaped ' ; or | before -i ends the scan
+      # command's flag is not sed's (sed -n 1p f; grep -i x). Here an escaped ' ; or | before -i ends the scan
       inplace("\\bg?sed\\b[^;&|\n]*\\s(-[A-Za-z]*i|--in-place)\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or inplace("\\bperl\\b[^;&|\n]*\\s-(?!M)[A-Za-z0-9]*i\\S*(\\s|$)(?![^;&|\n]*/(private/)?tmp/)")
       or test("\\bprettier\\b[^;&|\n]* (-w|--write)\\b")
@@ -78,9 +85,7 @@ read -r -d '' events_jq <<'JQ' || true
       # package scripts: fix, lint-fix, lint_fix, autofix, prettier-format, format:all; not prefix or check-format
       or test("\\b(npm|pnpm|yarn|bun) +(run +)?(?!prefix(?![\\w-])|[\\w:-]*check[-_:]?format)[\\w:-]*(fix|format)(:[\\w:-]+)?(?=[\\s;&|)\"']|$)");
   def writes_repo($in):
-      test("git apply|apply_patch|write_text|writeFileSync")
-      or (raw_write and (readonly | not))
-      or test("(\\.open\\(|open\\([^)]*, *)(mode *= *)?[\"'][wa][bt+]?[\"']")
+      (raw_write and (readonly | not))
       # as a command word: a codemod or a fixing formatter; mv/cp/rm on a repo path, or after cd into the repo
       or test("(^|[;&|(\n] *)(npx +|node +|bun +)?[\\w./-]*(codemod|jscodeshift)")
       or test("(^|[;&|(\n] *)(npx +|pnpm +(exec +)?|yarn +|bunx +)?[\\w./-]*(eslint|prettier|biome|stylelint|ruff)\\b[^;&|\n]*--(fix|write)\\b|gofmt +-w|dotnet +format")
@@ -94,10 +99,14 @@ read -r -d '' events_jq <<'JQ' || true
       or (test($cd) and (gsub("(?<m>\"[^\"]*\"|'[^']*')"; .m | gsub("[<>|]"; "_"))
           | test("(^|[^0-9&>])(>>?|tee) *(?![\"']?(/dev/|/tmp|/private/tmp|&))[^ ]")))
       or ($in and (gsub("\"[^\"]*\"|'[^']*'"; "Q") | test("(^|[\\s;&|(])>>? *(?![/~$&(])[\\w.]|(^|[;&|(\n] *)tee +(-a +)?(?![-/~$])[\\w.]")));
-    def only_md: [scan("[A-Za-z0-9_./-]+\\.[A-Za-z]{1,6}\\b")] | length > 0 and all(test("\\.md$"));
-  fromjson? // empty
+    .
+JQ
+read -r -d '' events_jq <<'JQ' || true
+  ($root | norm) as $root
+  | fromjson? // empty
   | select((.isSidechain == true) == $side)
   | .timestamp as $ts
+  # $in: the command ran with its cwd in the repo
   | ((.cwd // "") | norm | rtrimstr("/") + "/" | startswith($root)) as $in
   | if .type == "assistant" then
       .message.content | arrays | .[]
@@ -109,8 +118,10 @@ read -r -d '' events_jq <<'JQ' || true
           ((.input.file_path // .input.notebook_path // "") | norm) as $p
           | select(($p | startswith($root)) and ($p | test("\\.md$") | not))
           | {k: "edit", p: ($p | ltrimstr($root)), ts: $ts}
-        elif .name == "Bash" and ((.input.command // "") | writes_repo($in) and (only_md | not)) then
-          {k: "edit", p: "(via Bash)", ts: $ts}
+        elif .name == "Bash" then
+          (.input.command // "") as $c
+          | if $c | code_write and (only_md | not) then {k: "edit", p: "(via Bash)", ts: $ts}
+            else {k: "bash", c: $c, in: $in, ts: $ts} end
         elif $side then empty
         elif (.name == "Agent" or .name == "Task")
              and (.input | kit_is_reviewer) then
@@ -129,9 +140,18 @@ read -r -d '' events_jq <<'JQ' || true
         | {k: "review", ts: $ts} end)
     else empty end
 JQ
-events_jq="$KIT_REVIEWER_JQ$events_jq"
+events_jq="$KIT_REVIEWER_JQ$common_jq$events_jq"
 read -r -d '' tail_jq <<'JQ' || true
-  [.[] | select(.k == "denied") | .id] as $denied
+  # a Bash event becomes an edit by its verdict ($v, one character per Bash event): w, or r and the raw regex; a root
+  # holding a character the splitter cuts at (space, parenthesis) is read raw where the command names it
+  ($root | rtrimstr("/") | test("[ \t()|;&<>`'\"#\\\\]")) as $odd
+  | [foreach .[] as $e (-1; if $e.k == "bash" then . + 1 else . end;
+    if $e.k != "bash" then $e
+    elif $v[.:. + 1] == "w" or (($v[.:. + 1] != "-" or ($odd and ($e.c | contains($root | rtrimstr("/")))))
+        and ($e.c | writes_repo($e.in) and (only_md | not))) then
+      {k: "edit", p: "(via Bash)", ts: $e.ts}
+    else empty end)]
+  | [.[] | select(.k == "denied") | .id] as $denied
   | map(select(.k != "denied" and ((.k == "review" and .id != null and (.id as $i | any($denied[]; . == $i))) | not)))
   | sort_by(.ts) | . as $e
   | [range(length) as $i | $e[$i]
@@ -163,7 +183,12 @@ done
 last="$(jq -c '.last_assistant_message // empty | strings
   | {type: "assistant", timestamp: "9999", message: {content: [{type: "text", text: .}]}}' <<<"$input" 2>/dev/null || true)"
 [[ -n "$last" ]] && events+=$'\n'"$(jq -R --arg root "$project/" --arg dirs "$dirs" --argjson side false "$events_jq" <<<"$last" || true)"
-result="$(jq -cs "$tail_jq" <<<"$events")"
+# each Bash command judged per simple command (lib.sh kit_bash_writes), all in one awk run
+flags="$(jq -j 'select(.k == "bash") | if .in then "1" else "0" end' <<<"$events")"
+verdicts="$(jq -j 'select(.k == "bash") | .c + "\n\u001e\n"' <<<"$events" |
+  kit_bash_writes "$project/" "$dirs" "$flags" | tr -d '\n' || true)"
+result="$(jq -cs --arg v "$verdicts" --arg root "$project/" --arg dirs "$dirs" "$common_jq$raw_jq | $tail_jq" \
+  <<<"$events")"
 files="$(jq -r '.files[]' <<<"$result")"
 [[ -n "$files" ]] || exit 0
 state="$(jq -r '.state' <<<"$result")"

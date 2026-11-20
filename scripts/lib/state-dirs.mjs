@@ -1,11 +1,5 @@
-// The kit's state folders under .git, one place for the paths (twin of kit_state_dir in hooks/lib.sh).
-// Each takes the directory git runs from and returns "" when git fails, so a caller's empty check still works.
-// Options: { timeout } in ms (none by default, the old decider and plan calls had none); { throws: true } lets git's own error out.
-//   reviewDir      <absolute-git-dir>/claude-review   per work tree: review snapshots, read counts, run state
-//   usageCacheDir  <absolute-git-dir>/claude-usage    per work tree: transcript cache <session>.json
-//   usageBufDir    <git-common-dir>/claude-usage      shared: <session>.jsonl, .transcript, .sent, locks, refusals/, send.log
-//   planRunDir     <git-common-dir>/claude-plan-run   shared: run-<job>.json, the marker of a run-plan workflow (no shell twin)
-//   deciderDir     <git-common-dir>/claude-decider    shared: used verdicts <session>.json, log/ (decider log until sent)
+// The kit's state folders under .git (twin of kit_state_dir in hooks/lib.sh; contents: docs/spec.md, files the kit
+// creates). Each takes git's cwd and returns "" when git fails; options { timeout } ms (default none), { throws: true }
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 

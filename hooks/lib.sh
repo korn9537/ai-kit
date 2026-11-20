@@ -74,6 +74,7 @@ kit_conf() {
 # a general-purpose (type missing, general-purpose or claude, as agent-model-guard.sh) whose description contains
 # review (any case: CodeReview, rereview; not preview) and does not start "commit:". kit_review_text: a SendMessage
 # summary naming a review.
+# shellcheck disable=SC2034  # read by the hooks that source this file
 KIT_REVIEWER_JQ='def kit_is_reviewer: (.subagent_type // "") as $t | (.description // "") as $d
   | ($t | test("change-reviewer")) or (($t == "" or $t == "general-purpose" or $t == "claude")
     and ($d | test("(?<![Pp])(?<!un)review"; "i")) and ($d | test("^\\s*commit:"; "i") | not));
@@ -211,7 +212,8 @@ EOT
 # $(( )): the caller then checks the raw text as well. The one $( read through is the message form of git and gh: a
 # double quote ending its line in an unescaped $(cat <<'W', whose body is dropped, closed by a line of ) alone; for any
 # other command the output may be run (bash -c, eval). No \006ok at all means awk failed. awk under LC_ALL=C: bash 3.2
-# replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s).
+# replaces in a UTF-8 string in quadratic time (a 24 KB Thai heredoc: 14 s). A batch: commands each ended by a line of
+# \036 alone, one marker each.
 kit_split_cmd() {
   LC_ALL=C awk '
 function word(w) {
@@ -239,6 +241,12 @@ function escaped(s, pos,   b) {
   while (pos > 1 && substr(s, pos - 1, 1) == BS) { b++; pos-- }
   return b % 2
 }
+function fin() {
+  flush()
+  if (q != "" || hd || ar > 0) raw = 1
+  print MK (raw ? "raw" : "ok")
+  q = ""; qn = hd = hdq = hdtab = hdpend = dqhd = dqtab = dqclose = cont = ar = raw = 0; hdword = dqword = ""
+}
 function dqend(s,   off, k, pos, b, j) {
   off = 0
   while ((k = index(substr(s, off + 1), DQ)) > 0) {
@@ -253,6 +261,7 @@ BEGIN {
   SQ = "\047"; DQ = "\""; BS = "\\"; special = "[\\\\\047\"#;|&()<`>]"; US = "\037"; MK = "\006"
   PH = "[\001-\005\016-\021]"
 }
+$0 == "\036" { fin(); nsep++; lastsep = NR; next }
 {
   if (dqhd) {
     t = $0
@@ -340,9 +349,285 @@ BEGIN {
   else flush()
   if (hdpend) { hd = 1; hdpend = 0 }
 }
-END {
-  flush()
-  if (q != "" || hd || ar > 0) raw = 1
-  print MK (raw ? "raw" : "ok")
-}'
+END { if (!nsep || NR > lastsep) fin() }'
+}
+
+# kit_bash_writes <root> <code_dirs re> <flags>: Bash commands on stdin, each ended by a \036 line (flag k = 1: its
+# cwd in the repo); per command w = writes into the repo (not .md-only), - = no, r = unsure (raw split, bash -c, eval)
+kit_bash_writes() {
+  local root="${1%/}" dirs="$2" flags="$3" k=0 here=0 v=- seg n j w r any=1 f_was=1 sw rc IFS=$'\037'
+  local -a t a stack vars
+  case $- in *f*) ;; *) f_was=0; set -f ;; esac
+  root="$(kit_path "$root")"
+  here="${flags:0:1}"
+  while IFS= read -r seg; do
+    case "$seg" in
+      $'\006ok' | $'\006raw')
+        [[ "$v" == - && "$seg" == $'\006raw' ]] && v=r
+        printf '%s\n' "$v"
+        [[ "$v" == w ]] && any=0
+        k=$((k + 1)) v=- stack=() vars=() here="${flags:k:1}"
+        continue ;;
+      $'\006(') stack+=("$here"); continue ;;
+      $'\006)')
+        if ((${#stack[@]})); then here="${stack[${#stack[@]} - 1]}"; unset "stack[${#stack[@]}-1]"; fi
+        continue ;;
+      $'\006'*) continue ;;
+    esac
+    [[ "$v" == w ]] && continue
+    # shellcheck disable=SC2206  # split on \037 with globbing off
+    t=($seg)
+    n=${#t[@]} a=() sw=0
+    # a redirect word: \007> (unquoted), the target the rest of the word or the next one; the other words go to a
+    for ((j = 0; j < n; j++)); do
+      w="${t[j]}"
+      if [[ "$w" == *$'\007>'* ]]; then
+        r="${w#*$'\007'>}" r="${r#$'\007'>}" r="${r#[|]}"
+        [[ "${w%%$'\007'*}" =~ ^[0-9]*\&?$ ]] || a+=("${w%%$'\007'*}")
+        if [[ -z "$r" ]]; then j=$((j + 1)); r="${t[j]:-}"; fi
+        [[ -n "$r" && "$r" != '&'* ]] && _kbw_in "$r" && sw=1
+      else
+        a+=("$w")
+      fi
+    done
+    # NAME=value alone (or after export): a later $NAME/ in a target or cd reads as value/
+    if ((${#a[@]})) && [[ "${a[0]}" == export || "${a[0]}" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then
+      rc=0
+      for w in "${a[@]}"; do [[ "$w" == export || "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]] || rc=1; done
+      ((rc)) || for w in "${a[@]}"; do [[ "$w" == export ]] || vars=("$w" ${vars[@]+"${vars[@]}"}); done
+    fi
+    if ((!sw && ${#a[@]})); then
+      rc=0
+      _kbw_cmd 0 ${#a[@]} 1 || rc=$?
+      ((rc == 0)) && sw=1
+      ((rc == 2)) && [[ "$v" == - ]] && v=r
+    fi
+    if ((sw)) && ! _kbw_md_only "${t[@]}"; then v=w; fi
+  done < <(kit_split_cmd)
+  ((f_was)) || set +f
+  return $any
+}
+# _kbw_in <word>: the word names a path in the repo: under root, in a code_dirs folder (also after ./ or $VAR/), or
+# relative while the cwd (here) is in the repo
+_kbw_in() {
+  local w
+  _kbw_var "$1"
+  w="${w//\\//}"
+  while [[ "$w" == ./* ]]; do w="${w#./}"; done
+  [[ "$w" =~ ^[a-z]:/ ]] && w="$(printf %s "${w:0:1}" | tr a-z A-Z)${w:1}"
+  case "$w" in "$root" | "$root"/*) return 0 ;; esac
+  local re='^(\$\{?[A-Za-z_][A-Za-z0-9_]*\}?/)?('"$dirs"')/'
+  [[ -n "$dirs" && "$w" =~ $re ]] && return 0
+  ((here)) && [[ "$w" =~ ^[A-Za-z0-9_.] ]]
+}
+# _kbw_var <word>: w = the word, a leading ~, $NAME or ${NAME} replaced by its value (vars, else $HOME for HOME)
+_kbw_var() {
+  local x re='^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?(/.*)?$'
+  w="$1"
+  # shellcheck disable=SC2088  # a pattern on the word, not an expansion
+  if [[ -n "${HOME:-}" && ("$w" == '~' || "$w" == '~/'*) ]]; then w="$HOME${w#\~}"; return 0; fi
+  [[ "$w" =~ $re ]] || return 0
+  for x in ${vars[@]+"${vars[@]}"}; do
+    if [[ "${x%%=*}" == "${BASH_REMATCH[1]}" ]]; then w="${x#*=}${BASH_REMATCH[2]}"; return 0; fi
+  done
+  [[ "${BASH_REMATCH[1]}" == HOME && -n "${HOME:-}" ]] && w="$HOME${BASH_REMATCH[2]}"
+  return 0
+}
+_kbw_tmp() { local re='^(/private)?/tmp/|^\$\{?TMP'; [[ "$1" =~ $re ]]; }
+# _kbw_md_only <words>: every file name in them ends .md, and there is one
+_kbw_md_only() {
+  local w seen=0 re='[A-Za-z0-9_./-]+\.([A-Za-z]{1,6})([^A-Za-z0-9_]|$)'
+  for w; do
+    while [[ "$w" =~ $re ]]; do
+      [[ "${BASH_REMATCH[1]}" == md ]] || return 1
+      seen=1 w="${w#*"${BASH_REMATCH[0]}"}"
+    done
+  done
+  ((seen))
+}
+# _kbw_cmd <from> <to> <top>: the words a[from..to-1] as one command; 0 writes, 1 does not, 2 runs a text (bash -c,
+# eval, rg --pre) this cannot read. top = 1: a cd changes here
+_kbw_cmd() {
+  local i=$1 e=$2 top=$3 c j w s pos=() inpl=0 script=0 expect=0 dash=0 ch rest
+  # leading assignments, keywords and wrappers (env, sudo, xargs, timeout, ...) before the command word
+  while ((i < e)); do
+    w="${a[i]}"
+    if [[ "$w" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; then i=$((i + 1)); continue; fi
+    case "${w##*/}" in
+      '!' | '{' | '}' | then | do | else | elif | if | while | until | time | command | builtin | exec | nohup)
+        i=$((i + 1)) ;;
+      env | sudo | nice | xargs | timeout | stdbuf)
+        c="${w##*/}" i=$((i + 1))
+        while ((i < e)) && [[ "${a[i]}" == -* ]]; do
+          case "$c:${a[i]}" in
+            env:-u | sudo:-[ugCh] | nice:-n | xargs:-[nILPsdEa] | timeout:-[sk] | stdbuf:-[ioe]) i=$((i + 2)) ;;
+            *) i=$((i + 1)) ;;
+          esac
+        done
+        [[ "$c" == timeout ]] && i=$((i + 1)) ;;
+      *) break ;;
+    esac
+  done
+  ((i < e)) || return 1
+  c="${a[i]##*/}"
+  case "$c" in
+    cd | pushd)
+      ((top)) || return 1
+      j=$((i + 1))
+      while ((j < e)) && [[ "${a[j]}" == -[LPe@] ]]; do j=$((j + 1)); done
+      _kbw_var "${a[j]:-}"
+      w="${w//\\//}"
+      case "$w" in
+        "" | '~'*) here=0 ;;
+        "$root" | "$root"/*) here=1 ;;
+        /* | [A-Za-z]:/*) here=0 ;;
+      esac
+      return 1 ;;
+    bash | sh | zsh | dash | ksh)
+      for ((j = i + 1; j < e; j++)); do [[ "${a[j]}" =~ ^-[A-Za-z]*c ]] && return 2; done
+      return 1 ;;
+    eval) return 2 ;;
+    rg)
+      for ((j = i + 1; j < e; j++)); do [[ "${a[j]}" == --pre || "${a[j]}" == --pre=* ]] && return 2; done
+      return 1 ;;
+    sed | gsed | perl)
+      # options: i turns in-place on (the rest of the word is a suffix); sed e/f and perl e/E take the script
+      for ((j = i + 1; j < e; j++)); do
+        w="${a[j]}"
+        if ((expect)); then expect=0 script=1; continue; fi
+        case "$w" in
+          --in-place*) inpl=1 ;;
+          --expression=* | --file=*) script=1 ;;
+          --expression | --file) expect=1 ;;
+          --*) ;;
+          -?*)
+            rest="${w#-}"
+            while [[ -n "$rest" ]]; do
+              ch="${rest:0:1}" rest="${rest:1}"
+              if [[ "$ch" == i ]]; then
+                inpl=1
+                # BSD sed -i '' or -i .bak: the next word is the suffix
+                [[ -z "$rest" && "$c" != perl && $((j + 1)) -lt $e && "${a[j + 1]}" =~ ^(\.[A-Za-z0-9_~-]*)?$ ]] &&
+                  j=$((j + 1))
+                break
+              fi
+              if [[ "$c" == perl && "$ch" =~ [eE] ]] || [[ "$c" != perl && "$ch" =~ [ef] ]]; then
+                script=1; [[ -z "$rest" ]] && expect=1
+                break
+              fi
+              [[ "$c" == perl && "$ch" =~ [MmI] ]] && { [[ -z "$rest" ]] && j=$((j + 1)); break; }
+            done ;;
+          *) pos+=("$w") ;;
+        esac
+      done
+      ((inpl)) || return 1
+      ((script || ! ${#pos[@]})) || pos=(${pos[@]+"${pos[@]:1}"})
+      ((${#pos[@]})) || return 0
+      for s in "${pos[@]}"; do _kbw_var "$s"; _kbw_tmp "$w" || return 0; done
+      return 1 ;;
+    patch)
+      for ((j = i + 1; j < e; j++)); do [[ "${a[j]}" =~ ^--(version|help|dry-run)$ ]] && return 1; done
+      return 0 ;;
+    gofmt)
+      for ((j = i + 1; j < e; j++)); do [[ "${a[j]}" == -w ]] && return 0; done
+      return 1 ;;
+    dotnet) [[ "${a[i + 1]:-}" == format ]] && return 0; return 1 ;;
+    git)
+      j=$((i + 1))
+      while ((j < e)) && [[ "${a[j]}" == -* ]]; do
+        case "${a[j]}" in -C | -c | --git-dir | --work-tree | --namespace) j=$((j + 2)) ;; *) j=$((j + 1)) ;; esac
+      done
+      case "${a[j]:-}" in
+        checkout) for ((j = j + 1; j < e; j++)); do [[ "${a[j]}" == -- ]] && return 0; done; return 1 ;;
+        restore)
+          # a --staged-only restore leaves the work tree; --worktree beside it does not
+          local staged=0 wt=0
+          for ((j = j + 1; j < e; j++)); do
+            case "${a[j]}" in
+              --staged) staged=1 ;; --worktree) wt=1 ;;
+              --*) ;;
+              -*) [[ "${a[j]}" == *S* ]] && staged=1; [[ "${a[j]}" == *W* ]] && wt=1 ;;
+            esac
+          done
+          ((!staged || wt)) && return 0; return 1 ;;
+        mv | rm) _kbw_files "${a[j]}" $((j + 1)) "$e"; return ;;
+      esac
+      return 1 ;;
+    mv | cp | rm | tee) _kbw_files "$c" $((i + 1)) "$e"; return ;;
+    find)
+      for ((j = i + 1; j < e; j++)); do
+        if [[ "${a[j]}" =~ ^-(exec|execdir|ok|okdir)$ ]]; then
+          s=$((j + 1))
+          while ((j < e)) && [[ "${a[j]}" != ';' && "${a[j]}" != + ]]; do j=$((j + 1)); done
+          w=0
+          _kbw_cmd "$s" "$j" 0 || w=$?
+          ((w != 1)) && return $w
+        fi
+      done
+      return 1 ;;
+    npx | bunx)
+      j=$((i + 1))
+      while ((j < e)) && [[ "${a[j]}" == -* ]]; do
+        case "${a[j]}" in -p | --package) j=$((j + 2)) ;; *) j=$((j + 1)) ;; esac
+      done
+      _kbw_cmd "$j" "$e" 0; return ;;
+    npm | pnpm | yarn | bun)
+      j=$((i + 1))
+      while ((j < e)) && [[ "${a[j]}" == -* ]]; do
+        case "${a[j]}" in
+          -C | --dir | --filter | -F | --prefix | -w | --workspace | --cwd) j=$((j + 2)) ;;
+          *) j=$((j + 1)) ;;
+        esac
+      done
+      w="${a[j]:-}"
+      case "$w" in
+        exec | dlx | x) _kbw_cmd $((j + 1)) "$e" 0; return ;;
+        run | run-script) j=$((j + 1)) w="${a[j]:-}" ;;
+      esac
+      # a fix or format script (lint-fix, autofix, format:all), not prefix or check-format; or -- --fix
+      if [[ "$w" =~ ^[A-Za-z0-9_:-]*(fix|format)(:[A-Za-z0-9_:-]+)?$ && "$w" != prefix &&
+        ! "$w" =~ check[-_:]?format ]]; then return 0; fi
+      for ((s = j + 1; s < e; s++)); do
+        if ((dash)); then [[ "${a[s]}" =~ ^--(fix|write)(=|$) ]] && return 0; fi
+        [[ "${a[s]}" == -- ]] && dash=1
+      done
+      [[ "$c" != npm && -n "$w" ]] && { _kbw_cmd "$j" "$e" 0; return; }
+      return 1 ;;
+    node | deno | tsx | ts-node)
+      j=$((i + 1))
+      while ((j < e)) && [[ "${a[j]}" == -* ]]; do j=$((j + 1)); done
+      [[ "${a[j]:-}" =~ codemod|jscodeshift ]] && return 0
+      return 1 ;;
+    *codemod* | *jscodeshift*) return 0 ;;
+  esac
+  # a fixing formatter: eslint, prettier, biome, stylelint, ruff with --fix or --write; ruff format without --check
+  c="${c%%@*}"
+  if [[ "$c" =~ (eslint|prettier|biome|stylelint|ruff)$ ]]; then
+    for ((j = i + 1; j < e; j++)); do
+      [[ "${a[j]}" =~ ^--(fix|write)(=|$) ]] && return 0
+      [[ "$c" == *prettier && "${a[j]}" == -w ]] && return 0
+    done
+    if [[ "$c" == *ruff && "${a[i + 1]:-}" == format ]]; then
+      for ((j = i + 2; j < e; j++)); do [[ "${a[j]}" =~ ^--(check|diff)$ ]] && return 1; done
+      return 0
+    fi
+  fi
+  return 1
+}
+# _kbw_files <mv|cp|rm|tee> <from> <to>: rm, tee and mv write every file word (mv empties its source), cp only its
+# target: the last word, or -t
+_kbw_files() {
+  local c=$1 j last="" opts=1
+  for ((j = $2; j < $3; j++)); do
+    if ((opts)) && [[ "${a[j]}" == -- ]]; then opts=0; continue; fi
+    if ((opts)) && [[ "$c" == cp && "${a[j]}" == -t ]]; then
+      j=$((j + 1)); _kbw_in "${a[j]:-}" && return 0; continue
+    fi
+    if ((opts)) && [[ "$c" == cp && "${a[j]}" == --target-directory=* ]]; then
+      _kbw_in "${a[j]#*=}" && return 0; continue
+    fi
+    ((opts)) && [[ "${a[j]}" == -* ]] && continue
+    if [[ "$c" == cp ]]; then last="${a[j]}"; else _kbw_in "${a[j]}" && return 0; fi
+  done
+  [[ -n "$last" ]] && _kbw_in "$last"
 }

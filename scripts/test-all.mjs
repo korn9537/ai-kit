@@ -16,7 +16,7 @@ const list = (dir, suffix) =>
 const suites = [
   ...list("hooks", ".test.sh").map((f) => ({ name: f, cmd: "bash", args: [f] })),
   ...list("githooks", ".test.sh").map((f) => ({ name: f, cmd: "bash", args: [f] })),
-  ...list("scripts", ".test.mjs").map((f) => ({ name: f, cmd: process.execPath, args: [f] })),
+  ...list("scripts", ".test.mjs").map((f) => ({ name: f, cmd: process.execPath, args: ["--test-reporter=tap", f] })),
 ];
 
 const run = (s) =>
@@ -28,6 +28,13 @@ const run = (s) =>
     child.on("error", (e) => resolve({ ...s, code: 1, out: out + String(e) }));
     child.on("close", (code) => resolve({ ...s, code, out }));
   });
+
+// a node:test suite's TAP summary (`# pass N`, `# fail N`), else a shell suite's last "N passed, M failed" line
+const summary = (out) => {
+  const last = (k) => [...out.matchAll(new RegExp(`^# ${k} (\\d+)$`, "gm"))].pop()?.[1];
+  if (last("pass") !== undefined) return `${last("pass")} passed, ${last("fail") ?? 0} failed`;
+  return (out.split("\n").filter((l) => /\d+ passed, \d+ failed/.test(l)).pop() ?? "").trim();
+};
 
 const start = Date.now();
 const results = new Array(suites.length);
@@ -43,8 +50,7 @@ await Promise.all(Array.from({ length: Math.min(availableParallelism(), suites.l
 let failed = 0;
 for (const r of results) {
   if (r.code === 0) {
-    const last = r.out.split("\n").filter((l) => /\d+ passed, \d+ failed/.test(l)).pop() ?? "";
-    console.log(`ok   ${r.name}  ${last.trim()}`.trimEnd());
+    console.log(`ok   ${r.name}  ${summary(r.out)}`.trimEnd());
   } else {
     failed++;
     console.log(`FAIL ${r.name}\n${r.out.trimEnd()}`);

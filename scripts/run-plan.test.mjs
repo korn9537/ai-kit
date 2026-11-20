@@ -1,6 +1,7 @@
 // Runs workflows/run-plan.js with a fake agent(): one review for the whole job, how many fix rounds it gets, how it ends.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ok } from "./lib/test-util.mjs";
 
 const source = readFileSync(join(import.meta.dirname, "..", "workflows", "run-plan.js"), "utf8").replace("export const meta", "const meta");
 const AsyncFunction = (async () => {}).constructor;
@@ -10,12 +11,6 @@ const run = (batches, script) =>
     async (prompt, o) => script(o.label, prompt),
     () => {},
   );
-let pass = 0;
-let fail = 0;
-const ok = (name, cond) => {
-  console.log(`${cond ? "ok  " : "FAIL"} - ${name}`);
-  cond ? pass++ : fail++;
-};
 
 const commit = (hash) => ({ hash, files: ["a"], choices: [], owner: [], blockers: [], notes: [], review: "review" });
 const finding = (what, dataRule = false, verdict = "CONFIRMED") => ({ where: "a.ts:1", what, rule: "r", fix: "f", verdict, dataRule });
@@ -228,6 +223,3 @@ ok("no accept: no Done when line", seen.every((p) => !/Done when:/.test(p)));
   await new AsyncFunction("args", "agent", "log", staged)({ repo: "/elsewhere" }, async (p, o) => (prompts.push(p), s2(o.label)), () => {});
   ok("staged copy: a repo passed at launch joins the carried args", prompts.some((p) => p.includes("Repo: /elsewhere")));
 }
-
-console.log(`${pass} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

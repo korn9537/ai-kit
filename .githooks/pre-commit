@@ -5,6 +5,11 @@ node scripts/check-docs.mjs --wrap --staged || { echo "To bypass: git commit --n
 # docs/handoffs.md: a change to a route, an agent or the workflow runs the contract and workflow tests
 if git diff --cached --name-only | grep -qE '^(agents/|workflows/|commands/|hooks/|docs/(handoffs|plan-batching|owner-kinds)\.md|CLAUDE\.core\.md|scripts/(plan|continuous|handoffs|run-plan))'; then
   for t in scripts/handoffs.test.mjs scripts/run-plan.test.mjs; do
-    out=$(node "$t" 2>&1) || { printf '%s\n' "$out" | grep -v '^ok'; echo "To bypass: git commit --no-verify"; exit 1; }
+    out=$(node --test-reporter=dot "$t" 2>&1) || { printf '%s\n' "$out"; echo "To bypass: git commit --no-verify"; exit 1; }
   done
+fi
+# The kit's own code keeps the rules it enforces on every project: comment blocks of at most two lines, 40 KB files.
+node scripts/check-comments.mjs --staged --strict || { echo "To bypass: git commit --no-verify"; exit 1; }
+if [ -n "$(git diff --cached --name-only -M20% --diff-filter=MR)" ]; then
+  node scripts/check-comments.mjs --size || { echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"; exit 1; }
 fi

@@ -1,8 +1,5 @@
-// Reports comments breaking docs/code-comments.md: blocks over 2 lines, history, dates, two C# <summary>s on a member.
-// Usage, cwd in the repo: node <plugin>/scripts/check-comments.mjs [--staged] [--strict: exit 1 on an issue] [files...]
-// --range=<a...b>: the files changed in that range, read from the index (ai/kit/check.sh, a clean clone: index = HEAD).
-// --size: instead, block a staged edit to a code file over 40 KB at HEAD unless it only moves lines out (general.md
-// item 12); escape ALLOW_LARGE_EDIT=1.
+// Reports comments breaking docs/code-comments.md. Usage, cwd in the repo: node <plugin>/scripts/check-comments.mjs
+// [--staged] [--strict: exit 1] [--range=<a...b>: index] [--size: general.md item 12; ALLOW_LARGE_EDIT=1] [f...]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";

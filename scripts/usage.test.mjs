@@ -5,20 +5,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, w
 import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { LOCK_STALE_MS, breakLock, withLock } from "./usage.mjs";
+import { eq } from "./lib/test-util.mjs";
 
-let passed = 0;
-let failed = 0;
-function eq(desc, got, want) {
-  const g = JSON.stringify(got);
-  const w = JSON.stringify(want);
-  if (g === w) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n  got:  ${g}\n  want: ${w}`);
-  }
-}
 const run = (cmd, args, opts) => new Promise((res) => {
   const c = spawn(cmd, args, { ...opts, stdio: ["pipe", "ignore", "ignore"] });
   c.stdin.end(opts.input ?? "");
@@ -68,7 +56,7 @@ try {
   eq("and .lock.break is removed", existsSync(brk), false);
   rmSync(lock, { recursive: true });
 
-  // `seen` no longer matches the file under .lock.break: the lock stays
+  // `seen` differs from the file under .lock.break: the lock stays
   writeFileSync(lock, `${holder.pid}:${host}:new`);
   utimesSync(lock, old, old);
   eq("a lock that changed since it was seen is not removed", [breakLock(lock, "other"), readFileSync(lock, "utf8")], [false, `${holder.pid}:${host}:new`]);
@@ -185,5 +173,3 @@ try {
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }
-console.log(`${passed} passed, ${failed} failed`);
-process.exit(failed ? 1 : 0);

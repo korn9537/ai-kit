@@ -185,9 +185,8 @@ export async function postItems(base, path, project, items, { maxItems = 5000, m
   await post();
 }
 
-// One file's items posted: 2xx → done(); a PERMANENT_STATUS → the file kept as <name>.rejected with the error in
-// send.log; any other HTTP error → into errors, the file left for the next send and the next file still tried, but a
-// 429 is thrown with the errors so far to end the pass; unreachable → thrown, as every file would fail.
+// one file posted: 2xx → done(); PERMANENT_STATUS → kept as <name>.rejected, error in send.log; other HTTP → errors,
+// file kept, next file tried, but a 429 throws with the errors so far; unreachable → thrown (every file would fail)
 async function postFile(path, post, done, errors, log) {
   try {
     await post();
@@ -239,9 +238,8 @@ export async function sendRefusals(bufDir, base, project, { log = logLine } = {}
   return sent;
 }
 
-// Decider logs <logDir>/<session>.<agent>.jsonl: seq = line index; on 2xx the file goes and a .sent marker stays,
-// so decider.mjs sync does not write it again. A fresh file waits for a later send; an empty one past FRESH_MS is
-// marked sent with no POST; a <name>.jsonl.<pid>.tmp past TMP_MS (a crashed logDeciders) is deleted.
+// <logDir>/<session>.<agent>.jsonl, seq = line index; 2xx: file removed, a .sent marker kept so sync won't rewrite it.
+// A fresh file waits; an empty one past FRESH_MS is marked sent unposted; a .<pid>.tmp past TMP_MS (crashed) is deleted
 export async function sendDecisions(logDir, base, project, { log = logLine, now = Date.now() } = {}) {
   let names = [];
   try {

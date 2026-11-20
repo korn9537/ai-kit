@@ -2,7 +2,7 @@
 # Tests for handoff-nudge.sh: a transcript whose last main reply read a given context; checks the note, its event
 # name and that it repeats only every further 50k.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")"
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/handoff-nudge.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
@@ -81,7 +81,7 @@ counted() { [[ "$(($(wc -c <"$COUNT")))" == "$1" ]]; }
 
 # the default reads_from 0: a note well below the old 100k
 ctx 60000
-for i in 1 2 3; do read_tool Bash "grep -n x src/a.ts"; done
+for _ in 1 2 3; do read_tool Bash "grep -n x src/a.ts"; done
 check "three reads: no note yet" "$(t test -z "$OUT")" "$OUT"
 read_tool Read
 check "the fourth read: the subagent note" \
@@ -106,13 +106,13 @@ prompt2
 check "a new prompt starts the count again" "$(t test ! -e "$COUNT" -a ! -e "$COUNT.1")"
 ctx 60000
 echo '{"handoff": {"reads_from": 100000}}' >"$REPO/ai/kit/config.json"
-for i in 1 2 3 4 5; do read_tool Read; done
+for _ in 1 2 3 4 5; do read_tool Read; done
 check "below a set reads_from: counted, no note" "$(t test -z "$OUT")" "$OUT"
 rm -f "$REPO/ai/kit/config.json"
 prompt2
 ctx 120000
 echo '{"handoff": {"max_reads": 0}}' >"$REPO/ai/kit/config.json"
-for i in 1 2 3 4 5; do read_tool Read; done
+for _ in 1 2 3 4 5; do read_tool Read; done
 check "max_reads 0: off" "$(t test -z "$OUT")" "$OUT"
 # the whole-file note alone: the read count stays below its note at this context
 echo '{"handoff": {"reads_from": 100000}}' >"$REPO/ai/kit/config.json"

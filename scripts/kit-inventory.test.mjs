@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { ok } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "kit.mjs");
 const FILES = {
@@ -43,7 +44,6 @@ const WANT = [
 ];
 
 const dir = mkdtempSync(join(tmpdir(), "kit-inventory-"));
-let fail = 0;
 try {
   for (const [p, t] of Object.entries(FILES)) {
     mkdirSync(dirname(join(dir, p)), { recursive: true });
@@ -52,20 +52,11 @@ try {
   execFileSync("git", ["init", "-q"], { cwd: dir });
   execFileSync("git", ["add", "-A", "-f"], { cwd: dir });
   const lines = execFileSync("node", [SCRIPT, "inventory"], { cwd: dir, encoding: "utf8" }).split("\n");
-  for (const w of WANT) {
-    const ok = lines.includes(w);
-    console.log(`${ok ? "ok  " : "FAIL"} - ${w}`);
-    if (!ok) fail++;
-  }
+  for (const w of WANT) ok(w, lines.includes(w), lines.join("\n"));
   const sugg = lines.find((l) => l.startsWith("  ui.include suggestion: "));
   const re = sugg && new RegExp(JSON.parse(sugg.slice("  ui.include suggestion: ".length)));
-  const ok = !!re && re.test("app/orders/page.tsx") && !re.test("app/api/orders/route.ts");
-  console.log(`${ok ? "ok  " : "FAIL"} - ui.include suggestion matches pages, not routes`);
-  if (!ok) fail++;
-  const okUsage = !lines.includes("  ai/usage");
-  console.log(`${okUsage ? "ok  " : "FAIL"} - ai/usage is not reported outside the layout`);
-  if (!okUsage) fail++;
-  if (fail) console.log(lines.join("\n"));
+  ok("ui.include suggestion matches pages, not routes", !!re && re.test("app/orders/page.tsx") && !re.test("app/api/orders/route.ts"), lines.join("\n"));
+  ok("ai/usage is not reported outside the layout", !lines.includes("  ai/usage"), lines.join("\n"));
 } finally {
   rmSync(dir, { recursive: true, force: true });
 }
@@ -83,15 +74,12 @@ try {
   execFileSync("git", ["add", "-A"], { cwd: dir2 });
   put("tmp/package.json", JSON.stringify({ dependencies: { react: "18" } }));
   const out = execFileSync("node", [SCRIPT, "inventory"], { cwd: dir2, encoding: "utf8" });
-  const ok = out.split("\n").includes("ui: unset · detected: none");
-  console.log(`${ok ? "ok  " : "FAIL"} - docs site and untracked folder are not UI`);
-  if (!ok) fail++;
+  ok("docs site and untracked folder are not UI", out.split("\n").includes("ui: unset · detected: none"), out);
 } finally {
   rmSync(dir2, { recursive: true, force: true });
 }
 // records are never edited once committed (part files), so init writes no merge=union entry and check does not ask
 // (the eol=lf rules are kit-init.test.mjs)
-let extra = 1;
 {
   const d = mkdtempSync(join(tmpdir(), "kit-attr-"));
   try {
@@ -101,15 +89,8 @@ let extra = 1;
     const out = execFileSync("node", [SCRIPT, "init"], { cwd: d, encoding: "utf8" });
     const chk = spawnSync("node", [SCRIPT, "check"], { cwd: d, encoding: "utf8" }).stdout;
     const attrs = existsSync(join(d, ".gitattributes")) ? readFileSync(join(d, ".gitattributes"), "utf8") : "";
-    const ok = !/merge=union|ai\/usage/.test(attrs) && !chk.includes("gitattributes");
-    console.log(`${ok ? "ok  " : "FAIL"} - init writes no ai/usage merge entry and check does not ask for one`);
-    if (!ok) {
-      fail++;
-      console.log(JSON.stringify({ out, chk }));
-    }
+    ok("init writes no ai/usage merge entry and check does not ask for one", !/merge=union|ai\/usage/.test(attrs) && !chk.includes("gitattributes"), { out, chk });
   } finally {
     rmSync(d, { recursive: true, force: true });
   }
 }
-console.log(`\n${WANT.length + 3 + extra - fail} passed, ${fail} failed`);
-process.exit(fail ? 1 : 0);

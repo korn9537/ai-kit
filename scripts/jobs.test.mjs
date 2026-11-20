@@ -4,19 +4,9 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ok } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "jobs.mjs");
-let passed = 0;
-let failed = 0;
-function ok(desc, cond, out) {
-  if (cond) {
-    passed++;
-    console.log(`ok   - ${desc}`);
-  } else {
-    failed++;
-    console.log(`FAIL - ${desc}\n${out}`);
-  }
-}
 
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), "jobs-")));
 const g = (...a) => execFileSync("git", a, { cwd: tmp, encoding: "utf8" }).trim();
@@ -125,6 +115,3 @@ try {
 } finally {
   rmSync(plain, { recursive: true, force: true });
 }
-
-console.log(`${passed} passed, ${failed} failed`);
-process.exitCode = failed ? 1 : 0;
