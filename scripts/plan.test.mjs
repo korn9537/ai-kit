@@ -113,7 +113,8 @@ const r = resumeArgs(plan, commits, "/new");
 ok("resume args: committed batches and waits are gone", r.batches.map((b) => b.id).join() === "b,c" && !r.batches[0].waitsFor.length, r);
 ok("resume args: the current plugin path", r.plugin === "/new", r);
 
-const tmp = realpathSync(mkdtempSync(join(tmpdir(), "plan-")));
+// native: expands a Windows 8.3 temp dir (RUNNER~1) to the long name git prints
+const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "plan-")));
 const git = (repo, ...a) => execFileSync("git", a, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
 const repoAt = (name) => {
   const repo = join(tmp, name);
@@ -239,7 +240,7 @@ try {
   ok("a held batch is not ready", resume(repo, JOB, "/p").ready.join() === "c", resume(repo, JOB, "/p"));
   writeFileSync(state, '{"running":true}');
   ok("resume warns of a continuous run still going", resume(repo, JOB, "/p").continuousRunning === true);
-  ok("resume names the state to abandon", resume(repo, JOB, "/p").continuousState === state);
+  ok("resume names the state to abandon", resume(repo, JOB, "/p").continuousState === state, [resume(repo, JOB, "/p").continuousState, state]);
   writeFileSync(state, '{"launching":true}');
   ok("a run being launched counts as going", resume(repo, JOB, "/p").continuousRunning === true);
   writeFileSync(state, '{"batches":{"a":{"status":"partial"}}}');

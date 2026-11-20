@@ -13,7 +13,8 @@ const run = (cwd, cmd) =>
   spawnSync("node", [SCRIPT, cmd], { cwd, encoding: "utf8", env: { ...process.env, HOME: cwd, CLAUDE_CONFIG_DIR: "" } }).stdout;
 const lf = (repo) => execFileSync("git", ["check-attr", "eol", "--", ".githooks/pre-commit", "ai/kit/pre-commit.sh"], { cwd: repo, encoding: "utf8" });
 
-const tmp = realpathSync(mkdtempSync(join(tmpdir(), "kit-init-")));
+// native: expands a Windows 8.3 temp dir (RUNNER~1) to the long name git prints
+const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "kit-init-")));
 try {
   const repo = join(tmp, "repo");
   execFileSync("git", ["init", "-q", repo]);
