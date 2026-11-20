@@ -27,8 +27,8 @@ code bugs on Windows; no project needs to edit anything.
   `core.autocrlf` (its warnings went into the hook output being parsed), `env -i` keeps `SYSTEMROOT`, `TEMP` and
   `MSYSTEM`, a tool dir gets an `exec` wrapper where `ln -s` would copy an msys exe away from its DLL, node tests
   compare paths in one spelling and run a child script by `fileURLToPath`, and on Git Bash `session-start`'s
-  open-stdin case allows the hook's own time plus 2 s (2 s flat elsewhere). Skipped on Windows, with the reason: the execute-bit
-  cases, the symlinked-folder case, and the backslash file name.
+  open-stdin case allows the hook's own time plus 2 s (2 s flat elsewhere). Skipped on Windows, with the reason:
+  the execute-bit cases, the symlinked-folder case, and the backslash file name.
 - `.github/workflows/test.yml`: no `continue-on-error`; a red `main` on either platform is reverted. README's
   layout row and release step 2 say so; `docs/windows-ci.md`, the handoff for this, is deleted.
 
