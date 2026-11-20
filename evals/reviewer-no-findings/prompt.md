@@ -16,13 +16,13 @@ Done when:
 - No other line changes.
 
 What the caller knows, inline because the sandbox holds no repo: before the change, `grep -rn getUser src/` listed
-exactly three lines: `src/users.ts:4` (the export), `src/profile.ts:9` and `src/admin/list.ts:22` (the callers).
-There is no test file that names `getUser`. `ai/kit/review-checklist.md` does not exist.
+exactly five lines: `src/users.ts:3` (the export), `src/profile.ts:1` and `:4`, `src/admin/list.ts:1` and `:4` (each
+caller's import and call). There is no test file that names `getUser`. `ai/kit/review-checklist.md` does not exist.
 
 ```diff
 --- a/src/users.ts
 +++ b/src/users.ts
-@@ -1,7 +1,7 @@
+@@ -1,5 +1,5 @@
  import { db } from "./db";
 
 -export async function getUser(id: string): Promise<User | null> {
@@ -31,7 +31,7 @@ There is no test file that names `getUser`. `ai/kit/review-checklist.md` does no
  }
 --- a/src/profile.ts
 +++ b/src/profile.ts
-@@ -1,4 +1,4 @@
+@@ -1,5 +1,5 @@
 -import { getUser } from "./users";
 +import { fetchUser } from "./users";
 
@@ -41,7 +41,7 @@ There is no test file that names `getUser`. `ai/kit/review-checklist.md` does no
    if (!user) return null;
 --- a/src/admin/list.ts
 +++ b/src/admin/list.ts
-@@ -1,4 +1,4 @@
+@@ -1,5 +1,5 @@
 -import { getUser } from "../users";
 +import { fetchUser } from "../users";
 

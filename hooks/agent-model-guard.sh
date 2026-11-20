@@ -17,7 +17,8 @@ Blocked: a general-purpose or Explore subagent without a model inherits the main
 (where the code is, what it does, the path from an entry point) goes to subagent_type "ai-kit:explorer", which runs on
 sonnet from its frontmatter and needs no model. Anything else: launch it again with model "sonnet" (CLAUDE.core.md,
 Agent model). A fallback for a kit agent passes that agent's frontmatter model and effort: for ai-kit:change-reviewer,
-business-analyst or decider model "opus", effort "medium"; for ai-kit:committer or explorer model "sonnet", effort
-"medium"; any other general-purpose or Explore subagent model "sonnet".
+business-analyst or decider model "opus", effort "medium"; for ai-kit:committer model "sonnet", effort "medium"; an
+explorer whose type is not loaded is an Explore with model "sonnet", as is any other general-purpose or Explore
+subagent.
 EOT
 exit 2

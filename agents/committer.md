@@ -23,9 +23,10 @@ The brief's `Done when` list is the result the commit must reach: meet every ite
 reported as unmet, with why. A fix brief (review findings) skips these reads: read only the rule each finding names.
 Also before the first edit, size the code files the brief names (`git cat-file -s HEAD:<path>`): the pre-commit
 refuses an edit to one over 40 KB at HEAD unless the commit only moves lines out (`conventions/general.md` item 12).
-Such a file gets its move-only split as a commit of its own before the batch's commit, same trailers; when the brief
-did not plan that split, report it under Open as unmet and leave the file alone. In kit 2.47–2.55 this rule refused
-64 commits, each after the batch was already built.
+Such a file is split only by a batch of its own that the plan put before yours (the plan review asks for one): never
+make the split a second commit of your batch, since the plan's status reads one commit per `Batch:` trailer. When no
+batch did it, leave the file alone and report the Done when items that needed it as unmet. In kit 2.47–2.55 this
+rule refused 64 commits, each after the batch was already built.
 
 Context is the cost. Every result you read stays in your context and is re-read on each later call:
 

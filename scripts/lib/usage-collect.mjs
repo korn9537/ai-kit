@@ -12,10 +12,11 @@ export const COMMIT_RE = /^\[[^\]\n]+ ([0-9a-f]{7,40})\]/m;
 
 export function roleOf(desc, type) {
   if (/committer/.test(type ?? "") || /^\s*commit:/i.test(desc ?? "")) return "commit";
+  // by type before the description fallbacks: a search "where the review hook runs" is still an explorer
+  if (/explorer/.test(type ?? "")) return "explore";
   if (/decider/.test(type ?? "") || /\bdecider\b|^\s*decide\b/i.test(desc ?? "")) return "decider";
   if (/change-reviewer/.test(type ?? "") || /review/i.test(desc ?? "")) return "reviewer";
   if (/business-analyst/.test(type ?? "")) return "ba";
-  if (/explorer/.test(type ?? "")) return "explore";
   return "other";
 }
 

@@ -7,8 +7,9 @@ late, and a fifth agent takes the code searches. No project needs to edit anythi
 
 - `agents/committer.md`: the comment and doc checks run on the files about to be staged whatever tool wrote them
   (the Edit-tool rule lost to the auto-mode harness: committers wrote with sed and python3, and these two rules
-  refused 161 of 243 commits); the 40 KB rule is read before the first edit, with the split as its own commit or an
-  unmet item (64 refusals, each after the batch was built).
+  refused 161 of 243 commits); the 40 KB rule is read before the first edit: the split is a batch the plan put
+  earlier, and with none the file is left alone and the Done when items that needed it are reported unmet (64
+  refusals, each after the batch was built).
 - `agents/change-reviewer.md`: `dataRule` has a definition (what is stored, a computed value, a stage, who may do
   what), since it alone sends a fix to a heavy committer; a diff is read `--stat` first, then per file (one review
   read a 92k-character diff in one call).
