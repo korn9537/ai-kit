@@ -142,6 +142,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `docs/owner-kinds.md` | the one list of what only the owner decides |
 | `docs/kit-proposals.md` | filing and landing kit proposals |
 | `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set; route check when `ui.api` is set |
+| `docs/windows-ci.md` | temporary: the brief for making the test suites pass under Git Bash on Windows (issue #59); deleted when it closes |
 
 ### evals/ (agent evals for `claude plugin eval`, run by hand, not by `scripts/test-all.mjs`)
 
