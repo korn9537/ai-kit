@@ -65,10 +65,14 @@ if [[ "$tool_name" == "Bash" ]]; then
   ((${#files[@]})) || exit 0
 else
   file="$(jq -r '.tool_input.file_path // empty' <<<"$input" 2>/dev/null || true)"
-  file="$(kit_path "$file")"
+  # Windows only: elsewhere a \ is part of a file name; -W gives C:/ as git prints it, not /c/ or /tmp/
+  win=0
+  [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && win=1 && file="$(kit_path "$file")"
   [[ -n "$file" && -f "$file" ]] || exit 0
-  # physical folder: --show-toplevel resolves symlinks (/tmp -> /private/tmp); Git Bash -W: C:/ as git prints it
-  file="$(kit_path "$(cd "$(dirname "$file")" && { pwd -P -W 2>/dev/null || pwd -P; })")/${file##*/}" || exit 0
+  # physical folder: --show-toplevel resolves symlinks (/tmp -> /private/tmp)
+  dir="$(cd "$(dirname "$file")" && { pwd -P -W 2>/dev/null || pwd -P; })" || exit 0
+  ((win)) && dir="$(kit_path "$dir")"
+  file="$dir/${file##*/}"
 
   # the checkout that holds the file (a worktree runs its own copy of the checks)
   root="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)" || exit 0

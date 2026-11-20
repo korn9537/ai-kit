@@ -36,8 +36,10 @@ start=$SECONDS
 bash "$HOOK" <"$TMP/open.fifo" >"$TMP/open.out" 2>/dev/null
 elapsed=$((SECONDS - start))
 exec 3>&-
-# the hook's own time (slow under parallel suites on Git Bash) plus the 1 s read and a second of SECONDS rounding
-check "stdin left open adds at most 2 s" "$((elapsed <= own + 2 ? 0 : 1))" "took ${elapsed} s, ${own} s with /dev/null"
+# Git Bash: the hook alone takes seconds under parallel suites, so only the time open stdin adds is bounded there
+slack=0
+[[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && slack=$own
+check "stdin left open returns within 2 s" "$((elapsed <= slack + 2 ? 0 : 1))" "took ${elapsed} s, ${own} s with /dev/null"
 check "stdin left open gives the same output as /dev/null" "$(cmp -s "$TMP/null.out" "$TMP/open.out" && echo 0 || echo 1)"
 
 printf '{"session_id":"abc"}' | bash "$HOOK" >"$TMP/json.out" 2>/dev/null

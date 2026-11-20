@@ -10,20 +10,24 @@ code bugs on Windows; no project needs to edit anything.
   left the first of several edited files out of its diff, which turned a moved block into new code.
 - `hooks/post-edit-check.sh`: after an Edit on Windows the checks never ran. The file's folder came from `pwd -P`
   (`/c/...`, or `/tmp/...` for the temp dir) while git's toplevel is `C:/...`, so the file was never inside the
-  repo. The folder now comes from `pwd -P -W` where Git Bash has it, and both spellings go through `kit_path`.
+  repo. On Git Bash and Cygwin the folder now comes from `pwd -P -W` and both spellings go through `kit_path`;
+  elsewhere nothing changes.
 - `scripts/check-comments.mjs`, `scripts/check-docs.mjs`: a file passed by name was made relative with `\` on
   Windows, so a `comments.include` or `docs.include` written with `/` (and the default `/node_modules/` skip) never
   matched and the file went unchecked. The names are posix now.
 - `scripts/check-specs.mjs`: screen specs are read in sorted order, so the report has the same order on every
   filesystem (NTFS sorts case-insensitively).
 - `scripts/plan.mjs`, `scripts/kit/unattended.mjs`: warnings name repo paths with `/`, as every other kit message.
+  In `unattended` this also changes what is scanned on Windows: the `ai/kit/checks/` and `node_modules/` filters
+  never matched a `\` path, so the kit's own check copies and packages were followed and could be reported as index
+  readers.
 - `scripts/lib/usage-digest.mjs`: a baseline transcript that is not a file is counted as skipped; on Windows it
   could not be opened and was dropped without a count.
 - Test fixtures: hook input uses the `C:/` spelling Claude Code sends (`cygpath -m`), throwaway repos turn off
   `core.autocrlf` (its warnings went into the hook output being parsed), `env -i` keeps `SYSTEMROOT`, `TEMP` and
   `MSYSTEM`, a tool dir gets an `exec` wrapper where `ln -s` would copy an msys exe away from its DLL, node tests
-  compare paths in one spelling and run a child script by `fileURLToPath`, and `session-start`'s open-stdin case
-  allows the hook's own time plus 2 s instead of 2 s flat. Skipped on Windows, with the reason: the execute-bit
+  compare paths in one spelling and run a child script by `fileURLToPath`, and on Git Bash `session-start`'s
+  open-stdin case allows the hook's own time plus 2 s (2 s flat elsewhere). Skipped on Windows, with the reason: the execute-bit
   cases, the symlinked-folder case, and the backslash file name.
 - `.github/workflows/test.yml`: no `continue-on-error`; a red `main` on either platform is reverted. README's
   layout row and release step 2 say so; `docs/windows-ci.md`, the handoff for this, is deleted.
