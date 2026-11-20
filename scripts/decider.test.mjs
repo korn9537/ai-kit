@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { check, deciders, guard, overlap, loadDecisions, parseBlocks, report, subagentsDir, sync } from "./decider.mjs";
 import { eq } from "./lib/test-util.mjs";
 
@@ -18,7 +19,7 @@ eq("parse: bold keys and a fenced reply", parseBlocks("```\n**Verdict:** decided
 eq("parse: fields before the first Verdict and unknown verdicts are dropped", parseBlocks("Choice: x\nVerdict: maybe\nReason: y"), []);
 eq("parse: a repeated field keeps the first", parseBlocks("Verdict: OWNER\nChoice: a\nChoice: b")[0].choice, "a");
 eq("parse: a field is capped at 500 chars", parseBlocks(`Verdict: OWNER\nReason: ${"x".repeat(900)}`)[0].reason.length, 500);
-eq("subagentsDir: from the session transcript", subagentsDir("/p/s1.jsonl"), "/p/s1/subagents");
+eq("subagentsDir: from the session transcript", subagentsDir("/p/s1.jsonl"), join("/p", "s1", "subagents"));
 eq("subagentsDir: from a subagent transcript", subagentsDir("/p/s1/subagents/agent-a.jsonl"), "/p/s1/subagents");
 
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), "decider-")));
@@ -121,9 +122,9 @@ try {
   eq("guard: a Windows subfolder project dir finds the root", guard(input), "decided");
   // usage.mjs keeps its own copy (its CLI runs on import, so it is called in a child)
   const usageRoot = spawnSync("node", ["--input-type=module", "-e",
-    `import(${JSON.stringify(join(import.meta.dirname, "usage.mjs"))}).then((m) => console.log(m.projectRoot(process.env.D)))`],
+    `import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, "usage.mjs")).href)}).then((m) => console.log(m.projectRoot(process.env.D)))`],
   { encoding: "utf8", env: { ...process.env, D: process.env.CLAUDE_PROJECT_DIR }, stdio: ["ignore", "pipe", "ignore"] }).stdout.trim();
-  eq("usage.mjs projectRoot: a Windows subfolder path finds the root", usageRoot, repo);
+  eq("usage.mjs projectRoot: a Windows subfolder path finds the root", usageRoot, repo.replace(/\\/g, "/"));
   process.env.CLAUDE_PROJECT_DIR = repo;
   eq("guard: no transcript path lets the ask through", guard({ session_id: "s1" }), "owner");
   eq("guard: no session id lets the ask through", guard({ transcript_path: transcript }), "owner");

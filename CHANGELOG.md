@@ -1,5 +1,33 @@
 # Changelog
 
+## 2.58.2
+
+The windows CI job is no longer advisory: every suite passes under Git Bash (issue #59). Making them pass found seven
+code bugs on Windows; no project needs to edit anything.
+
+- `hooks/lib.sh`: on Git Bash and Cygwin, `jq` runs with `-b`. A native `jq.exe` ends every line with `\r\n`, and
+  `$(...)` drops only the last `\r`, so a `read` loop over `jq -r` output got `src/a.ts\r`: `review-before-stop.sh`
+  left the first of several edited files out of its diff, which turned a moved block into new code.
+- `hooks/post-edit-check.sh`: after an Edit on Windows the checks never ran. The file's folder came from `pwd -P`
+  (`/c/...`, or `/tmp/...` for the temp dir) while git's toplevel is `C:/...`, so the file was never inside the
+  repo. The folder now comes from `pwd -P -W` where Git Bash has it, and both spellings go through `kit_path`.
+- `scripts/check-comments.mjs`, `scripts/check-docs.mjs`: a file passed by name was made relative with `\` on
+  Windows, so a `comments.include` or `docs.include` written with `/` (and the default `/node_modules/` skip) never
+  matched and the file went unchecked. The names are posix now.
+- `scripts/check-specs.mjs`: screen specs are read in sorted order, so the report has the same order on every
+  filesystem (NTFS sorts case-insensitively).
+- `scripts/plan.mjs`, `scripts/kit/unattended.mjs`: warnings name repo paths with `/`, as every other kit message.
+- `scripts/lib/usage-digest.mjs`: a baseline transcript that is not a file is counted as skipped; on Windows it
+  could not be opened and was dropped without a count.
+- Test fixtures: hook input uses the `C:/` spelling Claude Code sends (`cygpath -m`), throwaway repos turn off
+  `core.autocrlf` (its warnings went into the hook output being parsed), `env -i` keeps `SYSTEMROOT`, `TEMP` and
+  `MSYSTEM`, a tool dir gets an `exec` wrapper where `ln -s` would copy an msys exe away from its DLL, node tests
+  compare paths in one spelling and run a child script by `fileURLToPath`, and `session-start`'s open-stdin case
+  allows the hook's own time plus 2 s instead of 2 s flat. Skipped on Windows, with the reason: the execute-bit
+  cases, the symlinked-folder case, and the backslash file name.
+- `.github/workflows/test.yml`: no `continue-on-error`; a red `main` on either platform is reverted. README's
+  layout row and release step 2 say so; `docs/windows-ci.md`, the handoff for this, is deleted.
+
 ## 2.58.1
 
 The first CI run on `main` (2.58.0) was red on both platforms; ubuntu is green again, windows is advisory. No project

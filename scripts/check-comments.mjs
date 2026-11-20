@@ -2,7 +2,7 @@
 // [--staged] [--strict: exit 1] [--range=<a...b>: index] [--size: general.md item 12; ALLOW_LARGE_EDIT=1] [f...]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -276,7 +276,7 @@ if (flag("size")) {
 
 let files = args
   .filter((a) => !a.startsWith("--"))
-  .map((f) => relative(root, resolve(cwd, f)));
+  .map((f) => relative(root, resolve(cwd, f)).split(sep).join("/"));
 if (!files.length)
   files = flag("staged") || range
     ? gitz("diff", range ?? "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all")

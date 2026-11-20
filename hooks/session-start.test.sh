@@ -25,7 +25,9 @@ check() {
   fi
 }
 
+start=$SECONDS
 bash "$HOOK" </dev/null >"$TMP/null.out" 2>/dev/null
+own=$((SECONDS - start))
 check "output with /dev/null stdin is non-empty" "$([[ -s "$TMP/null.out" ]] && echo 0 || echo 1)"
 
 mkfifo "$TMP/open.fifo"
@@ -34,7 +36,8 @@ start=$SECONDS
 bash "$HOOK" <"$TMP/open.fifo" >"$TMP/open.out" 2>/dev/null
 elapsed=$((SECONDS - start))
 exec 3>&-
-check "stdin left open returns within 2 s" "$((elapsed <= 2 ? 0 : 1))" "took ${elapsed} s"
+# the hook's own time (slow under parallel suites on Git Bash) plus the 1 s read and a second of SECONDS rounding
+check "stdin left open adds at most 2 s" "$((elapsed <= own + 2 ? 0 : 1))" "took ${elapsed} s, ${own} s with /dev/null"
 check "stdin left open gives the same output as /dev/null" "$(cmp -s "$TMP/null.out" "$TMP/open.out" && echo 0 || echo 1)"
 
 printf '{"session_id":"abc"}' | bash "$HOOK" >"$TMP/json.out" 2>/dev/null

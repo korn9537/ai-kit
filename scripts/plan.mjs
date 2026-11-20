@@ -125,7 +125,7 @@ export function planWarnings(root) {
   return planFiles(root).flatMap((path) => {
     try {
       const text = readFileSync(path, "utf8");
-      const rel = path.slice(root.length + 1);
+      const rel = path.slice(root.length + 1).replace(/\\/g, "/");
       const plan = parse(text);
       if (!plan) {
         return handFinished(text)

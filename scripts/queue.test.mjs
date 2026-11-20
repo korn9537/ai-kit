@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { approve, end, fresh, init, next, step } from "./queue.mjs";
 import { ok } from "./lib/test-util.mjs";
 
@@ -26,7 +27,7 @@ ok("init accepted after end", init([A], end(q0)).jobs[0] === A);
 ok("bad job id refused", /bad job id/.test(throws(() => init(["nope"]))));
 
 const n1 = next(q0, Q, A, "clean");
-ok("next clean gives the second job and its state path", n1.step.action === "job" && n1.step.job === B && n1.step.state === "/x/claude-review/continuous-" + B + ".json", n1);
+ok("next clean gives the second job and its state path", n1.step.action === "job" && n1.step.job === B && n1.step.state === join("/x", "claude-review", `continuous-${B}.json`), n1);
 ok("show names a job with no state file yet", step(n1.queue, Q).state.endsWith(`continuous-${B}.json`));
 const again = next(n1.queue, Q, A, "clean");
 ok("next twice for the same job moves once", again.queue.current === 1 && again.step.job === B, again);
@@ -48,7 +49,7 @@ ok("a path dirtied later is new", fresh(apd, B, ["dirty:src/a.ts", "dirty:src/b.
 
 // CLI: a git repo's review dir holds the queue file
 const dir = mkdtempSync(join(tmpdir(), "queue-"));
-const run = (...a) => spawnSync("node", [new URL("./queue.mjs", import.meta.url).pathname, ...a], { encoding: "utf8" });
+const run = (...a) => spawnSync("node", [fileURLToPath(new URL("./queue.mjs", import.meta.url)), ...a], { encoding: "utf8" });
 const qf = join(dir, "continuous-queue.json");
 const r1 = run("init", qf, A, B);
 const r2 = run("init", qf, A);

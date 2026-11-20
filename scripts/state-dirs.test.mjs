@@ -14,7 +14,9 @@ const git = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio
 const bash = (dir, kind) =>
   spawnSync("bash", ["-c", `source "${lib}"; kit_state_dir ${kind} "$1"`, "x", dir], { encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: "" } });
 const KINDS = ["review", "usage-cache", "usage", "decider"];
-const nodeDirs = (d) => [reviewDir(d), usageCacheDir(d), usageBufDir(d), deciderDir(d)];
+// one spelling: node joins with \ on Windows, git and bash print C:/; the folders are the same
+const posix = (p) => p.replace(/\\/g, "/");
+const nodeDirs = (d) => [reviewDir(d), usageCacheDir(d), usageBufDir(d), deciderDir(d)].map(posix);
 const literal = (d) => {
   const own = git(d, "rev-parse", "--absolute-git-dir");
   const common = git(d, "rev-parse", "--path-format=absolute", "--git-common-dir");
@@ -48,7 +50,7 @@ try {
   eq("review and usage-cache differ per work tree", [m[0] !== w[0], m[1] !== w[1]], [true, true]);
   eq("usage and decider are shared", [m[2] === w[2], m[3] === w[3]], [true, true]);
 
-  eq("planRunDir is in the git common dir, equal in both work trees", [planRunDir(repo) === planRunDir(wt), planRunDir(repo) === `${git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}/claude-plan-run`], [true, true]);
+  eq("planRunDir is in the git common dir, equal in both work trees", [planRunDir(repo) === planRunDir(wt), posix(planRunDir(repo)) === `${git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")}/claude-plan-run`], [true, true]);
 
   const none = join(tmp, "none");
   mkdirSync(none);

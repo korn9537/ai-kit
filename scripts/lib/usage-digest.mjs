@@ -287,6 +287,8 @@ export function baselineRecords(repoRoot, who = {}, since = "") {
     const path = join(dir, n);
     try {
       const session = basename(n, ".jsonl");
+      // Windows cannot open a folder, and collectSession reads an unopenable file as empty: count it here
+      if (!statSync(path).isFile()) throw new Error(`${n} is not a file`);
       const sess = collectSession(path);
       const rec = buildRecord(sess, [], {
         now: statSync(path).mtime, session, kit: "baseline",

@@ -10,6 +10,13 @@ TEST_PORT=39173
 NO_CONFIG="$(mktemp -d)"
 mkdir -p "$NO_CONFIG/ai/kit"
 NO_KIT="$(mktemp -d)"
+# env -i that keeps what Git Bash's node, jq and bash need to load (SYSTEMROOT, TEMP, MSYSTEM); a no-op elsewhere
+clean_env() { env -i ${SYSTEMROOT:+SYSTEMROOT="$SYSTEMROOT"} ${TEMP:+TEMP="$TEMP"} ${MSYSTEM:+MSYSTEM="$MSYSTEM"} "$@"; }
+# tool_link <tool> <dir>: Git Bash's ln -s copies, and a copied msys exe cannot find its DLL: exec it by path instead
+tool_link() {
+  ln -s "$(command -v "$1")" "$2/$1" 2>/dev/null
+  [[ -L "$2/$1" ]] || { rm -f "$2/$1" && printf '#!/bin/sh\nexec "%s" "$@"\n' "$(command -v "$1")" >"$2/$1" && chmod +x "$2/$1"; }
+}
 # PATH dirs holding the hook's tools with lsof left out (netstat kept), and with no probe tool at all
 NO_LSOF="$(mktemp -d)"
 NO_PROBE="$(mktemp -d)"
@@ -21,10 +28,10 @@ echo "gitdir: ../.git/modules/gm" >"$REPO/gm-sale-visit/.git"
 git -C "$REPO" update-index --add --cacheinfo 160000,0123456789012345678901234567890123456789,sm2
 trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE" "$STUBS" "$REPO"' EXIT
 for t in bash env jq grep sed tr cat dirname git uname awk; do
-  ln -s "$(command -v "$t")" "$NO_LSOF/$t"
-  ln -s "$(command -v "$t")" "$NO_PROBE/$t"
+  tool_link "$t" "$NO_LSOF"
+  tool_link "$t" "$NO_PROBE"
 done
-for t in netstat ss; do command -v "$t" >/dev/null && ln -s "$(command -v "$t")" "$NO_LSOF/$t"; done
+for t in netstat ss; do command -v "$t" >/dev/null && tool_link "$t" "$NO_LSOF"; done
 # stub_path <name> <tool=script>...: the base tools (no lsof) plus canned probe tools, as a PATH
 stub_path() {
   local d="$STUBS/$1" kv
@@ -43,7 +50,7 @@ run_case() {
   local desc="$1" expected="$2" cmd="$3" extra_env="${4:-}"
   local actual
   actual=$(jq -n --arg cmd "$cmd" '{tool_name:"Bash", tool_input:{command:$cmd}}' |
-    env -i PATH="${CASE_PATH:-$PATH}" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" $extra_env \
+    clean_env PATH="${CASE_PATH:-$PATH}" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" $extra_env \
       "$GUARD" >/tmp/build-guard-out.$$ 2>/tmp/build-guard-err.$$; echo $?)
   if [[ "$actual" == "$expected" ]]; then
     echo "ok   - $desc"
@@ -64,7 +71,7 @@ run_case "allow: mention only, not invoked" 0 "echo 'do not run pnpm build while
 # git_case <desc> <expected exit> <command>: the git add check, run in $REPO with the dev port closed
 git_case() {
   local rc=0
-  jq -n --arg c "$3" --arg d "$REPO" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $d}' |
+  printf '%s' "$3" | jq -Rs --arg d "$REPO" '{tool_name: "Bash", tool_input: {command: .}, cwd: $d}' |
     CLAUDE_PROJECT_DIR="$REPO" CLAUDE_DEV_GUARD_PORT=39174 "$GUARD" >/dev/null 2>&1 || rc=$?
   if [[ "$rc" == "$2" ]]; then
     echo "ok   - $1"
@@ -291,7 +298,7 @@ CASE_PATH="$(stub_path ss "ss=echo 'LISTEN 0 128 127.0.0.1:$TEST_PORT 0.0.0.0:*'
 CASE_PATH="$(stub_path nc "nc=exit 0")" run_case "block: nc connects" 2 "pnpm build"
 CASE_PATH="$(stub_path nc1 "nc=exit 1")" run_case "allow: nc refused" 0 "pnpm build"
 out="$(jq -n '{tool_name:"Bash", tool_input:{command:"pnpm build"}}' |
-  env -i PATH="$NO_PROBE" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" bash "$GUARD" 2>/dev/null)"
+  clean_env PATH="$NO_PROBE" CLAUDE_PROJECT_DIR="$NO_CONFIG" CLAUDE_DEV_GUARD_PORT="$TEST_PORT" bash "$GUARD" 2>/dev/null)"
 if [[ "$out" == *"was not checked"* ]]; then
   echo "ok   - warn: no probe tool says the port was not checked"
   pass=$((pass + 1))
@@ -303,7 +310,7 @@ fi
 # awk failing must not pass silently: the raw text is checked and a systemMessage says so
 AWK_FAIL="$(stub_path awkfail "awk=exit 2")"
 out="$(jq -n --arg d "$REPO" '{tool_name:"Bash", tool_input:{command:"echo hi"}, cwd:$d}' |
-  env -i PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" 2>/dev/null)"
+  clean_env PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" 2>/dev/null)"
 if [[ "$out" == *"splitter failed"* ]]; then
   echo "ok   - warn: a failing awk says the command was checked raw"
   pass=$((pass + 1))
@@ -313,7 +320,7 @@ else
 fi
 rc=0
 jq -n --arg d "$REPO" '{tool_name:"Bash", tool_input:{command:"echo hi; git add -A"}, cwd:$d}' |
-  env -i PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" >/dev/null 2>&1 || rc=$?
+  clean_env PATH="$AWK_FAIL" CLAUDE_PROJECT_DIR="$NO_CONFIG" bash "$GUARD" >/dev/null 2>&1 || rc=$?
 if [[ "$rc" == 2 ]]; then
   echo "ok   - block: a failing awk still blocks git add -A on the raw text"
   pass=$((pass + 1))
@@ -382,7 +389,7 @@ trap 'rm -rf "$NO_CONFIG" "$NO_KIT" "$NO_LSOF" "$NO_PROBE" "$STUBS" "$REPO" "$FA
 # mem_case <desc> <expected exit> <command> [extra env]
 mem_case() {
   local rc=0
-  jq -n --arg c "$3" --arg d "$REPO" '{tool_name: "Bash", tool_input: {command: $c}, cwd: $d}' |
+  printf '%s' "$3" | jq -Rs --arg d "$REPO" '{tool_name: "Bash", tool_input: {command: .}, cwd: $d}' |
     env HOME="$FAKE_HOME" CLAUDE_PROJECT_DIR="$REPO" CLAUDE_DEV_GUARD_PORT=39174 ${4:+"$4"} "$GUARD" >/dev/null 2>&1 || rc=$?
   if [[ "$rc" == "$2" ]]; then
     echo "ok   - $1"

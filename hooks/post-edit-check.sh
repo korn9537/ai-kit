@@ -12,6 +12,8 @@ set -uo pipefail
 kit_plugin="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 command -v jq >/dev/null 2>&1 || exit 0
+# shellcheck source=/dev/null
+set +u && . "$kit_plugin/hooks/lib.sh" && set -u
 mode="${1:-post}"
 input="$(cat)"
 IFS=$'\t' read -r tool_name tool_use_id cwd background < <(jq -r '[.tool_name // "", .tool_use_id // "", .cwd // "", (.tool_input.run_in_background // false | tostring)] | @tsv' <<<"$input" 2>/dev/null || true)
@@ -27,8 +29,6 @@ if [[ "$tool_name" == "Bash" ]]; then
   root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || exit 0
   # a project without ai/kit/ is not set up: write nothing
   [[ -d "$root/ai/kit" ]] || exit 0
-  # shellcheck source=/dev/null
-  set +u && . "$kit_plugin/hooks/lib.sh" && set -u
   state="$(kit_state_dir review "$root")" || exit 0
   marker="$state/bash-$tool_use_id"
   if [[ "$mode" == "mark" ]]; then
@@ -65,9 +65,10 @@ if [[ "$tool_name" == "Bash" ]]; then
   ((${#files[@]})) || exit 0
 else
   file="$(jq -r '.tool_input.file_path // empty' <<<"$input" 2>/dev/null || true)"
+  file="$(kit_path "$file")"
   [[ -n "$file" && -f "$file" ]] || exit 0
-  # physical folder: --show-toplevel resolves symlinks (/tmp -> /private/tmp), so a symlinked spelling never matches
-  file="$(cd "$(dirname "$file")" && pwd -P)/${file##*/}" || exit 0
+  # physical folder: --show-toplevel resolves symlinks (/tmp -> /private/tmp); Git Bash -W: C:/ as git prints it
+  file="$(kit_path "$(cd "$(dirname "$file")" && { pwd -P -W 2>/dev/null || pwd -P; })")/${file##*/}" || exit 0
 
   # the checkout that holds the file (a worktree runs its own copy of the checks)
   root="$(git -C "$(dirname "$file")" rev-parse --show-toplevel 2>/dev/null)" || exit 0

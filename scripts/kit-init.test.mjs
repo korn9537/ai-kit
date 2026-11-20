@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { test } from "node:test";
 import { eq } from "./lib/test-util.mjs";
 
 const SCRIPT = join(import.meta.dirname, "kit.mjs");
@@ -67,8 +68,13 @@ try {
   // a shim without the execute bit is skipped by git: check reports it, init repairs it
   const hook = join(fresh, ".githooks", "pre-commit");
   chmodSync(hook, 0o644);
-  eq("check: a non-executable shim is a problem", run(fresh, "check").includes(".githooks/pre-commit is not executable"), true);
-  eq("init: makes the shim executable", [run(fresh, "init").includes("made executable"), (statSync(hook).mode & 0o111) !== 0], [true, true]);
+  if (process.platform === "win32") {
+    // Windows has no execute bit: chmod 644 leaves the shim runnable, so there is nothing to report or repair
+    test("check and init: the shim's execute bit", { skip: "no execute bit on Windows" }, () => {});
+  } else {
+    eq("check: a non-executable shim is a problem", run(fresh, "check").includes(".githooks/pre-commit is not executable"), true);
+    eq("init: makes the shim executable", [run(fresh, "init").includes("made executable"), (statSync(hook).mode & 0o111) !== 0], [true, true]);
+  }
   eq("check: no problem once executable", run(fresh, "check").includes("not executable"), false);
   // CLAUDE_CONFIG_DIR holds the user scope: a plugin enabled there counts
   const cfg = join(tmp, "cfg");

@@ -11,8 +11,10 @@ TMP="$(mktemp -d "$BASE/stop.XXXXXX")" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 # the resolved path: transcript paths must match the repo root (macOS /var → /private/var)
 REPO="$(cd "$TMP" && pwd -P)" || exit 1
+# Git Bash: the C:/ spelling Claude Code sends and kit_path gives, not /c/
+command -v cygpath >/dev/null 2>&1 && REPO="$(cygpath -m "$REPO")"
 
-git -C "$REPO" init -q
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false
 mkdir -p "$REPO/ai/kit" "$REPO/src/migrations"
 for f in a b c other; do seq 1 40 >"$REPO/src/$f.ts"; done
 seq 1 40 >"$REPO/src/migrations/m.ts"
@@ -233,7 +235,7 @@ done
 reset
 
 # kit_code_lines: a moved run counts code lines only, and the line's own run must hold 3
-M="$(mktemp -d)" && git -C "$M" init -q
+M="$(mktemp -d)" && git -C "$M" init -q && git -C "$M" config core.autocrlf false
 code5=$'const alpha = computeSomethingLong(1, "argument");\nconst beta = computeSomethingLong(2, "argument");\nconst gamma = computeSomethingLong(3, "argument");'
 printf '%s\n' "// only admins from here on" "requireAdmin(req, res, next, options);" "" "x1" >"$M/a.ts"
 printf '%s\n' "y1" >"$M/b.ts"
@@ -254,7 +256,7 @@ rm -rf "$M"
 
 # a deleted line is not excused by a block that moved elsewhere: requireAdmin(req); leaves a.ts alone while a block
 # holding it moves from c.ts to b.ts, and a JSDoc around a moved line does not make a run of 3
-M="$(mktemp -d)" && git -C "$M" init -q
+M="$(mktemp -d)" && git -C "$M" init -q && git -C "$M" config core.autocrlf false
 printf '%s\n' "x1" "requireAdmin(req);" "x2" >"$M/a.ts"
 printf '%s\n' "y1" >"$M/b.ts"
 printf '%s\n' "$code5" "requireAdmin(req);" "z" >"$M/c.ts"
@@ -268,7 +270,7 @@ chk "moved: a line deleted beside a block that moves elsewhere stays visible" "y
 chk "moved: the block itself is still no change" "yes" \
   "$(grep -qF 'const beta' <<<"$moved" && echo "no: $moved" || echo yes)"
 rm -rf "$M"
-M="$(mktemp -d)" && git -C "$M" init -q
+M="$(mktemp -d)" && git -C "$M" init -q && git -C "$M" config core.autocrlf false
 printf '%s\n' "q1" "/**" " * Guards the route." " * Throws 403." " */" "requireAdmin(req);" "q2" >"$M/e.ts"
 printf '%s\n' "r1" >"$M/f.ts"
 git -C "$M" add -A && git -C "$M" -c user.name=t -c user.email=t@t commit -qm base
@@ -291,7 +293,8 @@ rm -rf "$M"
 # kit_review_skippable through scripts/review-needed.sh (the run-plan workflow reads it)
 NEEDED="$PWD/../scripts/review-needed.sh"
 S="$(mktemp -d)" && S="$(cd "$S" && pwd -P)"
-git -C "$S" init -q
+command -v cygpath >/dev/null 2>&1 && S="$(cygpath -m "$S")"
+git -C "$S" init -q && git -C "$S" config core.autocrlf false
 mkdir -p "$S/ai/kit" "$S/src/migrations"
 for i in $(seq 1 30); do echo "export function f$i(x: number) { return x * $i + somethingLongEnough; }"; done >"$S/src/a.ts"
 echo "// b" >"$S/src/b.ts"
@@ -470,7 +473,7 @@ reset
 
 # regex characters in the repo path
 REPO="$REPO/p(2" && mkdir -p "$REPO/ai/kit" "$REPO/src" && seq 1 40 >"$REPO/src/a.ts"
-git -C "$REPO" init -q && git -C "$REPO" add -A
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false && git -C "$REPO" add -A
 git -C "$REPO" -c user.name=t -c user.email=t@t commit -qm base --date 2020-01-01T00:00:00Z
 sed -i.bak '1,20s/$/x/' "$REPO/src/a.ts" && rm "$REPO/src/a.ts.bak"
 run_case "block: a repo path with ( still enforces review" block "no review yet" \

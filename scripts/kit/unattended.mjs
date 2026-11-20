@@ -1,6 +1,6 @@
 // kit unattended: makes a project's hooks run without the plugin; see scripts/kit.mjs
 import { existsSync, statSync, writeFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { STAGED, at, codeLines, dropEcho, eolOf, jsonText, kit, read, readConf, readLF, root, toolsIn } from "./shared.mjs";
 import { snapshotWarnings, syncSnapshot } from "./sync.mjs";
 
@@ -90,7 +90,7 @@ const packageCalls = (sh) => {
 };
 
 const resolveFrom = (from, rel) => {
-  const base = relative(root, resolve(root, dirname(from), rel));
+  const base = relative(root, resolve(root, dirname(from), rel)).split(sep).join("/");
   return ["", ".mjs", ".js", ".ts", ".cjs", "/index.js", "/index.ts"].map((e) => base + e).find((p) => existsSync(at(p)) && statSync(at(p)).isFile());
 };
 

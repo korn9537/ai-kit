@@ -3,13 +3,17 @@
 # git dir, stdout and the exit code; part 2 the detached sends of session-end and session-start.sh to a mock usage API.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+# env -i that keeps what Git Bash's node, jq and bash need to load (SYSTEMROOT, TEMP, MSYSTEM); a no-op elsewhere
+clean_env() { env -i ${SYSTEMROOT:+SYSTEMROOT="$SYSTEMROOT"} ${TEMP:+TEMP="$TEMP"} ${MSYSTEM:+MSYSTEM="$MSYSTEM"} "$@"; }
 HOOK="$PWD/kit-log.sh"
 PLUGIN_JSON="$PWD/../.claude-plugin/plugin.json"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP" "$TMP.wt"' EXIT
 REPO="$(cd "$TMP" && pwd -P)" || exit 1
+# Git Bash: the C:/ spelling Claude Code sends and kit_path gives, not /tmp/ or /c/
+command -v cygpath >/dev/null 2>&1 && TMP="$(cygpath -m "$TMP")" && REPO="$(cygpath -m "$REPO")"
 
-git -C "$REPO" init -q
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false
 git -C "$REPO" config user.name tester
 mkdir -p "$REPO/ai/kit"
 echo '{}' >"$REPO/ai/kit/config.json"
@@ -41,7 +45,7 @@ jq -cn '{type: "assistant", timestamp: "2030-01-15T10:00:30Z", message: {id: "m1
 # stop_hook <session> <transcript> → stdout in $OUT, stderr in $ERR, exit code in $RC
 stop_hook() {
   OUT="$(jq -n --arg t "$2" --arg s "$1" --arg c "$REPO" '{transcript_path: $t, session_id: $s, cwd: $c}' |
-    env -i PATH="$PATH" HOME="$HOME" "$HOOK" stop 2>"$TMP/err")"
+    clean_env PATH="$PATH" HOME="$HOME" "$HOOK" stop 2>"$TMP/err")"
   RC=$?
   ERR="$(cat "$TMP/err")"
 }
@@ -91,7 +95,7 @@ git -C "$REPO" worktree add -q "$TMP.wt" -b wtbranch
 mkdir -p "$TMP.wt/ai/kit"
 echo '{}' >"$TMP.wt/ai/kit/config.json"
 jq -n --arg t "$T" --arg c "$TMP.wt" '{transcript_path: $t, session_id: "s6", cwd: $c}' |
-  env -i PATH="$PATH" HOME="$HOME" "$HOOK" stop >/dev/null 2>&1
+  clean_env PATH="$PATH" HOME="$HOME" "$HOOK" stop >/dev/null 2>&1
 check "record: from a linked worktree the buffer is in the main git dir" "$(t test -f "$(buf s6)")"
 
 # skip cases start from a repo with no buffers
@@ -111,7 +115,7 @@ stop_hook s3 "$REPO/.git/missing.jsonl"
 check "skip: unreadable transcript → exit 0, one stderr line" \
   "$(t bash -c '[[ ! -e "$1" && "$2" == 0 && "$3" == kit-log:* && "$(wc -l <<<"$3" | tr -d " ")" == 1 ]]' _ "$(buf s3)" "$RC" "$ERR")" \
   "rc=$RC err=$ERR"
-echo '{"transcript_path": "/nope"}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" stop 2>"$TMP/err"
+echo '{"transcript_path": "/nope"}' | clean_env PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$HOOK" stop 2>"$TMP/err"
 rc=$?
 check "skip: no session id → exit 0, one stderr line" \
   "$(t bash -c '[[ "$1" == 0 && "$(cat "$2")" == kit-log:* ]]' _ "$rc" "$TMP/err")"
@@ -132,7 +136,7 @@ check "record: a quiet commit after the prompt is in commits, one before it is n
 # ---- part 2: session-end and the idle pass of session-start.sh start a detached send to a mock API (a fresh repo) ----
 REPO="$TMP/r2"
 mkdir -p "$REPO"
-git -C "$REPO" init -q
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false
 git -C "$REPO" config user.name tester
 git -C "$REPO" config user.email t@t
 mkdir -p "$REPO/ai/kit"
@@ -170,12 +174,12 @@ asst() {
 }
 stop() { # <session> <transcript>
   jq -n --arg t "$2" --arg s "$1" --arg c "$REPO" '{transcript_path: $t, session_id: $s, cwd: $c}' |
-    env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" stop >/dev/null 2>&1
+    clean_env PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" stop >/dev/null 2>&1
 }
 end_hook() { # <session> [transcript] → exit code of the SessionEnd hook
   jq -n --arg s "$1" --arg c "$REPO" --arg t "${2:-}" '{session_id: $s, cwd: $c, hook_event_name: "SessionEnd"}
     + (if $t == "" then {} else {transcript_path: $t} end)' |
-    env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end 2>"$TMP/err"
+    clean_env PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end 2>"$TMP/err"
 }
 # posted <session>: waits up to 10 s for the mock to see that session's events
 posted() { for _ in $(seq 1 100); do grep -q "^/v1/events $1\$" "$TMP/posts" && return 0; sleep 0.1; done; return 1; }
@@ -211,17 +215,17 @@ asst "$T9" m1 500
 stop s9 "$T9"
 age "$T7" 25200
 age "$T9" 25200
-out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
+out="$(jq -n --arg s s9 '{session_id: $s}' | clean_env PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
 check "session-start sends other idle sessions, prints nothing on stderr" "$(t posted s7)" "$out $(cat "$TMP/posts")"
 sleep 0.5
 check "and not its own session" "$(t bash -c '! grep -q " s9$" "$1"' _ "$TMP/posts")"
 age "$T1" 25200
-out="$(jq -n --arg s s9 '{session_id: $s}' | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
+out="$(jq -n --arg s s9 '{session_id: $s}' | clean_env PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" AI_KIT_USAGE_ENDPOINT="$API" "$PWD/session-start.sh" 2>&1 >/dev/null)"
 sleep 1
 check "a session unchanged since its .sent is not sent again" "$(t bash -c '[[ "$(grep -c " s1$" "$1")" == 1 && "$(grep -c " s7$" "$1")" == 1 ]]' _ "$TMP/posts")" "$(cat "$TMP/posts")"
 
 jq -n --arg s s13 --arg c "$REPO" '{session_id: $s, cwd: $c, transcript_path: "/nonexistent"}' |
-  env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end >/dev/null 2>&1
+  clean_env PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" session-end >/dev/null 2>&1
 check "SessionEnd with an unreadable transcript still exits 0" "$(t test "$?" == 0)"
 
 # usage.enabled false → SessionEnd starts no send
@@ -239,7 +243,7 @@ echo '{}' >"$REPO/ai/kit/config.json"
 mkdir -p "$TMP/proj/ss/subagents"
 jq -n --arg t "$TMP/proj/ss.jsonl" --arg c "$REPO" '{session_id: "ss", cwd: $c, transcript_path: $t, agent_id: "a9",
   agent_type: "ai-kit:decider", last_assistant_message: "Verdict: DECIDED\nChoice: x\nReason: y"}' |
-  env -i PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" subagent-stop 2>"$TMP/err"
+  clean_env PATH="$PATH" HOME="$HOME" AI_KIT_USAGE_ENDPOINT="$API" "$HOOK" subagent-stop 2>"$TMP/err"
 rc=$?
 check "subagent-stop logs a decider verdict to .git/claude-decider/log/, exit 0" \
   "$(t bash -c '[[ "$1" == 0 ]] && grep -q "\"choice\":\"x\"" "$2"/.git/claude-decider/log/ss.a9.jsonl' _ "$rc" "$REPO")" "rc=$rc $(cat "$TMP/err")"

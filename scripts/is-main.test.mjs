@@ -11,7 +11,8 @@ const dir = dirname(fileURLToPath(import.meta.url));
 const tmp = mkdtempSync(join(tmpdir(), "is-main-"));
 try {
   const link = join(tmp, "scripts");
-  symlinkSync(dir, link);
+  // junction: Windows needs no admin right for it; other platforms ignore the type
+  symlinkSync(dir, link, "junction");
   // No-arg runs print a usage line on stderr and exit non-zero when the guard fires; a silent run means it did not.
   for (const [name, args] of [["usage", []], ["plan", []], ["continuous", []], ["decider", ["bogus"]], ["kit", ["bogus"]]]) {
     const r = spawnSync(process.execPath, [join(link, `${name}.mjs`), ...args], { encoding: "utf8", input: "", cwd: tmp });

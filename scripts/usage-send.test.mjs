@@ -373,7 +373,9 @@ try {
   const buf5 = join(r5, ".git", "claude-usage");
   const copyAs = (id, cwd) => {
     const p = join(tmp, "projects", "p", `${id}.jsonl`);
-    writeFileSync(p, readFileSync(T, "utf8").replaceAll(S, id).replaceAll(root, cwd));
+    // the JSON spelling: a Windows root is C:\\Users\\... in the transcript
+    const js = (s) => JSON.stringify(s).slice(1, -1);
+    writeFileSync(p, readFileSync(T, "utf8").replaceAll(S, id).replaceAll(js(root), js(cwd)));
     return p;
   };
   const fromB = async (id) => {

@@ -90,7 +90,7 @@ const items = (v) => {
 const warn = [];
 const screens = [];
 const ids = new Map();
-const names = screensOn && existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".md") && f !== "index.md") : [];
+const names = screensOn && existsSync(DIR) ? readdirSync(DIR).filter((f) => f.endsWith(".md") && f !== "index.md").sort() : [];
 for (const f of names) {
   const path = `${DIR}/${f}`;
   const m = /^S-(\d+)-[a-z0-9-]+\.md$/.exec(f);

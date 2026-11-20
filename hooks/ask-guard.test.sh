@@ -3,18 +3,22 @@
 # that an AskUserQuestion is blocked (exit 2) or let through (exit 0) given the decider subagents the session holds.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
+# env -i that keeps what Git Bash's node, jq and bash need to load (SYSTEMROOT, TEMP, MSYSTEM); a no-op elsewhere
+clean_env() { env -i ${SYSTEMROOT:+SYSTEMROOT="$SYSTEMROOT"} ${TEMP:+TEMP="$TEMP"} ${MSYSTEM:+MSYSTEM="$MSYSTEM"} "$@"; }
 GUARD="$PWD/ask-guard.sh"
 LOG="$PWD/kit-log.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 TMP="$(cd "$TMP" && pwd -P)" || exit 1
+# Git Bash: the C:/ spelling Claude Code sends and kit_path gives, not /tmp/ or /c/
+command -v cygpath >/dev/null 2>&1 && TMP="$(cygpath -m "$TMP")"
 REPO="$TMP/repo"
 SUBS="$TMP/proj/s1/subagents"
 pass=0
 fail=0
 
 mkdir -p "$REPO/ai/kit" "$SUBS"
-git -C "$REPO" init -q
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false
 
 # agent <id> <verdict or ""> [touch time]: a decider subagent transcript ending in that verdict, on the question in
 # $Q (default "Which order?")
@@ -36,7 +40,7 @@ hook_input() {
 # run_case <desc> <want exit> [question] [second question]
 run_case() {
   local rc
-  hook_input "${3:-}" "${4:-}" | env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$GUARD" >/dev/null 2>"$TMP/err"
+  hook_input "${3:-}" "${4:-}" | clean_env PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$GUARD" >/dev/null 2>"$TMP/err"
   rc=$?
   if [[ "$rc" == "$2" ]]; then
     echo "ok   - $1"
@@ -71,7 +75,7 @@ agent a3 OWNER
 run_case "pass: the decider returned OWNER" 0
 run_case "block: one OWNER call serves one ask" 2
 hook_input | jq -c '.transcript_path = "'"$SUBS"'/agent-a3.jsonl"' |
-  env -i PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$LOG" subagent-stop >/dev/null 2>&1
+  clean_env PATH="$PATH" HOME="$HOME" CLAUDE_PROJECT_DIR="$REPO" "$LOG" subagent-stop >/dev/null 2>&1
 if [[ "$(ls "$REPO"/.git/claude-decider/log/ 2>/dev/null | tr '\n' ' ')" == "s1.a1.jsonl s1.a2.jsonl s1.a3.jsonl " ]]; then
   echo "ok   - kit-log subagent-stop logged each decider call"
   pass=$((pass + 1))

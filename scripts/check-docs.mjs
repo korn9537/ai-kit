@@ -2,7 +2,7 @@
 // [--staged] [--strict: exit 1] [--range=<a...b>: from the index] [--wrap: kit clone, prose over 120 chars] [files]
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 
 const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
@@ -300,7 +300,7 @@ const head = git("rev-parse", "-q", "--verify", "HEAD") !== null;
 const z = (s) => (s ?? "").split("\0").filter(Boolean);
 let files = args
   .filter((a) => !a.startsWith("--"))
-  .map((f) => relative(root, resolve(cwd, f)));
+  .map((f) => relative(root, resolve(cwd, f)).split(sep).join("/"));
 if (!files.length)
   files = staged
     ? z(git("diff", rangeArg ?? "--cached", "--name-only", "--diff-filter=ACMR", "--ignore-submodules=all", "-z"))

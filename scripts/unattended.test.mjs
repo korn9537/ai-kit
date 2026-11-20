@@ -202,14 +202,17 @@ try {
 
   // killed mid-run: the check is inside pre-commit.sh when SIGKILL lands, so no trap or cleanup can run
   copyFileSync(at("ai", "kit", "pre-commit.sh"), join(tmp, "pc"));
-  writeFileSync(at("ai", "kit", "pre-commit.sh"), `${readFileSync(TEMPLATE, "utf8")}: >"${join(tmp, "started")}"\nsleep 30\n`);
+  // short sleeps in the killed shell: Windows has no process group, and an orphan sleep 30 keeps the repo busy at tear-down
+  writeFileSync(at("ai", "kit", "pre-commit.sh"), `${readFileSync(TEMPLATE, "utf8")}: >"${join(tmp, "started")}"\ni=0; while [ "$i" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done\n`);
   commit("slow check");
   const held = state();
   const child = spawn("sh", ["ai/kit/check.sh", base], { cwd: repo, stdio: "ignore", detached: true });
   const gone = new Promise((res) => child.on("exit", (code, sig) => res(sig)));
   for (let i = 0; i < 100 && !existsSync(join(tmp, "started")); i++) await wait(50);
   eq("kill: the run reached the project check", existsSync(join(tmp, "started")), true);
-  process.kill(-child.pid, "SIGKILL");
+  // Windows has no process groups (-pid is ESRCH); the check runs sourced in that one shell
+  if (process.platform === "win32") child.kill("SIGKILL");
+  else process.kill(-child.pid, "SIGKILL");
   eq("kill: the run died of SIGKILL", await gone, "SIGKILL");
   eq("kill: HEAD, status and index are as they were", state(), held);
   copyFileSync(join(tmp, "pc"), at("ai", "kit", "pre-commit.sh"));

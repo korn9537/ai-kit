@@ -7,9 +7,11 @@ HOOK="$PWD/post-edit-check.sh"
 # physical path: the hook matches the file against git's toplevel, which resolves /var -> /private/var
 REPO="$(cd "$(mktemp -d)" && pwd -P)"
 LINKS="$(mktemp -d)"
+# Git Bash: the C:/ spelling Claude Code sends and kit_path gives, not /c/
+command -v cygpath >/dev/null 2>&1 && REPO="$(cygpath -m "$REPO")" && LINKS="$(cygpath -m "$LINKS")"
 ln -s "$REPO" "$LINKS/repo"
 trap 'rm -rf "$REPO" "$LINKS"' EXIT
-git -C "$REPO" init -q
+git -C "$REPO" init -q && git -C "$REPO" config core.autocrlf false
 mkdir -p "$REPO/ai/kit" "$REPO/src"
 echo '{"comments": {"include": "^$"}, "docs": {"include": "^$"}}' >"$REPO/ai/kit/config.json"
 echo 'x' >"$REPO/src/a.ts"
@@ -23,7 +25,7 @@ check() {
   local desc="$1" expected="$2" file="$3" want="$4"
   printf '%s\n' "$5" >"$REPO/ai/kit/post-edit.sh"
   local err rc
-  [[ "$file" == /* ]] || file="$REPO/$file"
+  [[ "$file" == /* || "$file" == ?:/* ]] || file="$REPO/$file"
   err="$(jq -n --arg f "$file" '{tool_input: {file_path: $f}}' | "$HOOK" 2>&1 >/dev/null)"
   rc=$?
   if [[ "$rc" == "$expected" ]] && { [[ "$want" == "-" && -z "$err" ]] || [[ "$want" != "-" && "$err" =~ $want ]]; }; then
@@ -56,8 +58,13 @@ check "block: failures in start order" 2 src/a.ts $'\\[slow\\][^[]*late.*\\[fast
   'run "slow" - sh -c "sleep 0.5; echo late; exit 1"
 run "fast" - sh -c "echo early; exit 1"'
 
-check "block: a file reached through a symlinked folder is checked" 2 "$LINKS/repo/src/a.ts" \
-  '^Checks failing on src/a.ts .*\[bad\]' 'run "bad" - false'
+# Git Bash without MSYS=winsymlinks: ln -s copies, so there is no symlinked folder to reach the file through
+if [[ -L "$LINKS/repo" ]]; then
+  check "block: a file reached through a symlinked folder is checked" 2 "$LINKS/repo/src/a.ts" \
+    '^Checks failing on src/a.ts .*\[bad\]' 'run "bad" - false'
+else
+  echo "skip - block: a file reached through a symlinked folder is checked (ln -s made a copy)"
+fi
 
 check "pass: a failure naming only other files is filtered out" 0 src/a.ts - \
   'run "lint" "src/a.ts" sh -c "echo src/b.ts: bad; exit 1"'

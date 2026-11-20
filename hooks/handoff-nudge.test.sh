@@ -7,6 +7,8 @@ HOOK="$PWD/handoff-nudge.sh"
 TMP="$(mktemp -d)" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 REPO="$(cd "$TMP" && pwd -P)" || exit 1
+# Git Bash: the C:/ spelling Claude Code sends and kit_path gives, not /tmp/ or /c/
+command -v cygpath >/dev/null 2>&1 && REPO="$(cygpath -m "$REPO")"
 git -C "$REPO" init -q
 mkdir -p "$REPO/ai/kit"
 pass=0

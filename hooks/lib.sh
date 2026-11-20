@@ -11,6 +11,10 @@ kit_path() {
   fi
   printf '%s\n' "$p"
 }
+# a native jq.exe ends lines with \r\n; $(...) drops only the last \r, so `read` loops got "a.ts\r" (-b: plain \n)
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && command jq -b -n 1 >/dev/null 2>&1; then
+  jq() { command jq -b "$@"; }
+fi
 
 kit_project_root() {
   local d prefix
