@@ -20,7 +20,8 @@
 # review. A Bash write is judged by those changed lines, not by the files its command names. Small: at most config
 # review.skip_lines changed code lines, no new file, no path matching review.always, nothing reviewed yet (a fix
 # after a review always goes to its re-check) → no review. Gap: a change to a path no Edit named is not counted when
-# no Bash write was seen (a user hook's formatter, an unrecognized rename, a script that writes files).
+# no Bash write was seen (a user hook's formatter, an unrecognized rename, a script that writes files); a repo
+# checked out under /tmp or /private/tmp gets no Bash write counted at all (its paths read as scratch).
 set -euo pipefail
 
 if ! command -v jq >/dev/null 2>&1; then

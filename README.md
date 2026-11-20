@@ -50,7 +50,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
 | `docs/`                       | `hooks.md` (what each hook does), `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md`, `handoffs.md`, `owner-kinds.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
-| `.github/workflows/`          | `test.yml`: every suite on ubuntu and windows plus shellcheck, on push to `main` and pull requests; `evals.yml`: the agent evals, by hand |
+| `.github/workflows/`          | `test.yml`: every suite on ubuntu and windows plus shellcheck, on push to `main` and pull requests (windows advisory until issue #59); `evals.yml`: the agent evals, by hand |
 | `evals/`                      | `claude plugin eval` cases for the agents (decider, change-reviewer, business-analyst); not run by `test-all`  |
 | `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`python`, `react`, ...)  |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
@@ -242,7 +242,8 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
    and `node scripts/test-all.mjs`, the one command for every test suite and the line wrap check. GitHub Actions
    (`.github/workflows/test.yml`) runs the same on ubuntu and windows for every push to `main` and every pull
-   request, plus `shellcheck` on the hooks; a red run on `main` is reverted like a bad release.
+   request, plus `shellcheck` on the hooks; a red run on `main` is reverted like a bad release. The windows job is
+   advisory (`continue-on-error`) until its fixtures run under Git Bash (issue #59).
 3. A new, renamed or removed file of the kit is named in `docs/spec.md` in the same commit, and a changed process is
    changed there; `scripts/spec.test.mjs` fails on a file the spec does not name.
 4. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
@@ -370,7 +371,7 @@ Claude Code ใหม่
 2. ทดสอบในโปรเจกต์ด้วย `claude --plugin-dir /path/to/ai-kit` และรัน `claude plugin validate /path/to/ai-kit`
    กับ `node scripts/test-all.mjs` GitHub Actions (`.github/workflows/test.yml`) รันชุดเดียวกันบน ubuntu และ
    windows ทุกครั้งที่ push `main` หรือเปิด pull request พร้อม `shellcheck` บน hook ถ้าแดงบน `main` ให้ revert
-   เหมือน release ที่เสีย
+   เหมือน release ที่เสีย (job windows เป็น advisory จนกว่า fixture จะรันบน Git Bash ได้ ดู issue #59)
 3. เพิ่มเลข `version` ใน `.claude-plugin/plugin.json` และเขียนหนึ่งบรรทัดใน `CHANGELOG.md`
    - patch (2.0.x) — แก้บั๊ก
    - minor (2.x.0) — เพิ่ม hook, command, check หรือ config key ที่มีค่า default

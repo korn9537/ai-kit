@@ -4,7 +4,10 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 HOOK="$PWD/review-before-stop.sh"
-TMP="$(mktemp -d)" || exit 1
+# not under TMPDIR: Linux puts it in /tmp, and the hook reads a /tmp path as scratch (no repo write), so every Bash
+# write case would pass
+BASE="${XDG_CACHE_HOME:-$HOME/.cache}/ai-kit-tests" && mkdir -p "$BASE" || exit 1
+TMP="$(mktemp -d "$BASE/stop.XXXXXX")" || exit 1
 trap 'rm -rf "$TMP"' EXIT
 # the resolved path: transcript paths must match the repo root (macOS /var → /private/var)
 REPO="$(cd "$TMP" && pwd -P)" || exit 1

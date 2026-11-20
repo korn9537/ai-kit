@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.58.1
+
+The first CI run on `main` (2.58.0) was red on both platforms; ubuntu is green again, windows is advisory. No project
+needs to edit anything.
+
+- `hooks/review-before-stop.test.sh`: the test repo lives under `~/.cache/ai-kit-tests`, not `TMPDIR`. On Linux
+  `mktemp -d` is under `/tmp`, which the hook reads as scratch, so its three Bash-write cases passed instead of
+  blocking. Reproduced in a Debian container with mawk and jq 1.6, which were not the cause. The hook's header
+  names the gap: a repo checked out under `/tmp` gets no Bash-write review.
+- `CLAUDE.core.md`: the Agent model bullet moves to "Delegation and report", where its readers are. The injected
+  first half was 9,030 characters with the runner's longer plugin path (14 `ai-kit/` references), over the 9,000 the
+  session-start test keeps as margin under Claude Code's 10,000 cap; it is 8,324 now, the second half 6,604 of 7,000.
+- `.github/workflows/test.yml`: the windows job runs with `continue-on-error` until its fixtures run under Git Bash
+  (issue #59: MSYS paths fed to hooks that normalise to `C:/`, `env -i` dropping `SYSTEMROOT`, posix separators and
+  executable bits asserted in node tests). A red `main` now means ubuntu.
+
 ## 2.58.0
 
 The four agents learn what the usage data of kit 2.47–2.55 (983 rounds, 243 refused commits) showed they met too

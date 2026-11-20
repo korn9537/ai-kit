@@ -56,13 +56,6 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   choice whose reasons must be kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names)
   with the default status, same commit. Small jobs (typo, copy, one style value on one screen, move-only refactor,
   docs) skip both, except that a BA request by the user is always run; unsure → summarize.
-- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
-  effort, `ai-kit:committer` and `ai-kit:explorer` on sonnet at medium effort, from their frontmatter; the Agent
-  call passes neither, except a committer's batch size: `light` sonnet low, `heavy` opus high
-  (`ai-kit/docs/plan-batching.md` §Coordinator pipeline). A general-purpose fallback for a kit agent (type not
-  loaded) passes that agent's frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for
-  committer at size normal); an explorer not loaded, and every other general-purpose or Explore subagent, gets
-  `model: "sonnet"`.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for
@@ -98,6 +91,13 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 
 ## Delegation and report
 
+- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
+  effort, `ai-kit:committer` and `ai-kit:explorer` on sonnet at medium effort, from their frontmatter; the Agent
+  call passes neither, except a committer's batch size: `light` sonnet low, `heavy` opus high
+  (`ai-kit/docs/plan-batching.md` §Coordinator pipeline). A general-purpose fallback for a kit agent (type not
+  loaded) passes that agent's frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for
+  committer at size normal); an explorer not loaded, and every other general-purpose or Explore subagent, gets
+  `model: "sonnet"`.
 - **Heavy reads go to a subagent** (hook-nudged), plan or not: a browser check (screenshots, page reads, clicking
   through a flow) or a search likely to need more than about three reads or greps. Finding what a summary, plan or
   brief needs (where the code is, what it does today, which files a change touches) is such a search: one

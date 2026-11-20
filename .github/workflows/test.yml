@@ -12,6 +12,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # windows is advisory until its fixtures run under Git Bash (issue #59): a red main means ubuntu
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     # Git Bash on windows: the hooks, their tests and test-all's bash spawns all run there
     defaults:
       run:
