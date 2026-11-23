@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.59.0
+
+Where the tokens go, measured and cut: a heavy batch is capped at 5 code files (#62), the committer checks docs
+and its own claims against the code (#63), and `usage.mjs handoffs` and `usage.mjs flow` show handoff re-reads and
+the process map. No project needs to edit anything.
 
 - `agents/committer.md`: before staging, the committer greps the `.md` files for each name the batch renamed, removed
   or changed and fixes the lines no longer true, and cuts any claim it wrote that its diff does not make true; a fix
