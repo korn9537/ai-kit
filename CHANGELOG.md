@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `usage.mjs flow [--kit <v>] [--project] [--html <file>]` (`scripts/lib/usage-flow.mjs`): the process map of the main
+  sessions from the usage server's new `v_flow_nodes` and `v_flow_edges` views (ai-kit-usage migration 006): each
+  step's share of cost, visits and time, the commonest transitions, and the steps taken both ways (commit and
+  reviewer, edit and test-fail); `--html` writes the map as a page. The server already held every row the map needs;
+  no new field is sent.
 - `usage.mjs handoffs [--since YYYY-MM-DD]` (`scripts/lib/handoff-audit.mjs`): per subagent role in this machine's
   transcripts of the project, the median brief and report size, the share of briefs with a line range, searches and
   reads before a committer's first edit, and how often the main session re-read a path a report had just named in

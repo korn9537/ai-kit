@@ -2,7 +2,7 @@
 // Token usage CLI. `record` (Stop) appends the round's record to the local buffer <git-common-dir>/claude-usage/ and
 // prints the summary line; `end` (SessionEnd) and `flush --idle` (SessionStart) start a detached `send` to the usage API.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
@@ -10,6 +10,7 @@ import { deciderDir, usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
 import { collectSession, loadCache, mergeCommits, saveCache, transcriptsDir } from "./lib/usage-collect.mjs";
 import { formatHooks, scanHooks } from "./lib/hook-events.mjs";
 import { formatHandoffs, scanHandoffs } from "./lib/handoff-audit.mjs";
+import { flowGraph, flowHtml, formatFlow } from "./lib/usage-flow.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, compare, digest, enc, summaryLine } from "./lib/usage-digest.mjs";
 import { HOST, LOCK_STALE_MS, LOCK_WAIT_MS, breakLock, withLock } from "./lib/usage-lock.mjs";
 import { VIEW_FILTERS, endpointOf, formatTable, getAll, getJson, projectId } from "./lib/usage-api.mjs";
@@ -281,6 +282,34 @@ async function viewsCmd(args) {
   process.stdout.write(`${formatTable(items, { cap: 60 })}\n`);
 }
 
+// flow [--kit <v|prefix.>] [--project] [--html <file>]: the process map of the main sessions from v_flow_nodes and
+// v_flow_edges, as a text summary and optionally a self-contained HTML page.
+async function flowCmd(args) {
+  const q = {};
+  let own = false;
+  let html = "";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--kit" && args[i + 1]) q.kit = args[++i];
+    else if (args[i] === "--project") own = true;
+    else if (args[i] === "--html" && args[i + 1]) html = args[++i];
+    else throw new Error("usage: usage.mjs flow [--kit <version|prefix.>] [--project] [--html <file>]");
+  }
+  const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
+  if (own) q.project = projectId(root);
+  const base = endpointOf(readConfig(root).usage ?? {});
+  const [nodes, edges] = await Promise.all(["v_flow_nodes", "v_flow_edges"].map((v) => getAll(base, `/v1/views/${v}`, q)));
+  if (!nodes.length) {
+    process.stdout.write("no flow rows: the server has no v_flow views yet, or nothing matches\n");
+    return;
+  }
+  const g = flowGraph(nodes, edges);
+  process.stdout.write(`${formatFlow(g, { kit: q.kit })}\n`);
+  if (html) {
+    writeFileSync(html, flowHtml(g, { kit: q.kit }));
+    process.stdout.write(`map written to ${html}\n`);
+  }
+}
+
 // migrate: posts this repo's ai/usage/** to the usage API; only when every POST got 2xx, stages its removal.
 async function migrateCmd() {
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
@@ -401,6 +430,7 @@ function main() {
   }
   if (cmd === "digest") return void digestCmd(args).catch(failWith("usage-digest"));
   if (cmd === "views") return void viewsCmd(args).catch(failWith("usage-views"));
+  if (cmd === "flow") return void flowCmd(args).catch(failWith("usage-flow"));
   if (cmd === "migrate") return void migrateCmd().catch(failWith("usage-migrate"));
   if (cmd === "refusal") {
     try {
@@ -420,7 +450,7 @@ function main() {
   }
   process.stderr.write("usage: usage.mjs record | end | refusal <rule-id> | flush --session <id> | flush --idle [--except <id>] | send [--session <id>]..."
     + " | digest [--since YYYY-MM-DD] [--project] [--baseline | --compare <kitA> <kitB>] | views <view> [--kit <v>] [--project] [--since YYYY-MM-DD]"
-    + " | migrate | hooks [--since YYYY-MM-DD] | handoffs [--since YYYY-MM-DD]\n");
+    + " | flow [--kit <v>] [--project] [--html <file>] | migrate | hooks [--since YYYY-MM-DD] | handoffs [--since YYYY-MM-DD]\n");
   process.exitCode = 2;
 }
 

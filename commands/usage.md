@@ -38,5 +38,8 @@ version: the goal is to see which kit version cost more or less and why, not to 
    Before judging a handoff (a brief, a report, what the main session did with it), run `usage.mjs handoffs
    [--since YYYY-MM-DD]` (this machine's transcripts): brief and report size per role and how often the main session
    re-read a range a report had just named.
+   To see where sessions go step after step (the loops, the step that costs most, where a hook block sends them), run
+   `usage.mjs flow [--kit <version|prefix.>] [--project] [--html <file>]`: the server's `v_flow_nodes` and
+   `v_flow_edges` merged into one map.
 8. End with the working-conventions report: files written under Files, the proposal or setting chosen under Decided,
    what the views could not show under Open.

@@ -94,6 +94,7 @@ export const VIEW_FILTERS = {
   v_tool_stats: { project: false, since: false }, v_hook_stats: { project: false, since: false },
   v_session_cost: { project: true, since: true }, v_round_cost: { project: true, since: true }, v_agent_cost: { project: true, since: true },
   v_call_cost: { project: true, since: true }, v_repeat_reads: { project: true, since: true }, v_daily: { project: true, since: true },
+  v_flow_steps: { project: true, since: true }, v_flow_nodes: { project: true, since: false }, v_flow_edges: { project: true, since: false },
 };
 
 // A view's rows as a fixed-width table: numbers rounded, timestamps to the minute, cells cut to `width`.
