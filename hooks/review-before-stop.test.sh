@@ -70,6 +70,20 @@ run_case "block: edit after the re-check asks to close" block "Review closed: re
   "$(line SendMessage '{"to": "r", "summary": "review fix diff"}')" "$(edit src/a.ts)"
 reset
 
+# a long file list: 30 paths in the reason, the rest in a file beside the snapshot
+many=()
+for i in $(seq 1 35); do echo x >"$REPO/src/n$i.ts" && many+=("$(edit "src/n$i.ts")"); done
+run_case "block: 35 edited files list 30 and point to the full list" block "+5 more; the full list of 35" "${many[@]}"
+if [[ "$(grep -c . "$REPO/.git/claude-review/s1.files" 2>/dev/null)" == 35 ]]; then
+  echo "ok   - the full list file holds all 35 paths"
+  pass=$((pass + 1))
+else
+  echo "FAIL - the full list file holds all 35 paths"
+  fail=$((fail + 1))
+fi
+rm -f "$REPO"/src/n*.ts
+reset
+
 sed -i.bak '1s/$/x/' "$REPO/src/migrations/m.ts" && rm "$REPO/src/migrations/m.ts.bak"
 run_case "block: one line in a review.always path" block - "$(edit src/migrations/m.ts)"
 reset

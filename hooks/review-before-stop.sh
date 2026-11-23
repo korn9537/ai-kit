@@ -287,7 +287,7 @@ reviews only what came after), never an earlier review's reviewer (opus, medium 
 frontmatter; pass no model or effort). Agent type not loaded (plugin
 enabled mid-session): general-purpose with model \"opus\", effort \"medium\", description containing \"review\", told to follow
 $kit_plugin/agents/change-reviewer.md (\${CLAUDE_PLUGIN_ROOT} = $kit_plugin). Brief: the user's request in their
-words, the summary's Done when checks if one was shown, the job's commits (\`git log --format=%h --grep '^Job: <id>$'\`), the files listed below and their
+words, the summary's Done when checks if one was shown, the job's commits (\`git log --format=%h --grep '^Job: <id>$'\`), the files listed below (all of them: a cut list names the file that holds the rest) and their
 \`git diff <first>^..HEAD -- <files> ':(exclude)ai/usage'\` (first = the job's first commit; other sessions share
 the checkout, so a hunk no commit of this job made is not in scope) and \`git diff -- <files>\` for what is not
 committed yet. Fix every CONFIRMED finding, judge each
@@ -301,7 +301,21 @@ issue left: write under \"Checked\" as plain text with no quotes or backticks:
 Review closed: re-checked once, no third pass. Then stop. New work instead: $launch" ;;
   *) reason="Code changed with no review yet: $launch" ;;
 esac
-reason+=$'\n'"Files:"$'\n'"$files"
-[[ -n "$outside" ]] && reason+=$'\n'"Paths outside the open plan of job $job (so the plan's pass did not apply):"$'\n'"$outside"
+# a long list goes to a file beside the snapshot: the reason stays in the main context for every later call
+# (kit 2.58.2: 7.4k characters per block against 1.7k in 2.54.0)
+list_cap=30
+capped() {  # $1 = list, $2 = file suffix; prints at most list_cap lines, then where the full list is
+  local n
+  n="$(grep -c . <<<"$1")"
+  if ((n <= list_cap)) || [[ -z "$rdir" || -z "$session" ]] || ! mkdir -p "$rdir" ||
+    ! printf '%s\n' "$1" >"$rdir/$session.$2"; then
+    printf '%s' "$1"
+    return
+  fi
+  head -n "$list_cap" <<<"$1"
+  printf '+%s more; the full list of %s: %s' "$((n - list_cap))" "$n" "$rdir/$session.$2"
+}
+reason+=$'\n'"Files:"$'\n'"$(capped "$files" files)"
+[[ -n "$outside" ]] && reason+=$'\n'"Paths outside the open plan of job $job (so the plan's pass did not apply):"$'\n'"$(capped "$outside" outside)"
 
 jq -n --arg r "$reason" '{decision: "block", reason: $r}'

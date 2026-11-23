@@ -190,6 +190,7 @@ and `scripts/lib/state-dirs.mjs`, never by a path built in a caller.
 | `<git-common-dir>/claude-decider/<session>.json` | `decider.mjs guard` | `decider.mjs guard` (which OWNER verdicts an ask already used; `used`: call ids spent whole (old format); `blocks`: `<call id>#<index>` blocks used) |
 | `<git-common-dir>/claude-decider/.lock` | `decider.mjs guard` | `decider.mjs guard` (lock directory, one per folder, serialising the guard's read-match-write; older than 10 s is stale) |
 | `<git-dir>/claude-review/<session>` | `review-snapshot.sh`, `session-start.sh` (the review snapshot tree) | `review-before-stop.sh` |
+| `<git-dir>/claude-review/<session>.files`, `.outside` | `review-before-stop.sh` (the full edited-file list, or paths outside the open plan, when the block reason lists only the first 30) | the coordinator, for the reviewer brief |
 | `<git-dir>/claude-review/bash-<tool_use_id>` | `post-edit-check.sh mark` (PreToolUse Bash) | `post-edit-check.sh` (PostToolUse and PostToolUseFailure Bash) lists files newer than it, then removes it; one older than a day is removed by the next `mark` |
 | `<git-dir>/claude-review/<session>.reads`, `.handoff` | `handoff-nudge.sh` | `handoff-nudge.sh` (read count, note marks) |
 | `<git-dir>/claude-review/continuous-<job>.json` | `continuous.mjs` | `continuous.mjs`, `/ai-kit:continuous` |

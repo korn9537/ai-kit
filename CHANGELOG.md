@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- `hooks/review-before-stop.sh`: the block reason lists at most 30 edited files (and 30 paths outside the open
+  plan); the rest go to `<git-dir>/claude-review/<session>.files` (`.outside`), which the reason names and the
+  reviewer brief takes whole. The reason stays in the main context for every later call: in kit 2.58.2 it averaged
+  7.4k characters per block against 1.7k in 2.54.0 (`usage.mjs views v_hook_stats`).
+
 ## 2.58.2
 
 The windows CI job is no longer advisory: every suite passes under Git Bash (issue #59). Making them pass found seven
