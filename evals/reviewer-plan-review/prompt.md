@@ -22,8 +22,6 @@ Done when:
 risks:
 - the job runs while the API writes orders (an order created mid-run is younger than two years, so the select
   never picks it)
-tests:
-- archive-orders.test.ts: a 3-year-old order moves, a 1-year-old order stays
 
 Batch b2 (size light): docs
 Brief: document the job in `ai/data/orders.md`: "Orders older than two years live in `orders_archive`; `orders`
@@ -31,7 +29,6 @@ holds only the last two years."
 Done when:
 - `ai/data/orders.md` names the archive table and the two-year rule.
 risks: none: docs only
-tests: none: docs only
 
 Code the batches touch, quoted because the sandbox holds no repo. `src/db.ts:10-14`:
 

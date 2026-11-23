@@ -3,7 +3,7 @@ export const meta = {
   description: 'Run a multi-commit plan: one ai-kit:committer per batch, one change-reviewer for the whole job after the last commit, CONFIRMED fixes, a re-check and one more round',
   whenToUse: 'Launched by /ai-kit:run-plan from the staged copy that carries the planned batches (commands/run-plan.md)',
   phases: [
-    { title: 'Plan review', detail: 'one change-reviewer reads the plan before the first commit: failure modes, tests, claims' },
+    { title: 'Plan review', detail: 'one change-reviewer reads the plan before the first commit: failure modes, claims, conflicts' },
     { title: 'Commit', detail: 'one ai-kit:committer per batch, one at a time' },
     { title: 'Review', detail: 'one change-reviewer over the whole job, after the last commit' },
     { title: 'Fix', detail: 'CONFIRMED findings fixed and re-checked, one more round for what is left' },
@@ -87,9 +87,9 @@ const PLAN_REVIEW = {
         type: 'object',
         properties: {
           batches: { type: 'array', items: { type: 'string' }, description: 'the ids of every batch it concerns (a conflict names two)' },
-          kind: { type: 'string', enum: ['failure-mode', 'test', 'claim', 'conflict'] },
+          kind: { type: 'string', enum: ['failure-mode', 'claim', 'conflict'] },
           what: { type: 'string', description: 'what the plan misses, with file:line when read in code' },
-          fix: { type: 'string', description: 'what the batch must also do, or its risks or tests must also hold' },
+          fix: { type: 'string', description: 'what the batch must also do, or its risks must also hold' },
           verdict: { type: 'string', enum: ['CONFIRMED', 'PLAUSIBLE'] },
         },
         required: ['batches', 'kind', 'what', 'fix', 'verdict'],
@@ -131,13 +131,10 @@ const later = (b) => {
 const trailer = (b) => `Add the trailer line \`Batch: ${b.id}\` just above the Job trailer.`
 // the result the batch must reach, set before the work: the committer builds to it and the reviewer checks it first
 const done = (b) => ((b.accept || []).length ? ['Done when:', ...b.accept.map((a) => `- ${a}`)].join('\n') : '')
-// what the plan expects to go wrong and the existing tests that cover the change, run by name or filter; a `check:`
-// one is a throwaway test the batch writes, runs and deletes
+// what the plan expects to go wrong, set before the work like Done when
 const plan = (b) =>
-  (b.risks || []).length || (b.tests || []).length
-    ? ['Risks (each handled in this batch, or said not to be):', ...(b.risks || []).map((a) => `- ${a}`),
-        'Tests (run only these, by name or filter, never the whole suite; a `check:` one is written, run, then deleted, never staged):',
-        ...(b.tests || []).map((a) => `- ${a}`)].join('\n')
+  (b.risks || []).length
+    ? ['Risks (each handled in this batch, or said not to be):', ...b.risks.map((a) => `- ${a}`)].join('\n')
     : ''
 // the plan review's findings for one batch: a CONFIRMED one is part of the work, a PLAUSIBLE one is judged
 // a finding naming no batch of this plan goes to every batch: it is not lost to a mistyped id
@@ -157,9 +154,8 @@ const found = (b) => {
 }
 // what the batch owes beyond Done when, which its reviewer and re-checks check like Done when
 const owed = (b) => {
-  const items = [...(b.tests || []).filter((t) => /^check:/i.test(t)).map((t) => `test: ${t}`),
-    ...planFindings(b).filter((f) => f.verdict === 'CONFIRMED').map((f) => `plan review: ${f.what} → ${f.fix}`)]
-  return items.length ? ['Also owed by this batch (plan review and its tests):', ...items.map((i) => `- ${i}`)].join('\n') : ''
+  const items = planFindings(b).filter((f) => f.verdict === 'CONFIRMED').map((f) => `plan review: ${f.what} → ${f.fix}`)
+  return items.length ? ['Also owed by this batch (plan review):', ...items.map((i) => `- ${i}`)].join('\n') : ''
 }
 const commitPrompt = (b) =>
   [`Batch ${b.id}: ${b.title}`, where, '', b.brief, '', done(b), plan(b), found(b), b.verify ? `Verify: ${b.verify}` : '', job, trailer(b), later(b), report].join('\n')
@@ -421,7 +417,7 @@ const findingSize = (where, list, res) => {
   return files.length ? files.reduce((m, f) => higher(m, one(f)), 'light') : 'normal'
 }
 
-// one review of the whole job, after its last commit: the plan's checks, risks and tests together
+// one review of the whole job, after its last commit: the plan's checks and risks together
 const made = batches.map((b) => results[b.id]).filter((r) => r && r.hash)
 let jobReview = null
 if (made.length) {
@@ -429,7 +425,7 @@ if (made.length) {
   jobFiles = [...new Set(made.flatMap((r) => r.files || []))]
   const jb = {
     id: 'job', isJob: true, title: `review findings of ${input.job}`, brief: batches.map((b) => `${b.id}: ${b.title}\n${b.brief}`).join('\n\n'),
-    accept: batches.flatMap((b) => b.accept || []), tests: batches.flatMap((b) => b.tests || []),
+    accept: batches.flatMap((b) => b.accept || []),
     risks: batches.flatMap((b) => b.risks || []), verify: [...new Set(batches.map((b) => b.verify).filter(Boolean))].join(' && '),
     alsoInScope: batches.flatMap((b) => b.alsoInScope || []),
     sizeAt: (where) => findingSize(where, batches, results),

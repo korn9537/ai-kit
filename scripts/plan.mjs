@@ -225,12 +225,12 @@ export function sharedFiles(batches, root = "") {
 }
 
 // the files a plan's batch texts name: a path, root file, directory (evals/), glob or <placeholder> path (a wildcard
-// segment); accept and tests count too, not only the briefs
+// segment); accept counts too, not only the briefs
 export function scopePaths(batches, root = "") {
   const top = `${root.replace(/\/+$/, "")}/`;
   const out = new Set();
   for (const b of batches ?? []) {
-    const text = [b.brief, b.accept, b.risks, b.tests, b.alsoInScope].flat(Infinity).filter((t) => typeof t === "string").join("\n");
+    const text = [b.brief, b.accept, b.risks, b.alsoInScope].flat(Infinity).filter((t) => typeof t === "string").join("\n");
     for (let t of text.split(/[\s,=`'"]+/)) {
       t = t.replace(/^[([{:]+/, "").replace(/[)\]},.;:]+$/, "").replace(/(:\d+(-\d+)?)+$/, "").replace(/[)\]},.;:]+$/, "");
       if (root && t.startsWith(top)) t = t.slice(top.length);

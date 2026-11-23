@@ -20,14 +20,14 @@ $ARGUMENTS starting with `queue`: follow §Queue.
    - `plugin`: `${CLAUDE_PLUGIN_ROOT}`.
    - `job`: the request's job id, one for the whole plan (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
    - `repo`: only when the repo is not the session's working directory.
-   - `batches`, in plan order: `{id, title, brief, accept, risks, tests, verify, waitsFor, alsoInScope}`. `brief` is the
+   - `batches`, in plan order: `{id, title, brief, accept, risks, verify, waitsFor, alsoInScope}`. `brief` is the
      `ai-kit:committer` brief (§Coordinator pipeline): what to change, where (`path:start-end` already found), the
      decisions and requirements it follows. `accept` lists the checks of the summary's Done when that this batch must
      meet, one string each, never empty (`plan.mjs write` refuses a batch with none; no summary was shown → write the
      checks the batch's result must pass); the committer builds to them and the job's one reviewer checks them first.
-     `verify` holds the project's verify commands for it, leaving out what CLAUDE.md says the pre-commit runs, with
-     each test command narrowed to the batch's `tests` (a filter or file paths), never the whole suite.
-     `risks` and `tests` are set per `plan-batching.md` §Plan review, never empty. `waitsFor` lists the ids it needs.
+     `verify` holds the project's build and typecheck commands for it, leaving out what CLAUDE.md says the
+     pre-commit runs; no test command. `risks` is set per `plan-batching.md` §Plan review, never empty. `waitsFor`
+     lists the ids it needs.
      `alsoInScope` lists each item the main session added beyond the request.
      Optional `size` (`light`, `normal` or `heavy`; absent is `normal`) is the committer's model and effort, set per
      `plan-batching.md` §Before the first edit.

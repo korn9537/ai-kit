@@ -28,8 +28,8 @@ const script = (reviews, fix = (n) => commit(`f${n}`), first = commit("c1")) => 
   fn.log = log;
   return fn;
 };
-const one = [{ id: "a", title: "feat(x): y", brief: "b", verify: "make test", risks: ["R"], tests: ["T"] }];
-const two = [...one, { id: "b", title: "feat(x): z", brief: "b2", risks: ["R2"], tests: ["T2"] }];
+const one = [{ id: "a", title: "feat(x): y", brief: "b", verify: "make test", risks: ["R"] }];
+const two = [...one, { id: "b", title: "feat(x): z", brief: "b2", risks: ["R2"] }];
 const fixes = (s) => s.log.filter((l) => /fix$/.test(l)).length;
 
 // the plan review: read before the first commit, its findings reach the batch they name, a failed one does not stop the run
@@ -43,9 +43,9 @@ const fixes = (s) => s.log.filter((l) => /fix$/.test(l)).length;
     return commit(/\[b\]/.test(label) ? "c2" : "c1");
   });
   ok("plan review runs first and reads the plan, not a commit", seen[0].label === "review: plan" && /Plan review: no code is written yet/.test(seen[0].prompt) && !/git show/.test(seen[0].prompt));
-  ok("plan review prompt carries the risks and tests", /- R\b/.test(seen[0].prompt) && /- T\b/.test(seen[0].prompt));
+  ok("plan review prompt carries the risks", /- R\b/.test(seen[0].prompt));
   const c = seen.find((x) => /^commit: \[a\]/.test(x.label)).prompt;
-  ok("the committer gets the risks, the tests and the plan review finding", /- R\b/.test(c) && /- T\b/.test(c) && /CONFIRMED · failure-mode · UAT deploy lands mid-run/.test(c));
+  ok("the committer gets the risks and the plan review finding", /- R\b/.test(c) && /CONFIRMED · failure-mode · UAT deploy lands mid-run/.test(c));
   ok("the result holds the plan review findings", res.planReview.findings.length === 1 && res.batches.every((b) => b.status === "committed"));
   let asked = false;
   const solo = await run(one, (l) => {

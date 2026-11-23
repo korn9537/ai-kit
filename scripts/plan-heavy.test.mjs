@@ -11,7 +11,7 @@ const args = (batches) => ({
   request: "r",
   plugin: "/plugin",
   job: JOB,
-  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, accept: ["ok"], risks: ["r"], tests: ["t"], ...b })),
+  batches: batches.map((b) => ({ title: b.id, brief: `do ${b.id}`, accept: ["ok"], risks: ["r"], ...b })),
 });
 const tmp = realpathSync.native(mkdtempSync(join(tmpdir(), "plan-heavy-")));
 const git = (repo, ...a) => execFileSync("git", a, { cwd: repo, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -41,8 +41,8 @@ try {
   const brief = "Change scripts/plan.mjs:280-290 per docs/plan-batching.md and CLAUDE.md; plan.mjs write refuses. Node.js only. Makefile.mk";
   ok("heavyFiles leaves out the docs it follows, a bare name a path covers and a word that is no file",
     heavyFiles({ brief }, root).join() === "scripts/plan.mjs,Makefile.mk", heavyFiles({ brief }, root));
-  ok("heavyFiles counts alsoInScope, not tests or risks",
-    heavyFiles({ brief: "x", alsoInScope: ["src/a.ts"], tests: ["src/t.test.ts"], risks: ["src/r.ts"] }, root).join() === "src/a.ts");
+  ok("heavyFiles counts alsoInScope, not risks",
+    heavyFiles({ brief: "x", alsoInScope: ["src/a.ts"], risks: ["src/r.ts"] }, root).join() === "src/a.ts");
 
   const kept = repoAt("kept");
   mkdirSync(join(kept, "ai", "plans"), { recursive: true });

@@ -83,9 +83,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   (`ai-kit/scripts/check-comments.mjs`, `ai-kit/docs/code-comments.md`).
 - **Verify once per commit**, right before it, only what changed, with the project's verify commands (CLAUDE.md),
   leaving to the commit what CLAUDE.md says the pre-commit runs.
-  Tests: only those covering what changed and what the analysis found it affects, by filter or file; never the
-  whole suite (`bash-guard.sh` blocks it). A test written to check the work is deleted once it passes, never
-  committed: the rules live in decisions and specs.
+  No tests: none written, none run; verify is the build and typecheck, the rules live in decisions and specs and the
+  reviewer reads the code (`bash-guard.sh` blocks a whole-suite run).
 - No build while the user's dev server runs: run the typecheck instead (hook-guarded for common JS
   build commands).
 - Independent reads, searches and checks go out together in one message. A symbol is found with `grep -n`, then

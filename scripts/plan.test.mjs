@@ -72,7 +72,7 @@ throws("an unknown wait is refused", () => merge(null, args([{ id: "a", waitsFor
 throws("a wait on a planned batch outside the run is refused: the workflow would skip it", () =>
   merge(merge(null, args()), args([{ id: "d", waitsFor: ["a"] }])), /not in this run/);
 throws("a batch with no risks is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", tests: ["t"] }] }), /risks is a list/);
-throws("a batch with an empty tests list is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: ["r"], tests: [] }] }), /tests is a list/);
+ok("a batch needs no tests list", merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", accept: ["ok"], risks: ["r"] }] }).batches.length === 1);
 throws("a blank risk is refused", () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [" "], tests: ["t"] }] }), /risks is a list/);
 for (const bare of ["none", "None.", "n/a", "-"])
   throws(`a bare ${bare} is refused`, () => merge(null, { job: JOB, batches: [{ id: "a", title: "A", brief: "B", risks: [bare], tests: ["t"] }] }), /says why/);

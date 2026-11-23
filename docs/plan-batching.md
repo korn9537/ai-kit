@@ -42,12 +42,8 @@ anyway is found before the code exists. Each batch carries, set when the plan is
 - `risks`: how the batch can fail, one line each: state that changes while it runs (a deploy, another session), a
   partial failure, a call that hangs or repeats, an empty or huge input. Each is handled in the batch or said not to
   be; a batch with none says `none: <why>`.
-- `tests`: the existing tests that cover the code the batch changes and what the analysis found it affects, named so
-  `verify` runs only them (`dotnet test --filter`, a test file path, `go test ./<pkg>`, `pytest -k`); never the
-  whole suite (`hooks/bash-guard.sh` blocks it); `none: <why>` when no test covers the change (a doc-only batch,
-  code no test reaches). A test the batch writes to check its work is a throwaway check, `check: <what it shows>`:
-  written, run until it passes, then deleted before staging; never committed. The rules live in the decisions and
-  specs, not in a growing suite.
+- No tests: a batch neither writes nor runs one. `verify` is the build and typecheck; the rules live in the decisions
+  and specs, and the job's reviewer reads the code (`hooks/bash-guard.sh` blocks a whole-suite run).
 - `size`: the reviewer checks each batch's size against the criteria in §Before the first edit; one that does not fit
   is a PLAUSIBLE finding (kind claim) naming the batch.
 - A statement a doc or brief makes about behavior is checked against the code when written, not after. A
@@ -58,18 +54,16 @@ anyway is found before the code exists. Each batch carries, set when the plan is
   committer would learn it only once the batch is built.
 
 The reviewer reads the plan and the code the batches touch, and reports per batch: a failure mode missing from
-`risks`, a `tests` list that misses a test covering the changed or affected code, or that runs or writes more than
-that (a whole suite), a statement the code does not
-make true, two batches that conflict.
+`risks`, a statement the code does not make true, two batches that conflict. A missing test is not a finding.
 In the workflow its findings go into the brief of the batch they name (a CONFIRMED one is part of the batch, a
 PLAUSIBLE one is judged and reported in `choices`) and into the result's `planReview`; the run does not stop for them.
 A finding names every batch it concerns (a conflict names two); one naming none goes to every batch. The committer
-reports a CONFIRMED finding it did not meet in `unmet`, and the job's reviewer and re-checks check it and the batch's
-`check:` items like Done when (run and passed, and not committed). A plan of one batch gets no review. A resume or a
+reports a CONFIRMED finding it did not meet in `unmet`, and the job's reviewer and re-checks check it like Done
+when. A plan of one batch gets no review. A resume or a
 continuous retry reviews only the batches left, again: the findings of an earlier run live in its result
 (`/ai-kit:continuous` keeps each run's in its state), not in the plan file.
 Run as coordinator: launch the reviewer once, after showing the plan, and put its findings in the briefs the same way.
-`plan.mjs write` and `continuous.mjs init` refuse a batch with no `risks` or no `tests`, or a bare `none`.
+`plan.mjs write` and `continuous.mjs init` refuse a batch with no `risks`, or a bare `none`.
 
 ## Plan file
 
@@ -153,7 +147,7 @@ left to run.
   each fix is a fresh agent. `/ai-kit:continuous` retries keep the size: a retry runs only an agent that died, and
   its fixes escalate as above.
 - The brief (`docs/handoffs.md` §Per batch): the batch (what to change, where, the decisions and requirements it
-  follows), its Done when checks (the summary's checks this batch must meet), its `risks` and `tests` and the plan
+  follows), its Done when checks (the summary's checks this batch must meet), its `risks` and the plan
   review's findings for it (§Plan review), its verify commands (not what CLAUDE.md
   says the pre-commit runs), the request's job id (`shared-checkout.md` §Jobs; one for the whole plan), the batch id
   for its `Batch: <id>` trailer (§Plan file; a fix commit has none), the later batches' ids and titles (planned work
@@ -167,7 +161,7 @@ left to run.
   reviewer reads the whole job, not one per commit. A job whose commits change no code line (only moved blocks,
   comments, docs or `ai/usage`) gets no reviewer (`scripts/review-needed.sh <hash>` prints `skip` for such a commit,
   as the run-plan workflow calls it). Reviewer brief: the user's request in their words, the batches' ids and titles,
-  the batches' `check:` items and CONFIRMED plan review findings as items it owes beyond Done when, read
+  the batches' CONFIRMED plan review findings as items it owes beyond Done when, read
   `git diff <first commit>^..<last commit> -- <the job's files> ':(exclude)ai/usage'`, not the work tree, only the
   hunks of this job's commits (another session may commit in between); pass every batch's Done when
   checks; name each item the main session added beyond the user's request, `also in scope: <item> (coordinator)`.

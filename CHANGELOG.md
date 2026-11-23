@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+Tests leave the process: a plan has no `tests` field, the plan review no longer asks for one, and the committer
+writes and runs none. Verify is the build and typecheck; the reviewer reads the code. No project needs to edit
+anything; a plan or args file that still carries `tests` stays valid, the field is ignored.
+
+- `scripts/lib/plan-file.mjs` `checkBatch` requires only `risks`; `workflows/run-plan.js` drops the tests from the
+  committer, reviewer and fix prompts and the plan review's `test` finding kind.
+- `agents/committer.md`, `agents/change-reviewer.md`, `CLAUDE.core.md`, `docs/plan-batching.md`, `docs/handoffs.md`,
+  `commands/run-plan.md`: no tests written or run; a missing test is not a finding.
+- `conventions/csharp.md` item 10, `dart.md` item 2: no tests; `general.md` item 9 drops the lock test.
+- `hooks/bash-guard.sh` still blocks a whole-suite run (`ALLOW_FULL_SUITE=1` when the owner asks).
+
 ## 2.60.0
 
 Test only what the change touches and affects. A project's `CLAUDE.md` verify line that runs a whole suite now

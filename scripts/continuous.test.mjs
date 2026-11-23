@@ -8,7 +8,7 @@ import { abandon, HUNG_AFTER, init as initState, MAX_TRIES, next, readRun, RETRY
 
 // init checks each batch as plan.mjs write does: the fixtures name only ids, so give each a title and brief
 const init = (args, ...rest) =>
-  initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", risks: ["r"], tests: ["t"], ...b })) }, ...rest);
+  initState({ ...args, batches: args.batches.map((b) => ({ title: "t", brief: "b", risks: ["r"], ...b })) }, ...rest);
 import { readRepo } from "./plan.mjs";
 import { ok } from "./lib/test-util.mjs";
 
@@ -36,7 +36,7 @@ const initErr = (args) => { try { init(args); return ""; } catch (e) { return e.
 ok("init refuses a batch with an invalid size", /size is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a", size: "opus" }] })));
 ok("init refuses an invalid maxSize", /maxSize is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "max", batches: [{ id: "a" }] })));
 ok("init takes a size and a maxSize", initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "normal", batches: [{ id: "a", size: "heavy" }] }) === "");
-const wideHeavy = { id: "h", title: "H", brief: "src/a.ts src/b.ts src/c.ts src/d.ts src/e.ts src/f.ts", risks: ["r"], tests: ["t"], size: "heavy" };
+const wideHeavy = { id: "h", title: "H", brief: "src/a.ts src/b.ts src/c.ts src/d.ts src/e.ts src/f.ts", risks: ["r"], size: "heavy" };
 ok("init refuses a heavy batch naming 6 files", /heavy batch h names 6 files/.test(initErr({ job: "2026-11-05-x", plugin: "p", batches: [wideHeavy] })));
 ok("init lets a wide heavy batch through under maxSize normal", initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "normal", batches: [wideHeavy] }) === "");
 ok("init lets through a wide heavy batch the plan file already holds",
@@ -247,11 +247,11 @@ ok("repo: dirty tree", readRepo(repo, "2026-11-05-x").dirty.join() === "f");
 
 const cli = (...a) => execFileSync("node", [join(import.meta.dirname, "continuous.mjs"), ...a], { cwd: repo, encoding: "utf8" });
 const st = join(tmp, "s.json");
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"] }] }));
 cli("init", st, join(tmp, "args.json"));
 ok("cli: a commit already in the repo is not sent again", JSON.parse(cli("next", st)).action === "done");
 rmSync(st);
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-z", plugin: "p", batches: [{ id: "m5", title: "t", brief: "b", risks: ["r"] }] }));
 cli("init", st, join(tmp, "args.json"));
 const step = JSON.parse(cli("next", st));
 ok("cli: run after init, args in a file", step.action === "run" && !step.args && existsSync(step.argsFile), step);
@@ -260,13 +260,13 @@ ok("cli: run names the job's workflow copy in the project, carrying the args fil
     readFileSync(step.script, "utf8").includes(`const STAGED = ${JSON.stringify(JSON.parse(readFileSync(step.argsFile, "utf8")))}\n`), step);
 
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"], tests: ["t"] }], repo: nogit }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "m4", title: "t", brief: "b", risks: ["r"] }], repo: nogit }));
 const noInit = spawnSync("node", [join(import.meta.dirname, "continuous.mjs"), "init", st, join(tmp, "args.json")], { encoding: "utf8" });
 ok("cli: init stops on a failed log", noInit.status === 1 && !existsSync(st) && noInit.stderr.includes("git log failed"), noInit);
 
 rmSync(join(repo, "f"));
 rmSync(st, { force: true });
-writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1", title: "t", brief: "b", risks: ["r"], tests: ["t"] }] }));
+writeFileSync(join(tmp, "args.json"), JSON.stringify({ job: "2026-11-05-s", plugin: "p", batches: [{ id: "s1", title: "t", brief: "b", risks: ["r"] }] }));
 cli("init", st, join(tmp, "args.json"));
 const failedState = JSON.parse(readFileSync(st, "utf8"));
 writeFileSync(st, JSON.stringify({ ...failedState, batches: { s1: failedAgent("s1") }, lastEnd: 1 }));

@@ -96,7 +96,7 @@ export function checkBatch(b) {
     throw new Error(`batch ${b.id}: accept is a list of checks (strings)`);
   }
   // set before the work: the plan review reads them, and the committer builds to them (plan-batching.md §Plan review)
-  for (const k of ["risks", "tests"]) {
+  for (const k of ["risks"]) {
     if (!(Array.isArray(b[k]) && b[k].length && b[k].every((a) => typeof a === "string" && a.trim()))) {
       throw new Error(`batch ${b.id}: ${k} is a list of strings, not empty (a batch with none says "none: <why>")`);
     }
