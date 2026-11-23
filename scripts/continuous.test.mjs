@@ -36,6 +36,11 @@ const initErr = (args) => { try { init(args); return ""; } catch (e) { return e.
 ok("init refuses a batch with an invalid size", /size is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "a", size: "opus" }] })));
 ok("init refuses an invalid maxSize", /maxSize is light, normal or heavy/.test(initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "max", batches: [{ id: "a" }] })));
 ok("init takes a size and a maxSize", initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "normal", batches: [{ id: "a", size: "heavy" }] }) === "");
+const wideHeavy = { id: "h", title: "H", brief: "src/a.ts src/b.ts src/c.ts src/d.ts src/e.ts src/f.ts", risks: ["r"], tests: ["t"], size: "heavy" };
+ok("init refuses a heavy batch naming 6 files", /heavy batch h names 6 files/.test(initErr({ job: "2026-11-05-x", plugin: "p", batches: [wideHeavy] })));
+ok("init lets a wide heavy batch through under maxSize normal", initErr({ job: "2026-11-05-x", plugin: "p", maxSize: "normal", batches: [wideHeavy] }) === "");
+ok("init lets through a wide heavy batch the plan file already holds",
+  init({ job: "2026-11-05-x", plugin: "p", batches: [wideHeavy] }, undefined, [], [], "", { batches: [wideHeavy] }).args.batches.length === 1);
 ok("abandon lets init take the job again", init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).args.batches.length === 1, orphan);
 ok("an abandoned run launches nothing on a late tick", next(orphan, none, clean, T).step.action === "stopped", orphan);
 ok("init clears the abandoned mark", !init({ job: "2026-11-05-x", plugin: "p", batches: [{ id: "n" }] }, orphan).abandoned);

@@ -20,9 +20,12 @@ upgrades). Goal: each file is read, verified and reviewed once per batch, not on
    - `heavy`: code-level difficulty only: a migration or data change on live data; transactions, concurrency,
      idempotency. A business rule is never heavy for being a rule. Keep a heavy batch to the hard part: the screens,
      the client and the other side's tests that build on it go to a following `normal` batch, unless that splits a
-     contract change. A committer's context grows with every call, so a long opus batch costs the most of any role
-     (kit 2.50.0: the five opus committers with 120 calls or more, 6 to 13 files each, were 42% of the opus
-     committer cost, at a mean peak of 322k).
+     contract change. A heavy batch names at most 5 code files in its brief and alsoInScope (not the
+     `.md` docs it follows; a directory or glob counts as one): `plan.mjs write` and `continuous.mjs init` refuse
+     more, unless `maxSize` clamps it below heavy; a batch the plan file already holds as heavy passes unless it
+     now names more. A committer's context grows with every call, so a long opus batch costs the most of any
+     role (kit 2.50.0: the five opus committers with 120 calls or more, 6 to 13 files each, were 42% of the opus
+     committer cost, at a mean peak of 322k; kit 2.58.2: the 38 opus committers were 58% of the commit role's cost).
 4. **Order**: a batch waits for another only when it needs that batch's code, schema or output, or shares a file or
    resource with it. Show the plan (batches, their items, what waits for what). An owner decision open → wait
    for the owner's go; none → go on, the user may correct it.

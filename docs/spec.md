@@ -106,10 +106,10 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
-| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write, status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker); the file format is in `scripts/lib/plan-file.mjs` and `live` in `scripts/lib/plan-live.mjs`, both re-exported |
+| `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write (refuses a `heavy` batch naming more than 5 code files, `heavyFiles`; one the plan file already holds passes unless it names more), status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker); the file format is in `scripts/lib/plan-file.mjs` and `live` in `scripts/lib/plan-live.mjs`, both re-exported |
 | `scripts/lib/plan-file.mjs` | the plan file format and batch rules: `render`, `parse`, `merge`, `ordered`, `checkBatch`, `checkMaxSize`, `progress`, `resumeArgs`, `JOB`, `SIZES` |
 | `scripts/lib/plan-live.mjs` | `plan.mjs live`: `liveStatus` (one line per batch from a workflow transcript dir), `parseLabel`, `nodePath` |
-| `scripts/continuous.mjs` | next step of a continuous run, from its state file |
+| `scripts/continuous.mjs` | next step of a continuous run, from its state file; `init` refuses a wide heavy batch as `plan.mjs write` does |
 | `scripts/queue.mjs` | queue state of `/ai-kit:continuous queue`: jobs in order, current job, outcomes, approvals; test `scripts/queue.test.mjs` |
 | `scripts/lib/workflow-run.mjs` | `readRun`: a workflow's run file status and idle time, shared by `continuous.mjs` and `plan.mjs` |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |

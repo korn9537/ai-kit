@@ -277,6 +277,37 @@ function headOf(root) {
   }
 }
 
+// a heavy batch runs an opus committer whose context grows with every file (kit 2.58.2: 58% of the commit role's
+// cost from 38 of its 179 agents); a maxSize below heavy clamps it anyway
+export const HEAVY_MAX_FILES = 5;
+
+// the code files a batch changes: its brief and alsoInScope, not the docs it follows (.md), not a bare name a path
+// already covers, and a bare name only when it is a file at the root (a word such as Node.js is none)
+export function heavyFiles(b, root = "") {
+  const entries = scopePaths([{ brief: b.brief, alsoInScope: b.alsoInScope }], root).filter((e) => !/\.md$/i.test(e));
+  return entries.filter((e) => e.includes("/") || (!entries.some((o) => o.endsWith(`/${e}`)) && existsSync(join(root || ".", e))));
+}
+
+// old: the plan file as it stands; a batch it already holds as heavy passes unless it now names more files, so an
+// owner's answer, a rebase or a resume of a plan written before this rule never strands its job
+export function refuseWideHeavy(batches, maxSize, root = "", old = null) {
+  if (maxSize === "light" || maxSize === "normal") return;
+  for (const b of batches) {
+    if (b.size !== "heavy") continue;
+    const files = heavyFiles(b, root);
+    if (files.length <= HEAVY_MAX_FILES) continue;
+    const prev = old?.batches?.find((o) => o.id === b.id && o.size === "heavy");
+    if (prev && files.length <= heavyFiles(prev, root).length) continue;
+    throw new Error(`heavy batch ${b.id} names ${files.length} files (${files.join(", ")}): keep the hard part (${HEAVY_MAX_FILES} files or fewer) heavy and move the rest to a following normal batch`);
+  }
+}
+
+// the plan file of a job as it stands, or null
+export function plannedOf(root, job) {
+  const path = join(root, relPath(job));
+  return existsSync(path) ? parse(readFileSync(path, "utf8")) : null;
+}
+
 // base is HEAD for a new plan, a plan with none, and on rebase (stale checked); else kept, so stale paths
 // of other batches survive a write
 export function write(root, args, replace = false, rebase = false) {
@@ -287,6 +318,7 @@ export function write(root, args, replace = false, rebase = false) {
   if (before !== null && !old) throw new Error(`${rel} is not a plan this script wrote`);
   const commits = commitsOf(root, args.job);
   const merged = merge(old, args, commits, replace);
+  refuseWideHeavy(merged.batches.filter((b) => !commits.has(b.id)), args.maxSize, root, old);
   const base = (rebase ? undefined : old?.base) ?? headOf(root);
   const plan = { job: merged.job, request: merged.request, ...(base ? { base } : {}), batches: merged.batches };
   const text = render(plan);

@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMain } from "./lib/is-main.mjs";
 import { readRun } from "./lib/workflow-run.mjs";
-import { JOB, checkBatch, checkMaxSize, readRepo, stageScript } from "./plan.mjs";
+import { JOB, checkBatch, checkMaxSize, plannedOf, projectRoot, readRepo, refuseWideHeavy, stageScript } from "./plan.mjs";
 
 export { readRun };
 export const MAX_TRIES = 6;
@@ -21,7 +21,7 @@ const agentFailed = (r) =>
   r?.status === "blocked" && !r.owner?.length && r.blockers?.length === 1 && r.blockers[0] === "agent failed";
 
 // a new plan on the same job keeps every result with a commit: the report lists them, a waitsFor may not name one
-export function init(args, old, base = [], baseLoose = []) {
+export function init(args, old, base = [], baseLoose = [], root = "", planned = null) {
   if (old?.running || old?.launching) throw new Error("a run of this job is still going");
   if (!JOB.test(args.job || "")) throw new Error(`bad job id: ${args.job}`);
   if (!args.plugin || !args.batches?.length) throw new Error("args need plugin and batches");
@@ -40,6 +40,7 @@ export function init(args, old, base = [], baseLoose = []) {
       if (!ids.has(w)) throw new Error(`${b.id} waits for ${w}, not in this run`);
     }
   }
+  refuseWideHeavy(args.batches, args.maxSize, root, planned);
   return { args, base, baseLoose, batches: kept, tries: {}, pending: [], lastEnd: 0, running: false, launching: false, dir: "" };
 }
 
@@ -193,7 +194,9 @@ if (isMain(import.meta.url)) {
       const args = read(arg);
       const { dirty, loose, logFailed } = readRepo(args.repo || process.cwd(), args.job);
       if (logFailed) throw new Error(`git log failed, the commits of ${args.job} are not known`);
-      write(path, init(args, existsSync(path) ? read(path) : undefined, dirty, loose));
+      const root = args.repo || projectRoot(process.cwd());
+      const planned = JOB.test(args.job || "") ? plannedOf(root, args.job) : null;
+      write(path, init(args, existsSync(path) ? read(path) : undefined, dirty, loose, root, planned));
     } else if (cmd === "abandon" && path) {
       if (!existsSync(path)) throw new Error(`no state ${path}`);
       write(path, abandon(read(path)));

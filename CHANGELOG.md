@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- `scripts/plan.mjs write`, `scripts/continuous.mjs init`: a `heavy` batch naming more than 5 code files in its brief
+  and alsoInScope (`.md` docs it follows left out) is refused, listing them, with the way out (keep the hard part
+  heavy, the rest in a following normal batch); a `maxSize` below heavy lets it through, clamped, and a batch the
+  plan file already holds as heavy passes unless it now names more, so a plan written before stays resumable. In
+  kit 2.58.2 the 38 opus committers were 58% of the commit role's cost ($2.68 per agent against $0.53 on sonnet),
+  the costliest at 110 to 143 calls and a 232k to 287k peak (#62).
 - `hooks/review-before-stop.sh`: the block reason lists at most 30 edited files (and 30 paths outside the open
   plan); the rest go to `<git-dir>/claude-review/<session>.files` (`.outside`), which the reason names and the
   reviewer brief takes whole. The reason stays in the main context for every later call: in kit 2.58.2 it averaged
