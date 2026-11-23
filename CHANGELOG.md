@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.60.0
 
 Test only what the change touches and affects. A project's `CLAUDE.md` verify line that runs a whole suite now
 needs a filter, or `ALLOW_FULL_SUITE=1` when the owner wants the whole run.
