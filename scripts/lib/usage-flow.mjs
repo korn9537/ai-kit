@@ -12,8 +12,9 @@ export function flowGraph(nodes, edges) {
     n.sessions += num(r.sessions) ?? 0;
     n.items += num(r.items) ?? 0;
     n.units += num(r.units) ?? 0;
-    if (num(r.usd) === null) n.unpriced = true;
-    else n.usd += num(r.usd);
+    // `unpriced` (migration 007): any unpriced visit, since sum(usd) skips them; a null usd means all were
+    if (r.unpriced === true || num(r.usd) === null) n.unpriced = true;
+    n.usd += num(r.usd) ?? 0;
     n.secs += (num(r.avg_s) ?? 0) * (num(r.visits) ?? 0);
     N.set(r.step, n);
   }
@@ -24,14 +25,18 @@ export function flowGraph(nodes, edges) {
     e.sessions += num(r.sessions) ?? 0;
     E.set(key, e);
   }
+  // priced steps share by dollars (models differ in price per unit), else by units, as the digest ranks
+  const priced = [...N.values()].every((n) => !n.unpriced);
+  const of = (n) => (priced ? n.usd : n.units);
   const units = [...N.values()].reduce((s, n) => s + n.units, 0);
+  const total = [...N.values()].reduce((s, n) => s + of(n), 0);
   const out = new Map();
   for (const e of E.values()) out.set(e.from, (out.get(e.from) ?? 0) + e.n);
   for (const e of E.values()) e.share = out.get(e.from) ? e.n / out.get(e.from) : 0;
   return {
-    units,
-    nodes: [...N.values()].map((n) => ({ ...n, share: units ? n.units / units : 0, avg_s: n.visits ? Math.round(n.secs / n.visits) : 0 }))
-      .sort((a, b) => b.units - a.units),
+    units, measure: priced ? "cost" : "units",
+    nodes: [...N.values()].map((n) => ({ ...n, share: total ? of(n) / total : 0, avg_s: n.visits ? Math.round(n.secs / n.visits) : 0 }))
+      .sort((a, b) => b.share - a.share),
     edges: [...E.values()].sort((a, b) => b.n - a.n),
   };
 }
@@ -56,7 +61,7 @@ const pad = (s, n) => String(s).padEnd(n);
 
 export function formatFlow(g, { kit = "", steps = 15, edges = 20, loops = 8 } = {}) {
   const lines = [`flow${kit ? ` · kit ${kit}` : ""} · ${g.nodes.length} steps · ${g.edges.reduce((s, e) => s + e.n, 0)} transitions`];
-  lines.push("", "steps by cost (share of all cost · visits · items · avg seconds):");
+  lines.push("", `steps by ${g.measure} (share of all ${g.measure} · visits · items · avg seconds):`);
   for (const n of g.nodes.slice(0, steps)) lines.push(`  ${pad(n.step, 30)} ${pad(pct(n.share), 5)} ${pad(n.visits, 6)} ${pad(n.items, 6)} ${n.avg_s}s`);
   lines.push("", "commonest transitions (count · share of the step's exits):");
   for (const e of g.edges.slice(0, edges)) lines.push(`  ${pad(`${e.from} → ${e.to}`, 44)} ${pad(e.n, 6)} ${pct(e.share)}`);
@@ -81,7 +86,7 @@ export function flowMermaid(g, { maxEdges = 60 } = {}) {
   const lines = ["flowchart TD"];
   for (const s of used) {
     const n = node.get(s);
-    const label = n ? `${s}<br/>${n.visits} visits · ${pct(n.share)} cost` : s;
+    const label = n ? `${s}<br/>${n.visits} visits · ${pct(n.share)} ${g.measure}` : s;
     const q = (t) => String(t).replace(/"/g, "'");
     lines.push(`  ${id.get(s)}${s === "start" || s === "end" ? `(["${q(s)}"])` : `["${q(label)}"]`}`);
   }
@@ -112,10 +117,10 @@ th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);font-
 th{color:var(--muted);font-weight:600}
 </style></head><body><main>
 <h1>Session process map</h1>
-<p class="sub">${kit ? `Kit ${esc(kit)} · ` : ""}${g.nodes.length} steps · the ${Math.min(maxEdges, g.edges.length)} commonest of ${g.edges.length} transitions; a thicker line is a commoner one, an orange step holds 10% of cost or more.</p>
+<p class="sub">${kit ? `Kit ${esc(kit)} · ` : ""}${g.nodes.length} steps · the ${Math.min(maxEdges, g.edges.length)} commonest of ${g.edges.length} transitions; a thicker line is a commoner one, an orange step holds 10% of ${g.measure} or more.</p>
 <div class="map"><pre class="mermaid">${esc(flowMermaid(g, { maxEdges }))}</pre></div>
 <div class="grid">
-<table><thead><tr><th>Step</th><th>Cost</th><th>Visits</th><th>Items</th><th>Avg</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>Step</th><th>${g.measure === "cost" ? "Cost" : "Units"}</th><th>Visits</th><th>Items</th><th>Avg</th></tr></thead><tbody>${rows}</tbody></table>
 <table><thead><tr><th>Back and forth</th><th>Times</th></tr></thead><tbody>${bf || "<tr><td>None</td><td></td></tr>"}</tbody></table>
 </div></main>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>

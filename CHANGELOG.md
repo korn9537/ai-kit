@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Review findings of 2.59.0:
+  - `usage.mjs flow` shares and ranks steps by dollars only when every visit of every step is priced, else by units,
+    and says which (it read `units` as cost); it reads the `unpriced` column of ai-kit-usage migration 007.
+  - `agents/committer.md`: the docs check leaves released `CHANGELOG.md` sections alone, and a sentence need only be
+    true of HEAD plus the diff unless it claims what the change does.
+
 ## 2.59.0
 
 Where the tokens go, measured and cut: a heavy batch is capped at 5 code files (#62), the committer checks docs

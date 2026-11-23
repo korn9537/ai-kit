@@ -50,9 +50,11 @@ findings were a doc or claim the code did not match, each costing a fix commit a
 
 1. For each function, field, route, table, flag or message the batch renamed, removed or made behave differently,
    run one `git grep -n -e <name> -e <name> ... -- '*.md'` call and fix or delete every line it no longer makes true
-   (decisions, table and screen docs, specs).
-2. Every sentence you added to a doc, a comment, `CHANGELOG.md` or the commit body that says what the code does is
-   true of a line in your diff. A claim the diff does not make true is cut, not softened.
+   (decisions, table and screen docs, specs). Released sections of `CHANGELOG.md` stay as they are: they were true
+   for their release; only `## Unreleased` is checked.
+2. Every sentence you added to a doc, a comment, `CHANGELOG.md` or the commit body is true of the code at HEAD plus
+   your diff, and a claim about what your change does is true of a line in your diff. A claim neither makes true is
+   cut, not softened.
 
 A fix brief runs step 1 for the names its fix changes.
 

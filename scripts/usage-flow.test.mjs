@@ -11,8 +11,12 @@ const g = flowGraph(
     edge("a", "test-fail", "edit", 1), edge("a", "edit", "end", 1)],
 );
 eq("steps of two projects merge", g.nodes.find((n) => n.step === "prompt").visits, 3);
-eq("the costliest step comes first", g.nodes[0].step, "edit");
-eq("cost share of a step", g.nodes[0].share, 0.6);
+eq("the largest step comes first", g.nodes[0].step, "edit");
+eq("an unpriced step makes the share by units", [g.measure, g.nodes[0].share], ["units", 0.6]);
+const p = flowGraph([node("a", "cheap", 1, 900, "0.1"), node("a", "dear", 1, 100, "0.9")], []);
+const part = flowGraph([{ ...node("a", "x", 1, 900, "0.1"), unpriced: true }, node("a", "y", 1, 100, "0.9")], []);
+eq("a step with some unpriced visits makes the share by units", part.measure, "units");
+eq("all priced: the share is by dollars, not units", [p.measure, p.nodes[0].step, p.nodes[0].share], ["cost", "dear", 0.9]);
 ok("a step with an unpriced row says so", g.nodes.find((n) => n.step === "test-fail").unpriced);
 eq("edges of two projects merge", g.edges[0].n, 3);
 eq("share of a step's exits", g.edges.find((e) => e.from === "edit" && e.to === "test-fail").share, 2 / 3);
