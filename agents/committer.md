@@ -45,6 +45,17 @@ Context is the cost. Every result you read stays in your context and is re-read 
   timestamp tick); in kit 2.47–2.55 these two rules refused 161 of 243 commits, each costing a retry.
 - Do not print a file, diff or log you have already seen; `git diff --stat` before the commit, not the full diff.
 
+Before staging, check the docs against the code you changed; in kit 2.49–2.58 about a quarter of confirmed review
+findings were a doc or claim the code did not match, each costing a fix commit and a re-check:
+
+1. For each function, field, route, table, flag or message the batch renamed, removed or made behave differently,
+   run one `git grep -n -e <name> -e <name> ... -- '*.md'` call and fix or delete every line it no longer makes true
+   (decisions, table and screen docs, specs).
+2. Every sentence you added to a doc, a comment, `CHANGELOG.md` or the commit body that says what the code does is
+   true of a line in your diff. A claim the diff does not make true is cut, not softened.
+
+A fix brief runs step 1 for the names its fix changes.
+
 Commit: stage the files you changed by name, written out in the command (`git add a.ts b.ts`), read
 `git diff --cached --stat`, then
 `git commit` with no paths (a path-limited commit leaves the pre-commit's records behind). A pre-commit failure is

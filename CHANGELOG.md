@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `agents/committer.md`: before staging, the committer greps the `.md` files for each name the batch renamed, removed
+  or changed and fixes the lines no longer true, and cuts any claim it wrote that its diff does not make true; a fix
+  brief runs the grep for the names its fix changes. About a quarter of confirmed review findings in kit 2.49–2.58
+  were such a doc or claim (#63).
 - `usage.mjs flow [--kit <v>] [--project] [--html <file>]` (`scripts/lib/usage-flow.mjs`): the process map of the main
   sessions from the usage server's new `v_flow_nodes` and `v_flow_edges` views (ai-kit-usage migration 006): each
   step's share of cost, visits and time, the commonest transitions, and the steps taken both ways (commit and
