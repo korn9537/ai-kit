@@ -18,8 +18,9 @@ row here and its test together.
 | plan reviewer → committer | findings per batch id, in that batch's brief; CONFIRMED is part of the batch, PLAUSIBLE judged into `choices` |
 
 `accept` is the summary's Done when checks for that batch; `risks` and `tests` are the plan's failure modes and the
-tests that answer them. `plan.mjs write` and `continuous.mjs init` check a batch
-with one function (`checkBatch`); `resumeArgs` and `continuous next` keep every field.
+existing tests that cover the change (a `check:` one is a throwaway test the batch writes, runs and deletes).
+`plan.mjs write` and `continuous.mjs init` check a batch with one function (`checkBatch`); `resumeArgs` and
+`continuous next` keep every field.
 
 ## Per batch
 

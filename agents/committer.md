@@ -36,6 +36,9 @@ Context is the cost. Every result you read stays in your context and is re-read 
 - Verify with the project's verify commands (CLAUDE.md) on what changed only, once, right before the commit. A command
   CLAUDE.md says the pre-commit runs is not run by hand first: the commit runs it. Cut their output: a passing run needs
   its last lines (`2>&1 | tail -n 20`); on a failure, rerun the one failing file or test, not the whole suite.
+- Tests: run only the brief's `tests` (by filter or file), or with none listed, the tests that cover the code you
+  changed and what it affects; never the whole suite (`hooks/bash-guard.sh` blocks it). A test you write (a brief's
+  `check:` item, or your own) is deleted once it passes and never staged; report it in notes as run and passed.
 - A lint or type check over a whole app prints every finding: filter it to the files you changed
   (`| grep -F -e <file> ...`) or to the rule you are fixing, and cap it (`| head -n 40`).
 - Right before staging, whatever tool wrote the files (Edit, sed -i, python3, a heredoc), run

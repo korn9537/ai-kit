@@ -441,6 +441,36 @@ mem_case "pass: heredoc body, \$( in quotes (raw pass)" 0 "echo \"\$(date)\" > o
 echo x > $M/a.md
 EOF"
 
+# suite_case: the whole-suite check, run in $REPO with the dev port closed
+suite_case() { git_case "$@"; }
+suite_case "block: dotnet test on the solution" 2 "dotnet test apps/api/Api.slnx"
+suite_case "block: dotnet test after cd" 2 "cd apps/api && dotnet test 2>&1 | tail -n 20"
+suite_case "pass: dotnet test --filter" 0 "dotnet test apps/api/Api.slnx --filter 'FullyQualifiedName~ConsentPurpose'"
+suite_case "pass: dotnet build" 0 "dotnet build apps/api/Api.slnx"
+suite_case "block: pnpm test" 2 "pnpm test"
+suite_case "block: pnpm --filter web test" 2 "pnpm --filter web test"
+suite_case "block: npm run test" 2 "npm run test"
+suite_case "block: npx vitest run" 2 "npx vitest run"
+suite_case "pass: vitest on one file" 0 "pnpm vitest run src/a.test.ts"
+suite_case "pass: pnpm test -- a file" 0 "pnpm test -- src/a.test.ts"
+suite_case "pass: jest -t name" 0 "npx jest -t 'saves lookup'"
+suite_case "pass: pnpm typecheck" 0 "pnpm --filter web typecheck"
+suite_case "block: go test ./..." 2 "go test ./..."
+suite_case "pass: go test one package" 0 "go test ./internal/consent"
+suite_case "block: pytest bare" 2 "pytest -q"
+suite_case "block: python -m pytest bare" 2 "python3 -m pytest"
+suite_case "pass: pytest -k" 0 "pytest -k consent"
+suite_case "block: cargo test" 2 "cargo test"
+suite_case "pass: cargo test name" 0 "cargo test consent_purpose"
+suite_case "block: flutter test" 2 "flutter test"
+suite_case "pass: flutter test file" 0 "flutter test test/consent_test.dart"
+suite_case "block: gradle test" 2 "./gradlew test"
+suite_case "pass: gradle --tests" 0 "./gradlew test --tests 'ConsentTest'"
+suite_case "block: whole suite in bash -c" 2 "bash -c 'dotnet test'"
+suite_case "pass: escape hatch" 0 "ALLOW_FULL_SUITE=1 dotnet test"
+suite_case "pass: message naming dotnet test" 0 "git commit -m 'no dotnet test here'"
+suite_case "pass: echo naming pnpm test" 0 "echo pnpm test"
+
 echo
 echo "$pass passed, $fail failed"
 [[ "$fail" == "0" ]]

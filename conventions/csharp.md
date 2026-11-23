@@ -24,6 +24,7 @@ Reader: agents writing or reviewing C#. Adds to `general.md`.
    `HasData` and never on boot.
 9. **Audit and transactions** — audit columns (created/updated at/by) are stamped by a `SaveChangesInterceptor`,
    never by handlers; one request = one transaction.
-10. **Tests** — SQL-level behaviour is tested against a real PostgreSQL (Testcontainers), never a stub.
+10. **Tests** — a query that enforces a business rule (a filter that hides data, a lock, a transaction) is checked
+    once against a real PostgreSQL, never a stub; the check is deleted after it passes (`CLAUDE.core.md`).
 11. **Large files** — rule: `general.md` item 12. The split goes into `partial class` files named
     `<Class>.<Group>.cs`.

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+Test only what the change touches and affects. A project's `CLAUDE.md` verify line that runs a whole suite now
+needs a filter, or `ALLOW_FULL_SUITE=1` when the owner wants the whole run.
+
+- `hooks/bash-guard.sh` blocks a whole test suite: `dotnet test` with no `--filter`, `go test ./...`, `pnpm test`,
+  `vitest`/`jest`/`pytest`/`cargo test`/`flutter test`/`gradle test`... with no path, name or filter.
+- `tests` of a plan batch lists the existing tests that cover the changed and affected code, which `verify` runs by
+  filter. A test written to check the work is `check: <what it shows>`: run until it passes, then deleted, never
+  committed; the rules live in decisions and specs. Before, the plan asked for a new committed test per risk and per
+  Done when check, and the plan review flagged a check with none: in one project that grew the suite to about 2,450
+  tests in two months, all run on every commit.
+- Conventions that required a kept test now ask for a one-time check: `csharp.md` item 10 (a query that enforces a
+  business rule, against a real PostgreSQL), `dart.md` item 2 (a screen that guards a write), `general.md` item 9 (a
+  server-side lock, by calling the endpoint).
+
 ## 2.59.1
 
 Review findings of 2.59.0, found by a review after the release. No project needs to edit anything.

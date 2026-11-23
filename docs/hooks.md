@@ -85,7 +85,7 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   parentheses; quoted text, comments and heredoc bodies are dropped, so a commit message that names a command
   does not block). When the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds
   `$(`), it checks the raw text as well, cut on `;`, `&&`, `||`, `|`, `&`, parentheses, backtick and newline: a
-  heredoc body or message there that names `git add -A` can block. It runs three checks:
+  heredoc body or message there that names `git add -A` can block. It runs four checks:
   - blocks `git add`/`git stage` of `-A`, `-u`, `.`, a directory or a glob, and `git commit -a` or with such a path
     (shared checkout), also inside a subshell or group, after `then`/`do`/`else`, behind `env`/`command`/`sudo`,
     after `cd` or `git -C` (the directory is resolved there, and a relative path is also tried in the starting
@@ -100,4 +100,9 @@ Hooks (each exits silently when the project has no `ai/kit/`):
   - blocks a write into the auto-memory dir through Bash (same regex as `memory-guard.sh`, `kit_memory_re` in
     `hooks/lib.sh`): a `>`/`>>` target, `tee`, `cp`/`mv`/`install`/`ln` into it, `sed -i`, `perl -i`, `mkdir`, `touch`,
     with a leading `~`, `$HOME` and `$CLAUDE_CONFIG_DIR` expanded. Quoted text and heredoc bodies are not matched.
+  - blocks a whole test suite: `dotnet test` with no `--filter`; `go test` of `./...`; `pnpm`/`npm`/`yarn`/`bun`
+    `test` or `test:*`, `vitest`, `jest`, `mocha`, `pytest` (also `python -m pytest`), `rspec`, `phpunit`, `cargo
+    test`, `flutter`/`dart test`, `playwright test` with no path, name or `-k`/`-t`/`--grep`/`--filter`; `gradle`/
+    `mvn` `test` with no `--tests`/`-Dtest`. Also behind `npx`, `pnpm exec` and in `bash -c`. Only what the change
+    touches and affects is tested. `ALLOW_FULL_SUITE=1 <command>` skips this check, for when the owner asked.
 

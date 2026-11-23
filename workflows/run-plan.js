@@ -131,11 +131,13 @@ const later = (b) => {
 const trailer = (b) => `Add the trailer line \`Batch: ${b.id}\` just above the Job trailer.`
 // the result the batch must reach, set before the work: the committer builds to it and the reviewer checks it first
 const done = (b) => ((b.accept || []).length ? ['Done when:', ...b.accept.map((a) => `- ${a}`)].join('\n') : '')
-// what the plan expects to go wrong and the tests that answer it, set before the work like Done when
+// what the plan expects to go wrong and the existing tests that cover the change, run by name or filter; a `check:`
+// one is a throwaway test the batch writes, runs and deletes
 const plan = (b) =>
   (b.risks || []).length || (b.tests || []).length
     ? ['Risks (each handled in this batch, or said not to be):', ...(b.risks || []).map((a) => `- ${a}`),
-        'Tests this batch adds:', ...(b.tests || []).map((a) => `- ${a}`)].join('\n')
+        'Tests (run only these, by name or filter, never the whole suite; a `check:` one is written, run, then deleted, never staged):',
+        ...(b.tests || []).map((a) => `- ${a}`)].join('\n')
     : ''
 // the plan review's findings for one batch: a CONFIRMED one is part of the work, a PLAUSIBLE one is judged
 // a finding naming no batch of this plan goes to every batch: it is not lost to a mistyped id
@@ -155,7 +157,7 @@ const found = (b) => {
 }
 // what the batch owes beyond Done when, which its reviewer and re-checks check like Done when
 const owed = (b) => {
-  const items = [...(b.tests || []).filter((t) => !/^none\b/i.test(t)).map((t) => `test: ${t}`),
+  const items = [...(b.tests || []).filter((t) => /^check:/i.test(t)).map((t) => `test: ${t}`),
     ...planFindings(b).filter((f) => f.verdict === 'CONFIRMED').map((f) => `plan review: ${f.what} → ${f.fix}`)]
   return items.length ? ['Also owed by this batch (plan review and its tests):', ...items.map((i) => `- ${i}`)].join('\n') : ''
 }

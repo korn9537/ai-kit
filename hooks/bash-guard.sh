@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PreToolUse guard (Bash), three checks on the commands kit_split_cmd (lib.sh) cuts out of one command line:
+# PreToolUse guard (Bash), four checks on the commands kit_split_cmd (lib.sh) cuts out of one command line:
 # 1. a sweeping stage (`git add -A/-u/./<dir>/<glob>`, `git commit -a/./<dir>`): the checkout and index are shared
 #    with other sessions, so it commits their work too (docs/shared-checkout.md in this plugin).
 #    Also seen: `xargs git add` with no file named, `bash|sh|zsh -c "git add -A"` (the script is scanned, three levels
@@ -9,6 +9,8 @@
 # 3. a write into the auto-memory dir (~/.claude/projects/*/memory, see lib.sh kit_memory_re): a > or >> target, tee,
 #    cp, mv, install, ln, sed -i, perl -i, mkdir, touch; a leading ~, $HOME, $CLAUDE_CONFIG_DIR are expanded. Only on
 #    the split segments, so a heredoc body or message naming the path does not block.
+# 4. a whole test suite (a runner with no path, name or filter picking tests, suite_words): only what the change
+#    touches and affects is tested. Escape hatch, when the owner asked for it: ALLOW_FULL_SUITE=1.
 # Build escape hatch: prefix the command with ALLOW_BUILD_WHILE_DEV=1 when the port is unrelated.
 # Fail closed: when the scan cannot follow the text (it ends inside a quote or heredoc, or a double quote holds $( ),
 # the raw text, cut on ; && || | & ( ) backtick and newline with the quotes blanked, is checked as well, so a
@@ -228,8 +230,95 @@ build_words() {
   return 1
 }
 
+# suite_words: 0 when the words from t[i] run a whole test suite: a test runner given nothing that picks tests (a
+# path, a name, --filter, -k, -t). Fails open: a flag value it cannot tell from a path counts as one.
+suite_words() {
+  local r="${t[i]##*/}" w named=0 seen=0 dd=0 vals=" --prefix --cwd --workspace --filter --dir -C -w -F -p --package "
+  ((++i))
+  case "$r" in
+    python | python3)
+      [[ "${t[i]:-}" == -m && "${t[i + 1]:-}" == pytest ]] || return 1
+      ((i += 2))
+      r=pytest
+      seen=1
+      ;;
+    npx | pnpx | bunx)
+      while ((i < n)) && [[ "${t[i]}" == -* ]]; do ((++i)); done
+      ((i < n)) || return 1
+      suite_words
+      return
+      ;;
+    npm | pnpm | yarn | bun)
+      while ((i < n)); do
+        w="${t[i]}"
+        case "$w" in
+          -*)
+            [[ "$w" != *=* && "$vals" == *" $w "* ]] && ((++i))
+            ((++i))
+            ;;
+          run | run-script) ((++i)) ;;
+          exec | dlx | x)
+            ((++i))
+            while ((i < n)) && [[ "${t[i]}" == -* ]]; do ((++i)); done
+            ((i < n)) || return 1
+            suite_words
+            return
+            ;;
+          test | test:* | t) seen=1; ((++i)); break ;;
+          *) return 1 ;;
+        esac
+      done
+      ;;
+    dotnet | cargo | flutter | dart | go)
+      while ((i < n)) && [[ "${t[i]}" == -* ]]; do ((++i)); done
+      [[ "${t[i]:-}" == test ]] || return 1
+      seen=1
+      ((++i))
+      ;;
+    vitest | jest | mocha | pytest | rspec | phpunit) seen=1 ;;
+    playwright)
+      [[ "${t[i]:-}" == test ]] || return 1
+      seen=1
+      ((++i))
+      ;;
+    mvn | mvnw | gradle | gradlew)
+      for ((; i < n; i++)); do
+        case "${t[i]}" in
+          test | *:test) seen=1 ;;
+          -Dtest=* | --tests | --tests=*) named=1 ;;
+        esac
+      done
+      ((seen && !named))
+      return
+      ;;
+    *) return 1 ;;
+  esac
+  ((seen)) || return 1
+  for (( ; i < n; i++)); do
+    w="${t[i]}"
+    case "$r" in
+      dotnet) [[ "$w" == --filter || "$w" == --filter=* ]] && named=1 ;;
+      go) [[ "$w" == ./... || "$w" == */... || "$w" == ... ]] && return 0 ;;
+      *)
+        case "$w" in
+          --) dd=1 ;;
+          -k | -t | -g | --grep | --filter | --testNamePattern | --test-name-pattern | --example | -e) named=1 ;;
+          -k?* | -t?* | --grep=* | --filter=* | --testNamePattern=* | --test-name-pattern=*) named=1 ;;
+          -*) ;;
+          run | watch) ((dd)) && named=1 ;;
+          *) named=1 ;;
+        esac
+        ;;
+    esac
+  done
+  # go test with no ./... runs one package
+  [[ "$r" == go ]] && return 1
+  ((!named))
+}
+
 build_re="$(kit_conf .build_guard.build_re "")"
 build=0
+suite=0
 
 # mem_re: kit_memory_re, built when the first write-like segment needs it
 mem_re=""
@@ -419,6 +508,9 @@ EOF
         fi
         ;;
       *)
+        j=$i
+        if [[ "$mode" == split ]] && suite_words; then suite=1; fi
+        i=$j
         if [[ -n "$build_re" ]]; then
           rest="${t[*]:i}"
           # grep, not =~: bash on macOS reads \s \b \d in a config pattern as plain letters
@@ -446,6 +538,15 @@ scan split <<<"$split_out"
 if ((raw)); then
   # ; & | ( ) and backtick start a new line, both quote characters become spaces
   scan raw <<<"$(printf '%s\n' "$cmd" | cut_raw)"
+fi
+
+if ((suite)) && [[ "$cmd" != *"ALLOW_FULL_SUITE=1"* ]]; then
+  cat >&2 <<EOF
+Blocked: this runs a whole test suite. Run only the tests that cover the code you changed and what the analysis
+found it affects: dotnet test --filter <names>, a test file path (vitest/jest/pytest/flutter), go test ./<pkg>,
+pytest -k, gradle --tests, mvn -Dtest. When the owner asked for the whole suite: ALLOW_FULL_SUITE=1 <command>
+EOF
+  exit 2
 fi
 
 [[ "$build" == "1" ]] || exit 0

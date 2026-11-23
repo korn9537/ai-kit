@@ -33,10 +33,12 @@ Find a symbol with `grep -n`, then read only its line range, never a whole large
 A plan review (the caller gives a plan, no commit: "Plan review") reads the code each batch touches and finds what the
 plan misses before any code exists. Check, per batch: (a) a failure mode `risks` leaves out: state that changes while
 the work runs (a deploy, another session, a concurrent writer), a partial failure, a call that hangs or repeats, an
-empty or huge input; (b) a risk or `Done when` check with no test in `tests`; (c) a statement in the brief or in a
-doc the batch writes that the code does not make true (read the code, `grep -n` the symbol); (d) two batches that
-edit the same thing or wait on each other wrongly. Reply with findings only, each: batch id · kind (`failure-mode`,
-`test`, `claim`, `conflict`) · what is missing, with file:line · what the batch must also do · CONFIRMED or PLAUSIBLE.
+empty or huge input; (b) `tests` misses an existing test that covers the changed or affected code, or runs or
+writes more than that (a whole suite); (c) a
+statement in the brief or in a doc the batch writes that the code does not make true (read the code, `grep -n` the
+symbol); (d) two batches that edit the same thing or wait on each other wrongly. Reply with findings only, each: batch
+id · kind (`failure-mode`, `test`, `claim`, `conflict`) · what is missing, with file:line · what the batch must also
+do · CONFIRMED or PLAUSIBLE.
 A preference is not a finding.
 
 A re-check of a fix (the caller lists the findings and names one fix commit) checks only whether each finding is

@@ -16,7 +16,7 @@ const commit = (hash, extra = {}) => ({ hash, files: ["a"], choices: [], owner: 
 const finding = (what, dataRule) => ({ where: "a.ts:1", what, rule: "r", fix: "f", verdict: "CONFIRMED", dataRule });
 const review = (findings) => ({ findings, reviewed: true, checked: "all" });
 const batches = [
-  { id: "a", title: "feat(x): y", brief: "BRIEF-A", accept: ["CHECK-A"], risks: ["RISK-A"], tests: ["TEST-A"], verify: "make test", alsoInScope: ["SCOPE-A"] },
+  { id: "a", title: "feat(x): y", brief: "BRIEF-A", accept: ["CHECK-A"], risks: ["RISK-A"], tests: ["check: TEST-A"], verify: "make test", alsoInScope: ["SCOPE-A"] },
   { id: "b", title: "feat(x): z", brief: "BRIEF-B", risks: ["RISK-B"], tests: ["TEST-B"], waitsFor: ["a"] },
 ];
 // every prompt by role, for a plan whose batch a gets a data finding, a fix, a narrow finding, a second fix
@@ -78,7 +78,7 @@ ok("a fix that made no commit keeps its findings in confirmed", res.review.revie
 
 const pr = seen.find((x) => x.label === "review: plan")?.prompt ?? "";
 ok("plan reviewer: request, per batch brief, Done when, risks, tests, also in scope, waits for",
-  all([pr], /REQUEST/, /Batch a \(size normal\): feat\(x\): y/, /BRIEF-A/, DONE, /- RISK-A/, /- TEST-A/, /also in scope: SCOPE-A/, /Batch b \(size normal\): feat\(x\): z \(waits for a\)/, /BRIEF-B/));
+  all([pr], /REQUEST/, /Batch a \(size normal\): feat\(x\): y/, /BRIEF-A/, DONE, /- RISK-A/, /- check: TEST-A/, /also in scope: SCOPE-A/, /Batch b \(size normal\): feat\(x\): z \(waits for a\)/, /BRIEF-B/));
 const okPlan = { findings: [{ batches: ["a"], kind: "claim", what: "CLAIM-X", fix: "FIX-X", verdict: "CONFIRMED" }, { batches: ["a", "b"], kind: "conflict", what: "BOTH", fix: "f", verdict: "PLAUSIBLE" }, { batches: ["zz"], kind: "test", what: "LOST", fix: "f", verdict: "CONFIRMED" }], reviewed: true, checked: "c" };
 {
   const seen2 = [];
@@ -93,14 +93,14 @@ const okPlan = { findings: [{ batches: ["a"], kind: "claim", what: "CLAIM-X", fi
   ok("plan findings reach each batch they name; one naming no batch reaches all", /CLAIM-X/.test(ca) && !/CLAIM-X/.test(cb) && /BOTH/.test(ca) && /BOTH/.test(cb) && /LOST/.test(ca) && /LOST/.test(cb));
   ok("the committer is told to report an unmet CONFIRMED finding in unmet", /goes in `unmet`/.test(ca));
   ok("first reviewer and re-checks get the tests and CONFIRMED findings owed",
-    all(role(seen2, /^review: \[job/), /Also owed by this batch/, /test: TEST-A/, /plan review: CLAIM-X/));
-  ok("fix committer gets risks, tests and the plan findings", all(role(seen2, /^commit: \[job fix\]/), /- RISK-A/, /- TEST-A/, /CLAIM-X/));
+    all(role(seen2, /^review: \[job/), /Also owed by this batch/, /test: check: TEST-A/, /plan review: CLAIM-X/));
+  ok("fix committer gets risks, tests and the plan findings", all(role(seen2, /^commit: \[job fix\]/), /- RISK-A/, /- check: TEST-A/, /CLAIM-X/));
 }
-ok("committer: the plan's risks and tests", all(commitA, /- RISK-A/, /- TEST-A/));
+ok("committer: the plan's risks and tests", all(commitA, /- RISK-A/, /- check: TEST-A/));
 ok("plan-batching names the plan review: risks, tests, claims, findings into the briefs",
   has0(read("docs/plan-batching.md"), /## Plan review/, /`risks`/, /`tests`/, /against the code when written/, /findings go into the brief of the batch they name/, /`planReview`/));
 ok("reviewer: a plan review checks failure modes, tests, claims and conflicts",
-  has0(read("agents/change-reviewer.md"), /A plan review/, /failure mode `risks` leaves out/, /no test in `tests`/, /the code does not make true/, /`conflict`/));
+  has0(read("agents/change-reviewer.md"), /A plan review/, /failure mode `risks` leaves out/, /`tests` misses an existing test/, /the code does not make true/, /`conflict`/));
 // a request in plain words reaches the plan and queue modes: the core rule names them, the descriptions say them
 const coreText = read("CLAUDE.core.md");
 ok("core maps plain words to run-plan plan and queue and to continuous queue",

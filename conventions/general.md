@@ -30,7 +30,7 @@ on a conflict and is where a repo writes an exception, with its reason.
 8. **No query in a loop** — no database read inside a loop: batch-fetch the rows first, then look them up.
 9. **Authorization** — the server enforces every permission, default deny, and every other write rule (a locked
    field, a state that allows no edit, a record frozen after approval) by rejecting the write itself; a client-side
-   gate or disabled field is UX only. Each such lock has a test that calls the endpoint directly.
+   gate or disabled field is UX only. Each such lock is checked once by calling the endpoint directly.
 10. **Secrets** — none in committed config: keep the key shape with empty values, real values come from the
     environment.
 11. **One screen = one server read** — a screen's data comes from one server read (endpoint, query, loader, server
