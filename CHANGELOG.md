@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `docs/plan-batching.md`, `CLAUDE.core.md`: a `path:start-end` from a BA, explorer or decider report of this turn
+  counts as checked against the code; the main session copies it into the brief and reads again only what the
+  report marks assumed or not found, or a file edited since. A traced path with a step missing goes back to that
+  agent. In this machine's transcripts since 2026-11-19 the main session re-read ranges a BA report had just cited
+  after 58% of the long reports (38 calls over 44 reports), on opus, before the committer read them a third time.
+- `agents/business-analyst.md`: the report is written for its two uses, the user's summary and the committer's
+  brief: one fact per line stated once, the fact and not the search, "None" for an empty section, out of scope only
+  in Done when. The 80-line cap is gone: reports kept to it and still ran 9.5k characters (median), from long lines
+  that restated facts.
+
 - `scripts/plan.mjs write`, `scripts/continuous.mjs init`: a `heavy` batch naming more than 5 code files in its brief
   and alsoInScope (`.md` docs it follows left out) is refused, listing them, with the way out (keep the hard part
   heavy, the rest in a following normal batch); a `maxSize` below heavy lets it through, clamped, and a batch the

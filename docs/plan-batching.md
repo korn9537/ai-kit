@@ -46,7 +46,9 @@ anyway is found before the code exists. Each batch carries, set when the plan is
   doc-only batch.
 - `size`: the reviewer checks each batch's size against the criteria in §Before the first edit; one that does not fit
   is a PLAUSIBLE finding (kind claim) naming the batch.
-- A statement a doc or brief makes about behavior is checked against the code when written, not after.
+- A statement a doc or brief makes about behavior is checked against the code when written, not after. A
+  `path:start-end` from a BA, explorer or decider report of this turn is that check: copy it into the brief, and read
+  again only what the report marks assumed or not found, or a file edited since.
 - File size: a batch that edits a code file over 40 KB at HEAD with no move-only split planned before it is a
   CONFIRMED finding (kind claim): the pre-commit refuses the edit (`conventions/general.md` item 12), and the
   committer would learn it only once the batch is built.

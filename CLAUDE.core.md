@@ -106,7 +106,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   session coordinates, it does not explore. For a DB or business-rule change, or a check of how one
   works today, the BA is that subagent. A brief asking how something works asks for the path traced from the entry
   point (route, handler, screen) to the line that decides it, each step as `file:line`: a matching line says where
-  code is, not that the flow reaches it. The main session checks that path, not only that the line exists. Reads
+  code is, not that the flow reaches it. The main session checks that the report gives every step, not only the
+  line; a missing step goes back to that agent, and the ranges a report cites are not read again. Reads
   while debugging with the user watching each step stay in the main session. The brief names what to
   check or find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads
   that report, never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one

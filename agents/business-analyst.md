@@ -28,9 +28,12 @@ it as "not sure" or "I guess".
 Run only read-only commands (`grep`, `git log`, `git show`). Do not edit files.
 Find a symbol with `grep -n`, then read only its line range, never a whole large file.
 
-Reply with exactly these sections, terse, every claim with its source (path:start-end, requirement id, decision
-id, URL). The whole report stays under 80 lines: the main session reads it in full and pays for it again on every
-later call, so cite a range instead of pasting code, and give one line per item:
+Reply with exactly these sections, every claim with its source (path:start-end, requirement id, decision id, URL).
+The main session reads it in full, pays for it again on every later call, and turns it into the user's summary and
+the committer's brief without reading the code again, so write only what those two use:
+- One fact per line, stated once: a later section points back to it by its source, never says it again.
+- The fact, not how you found it: no search narrative, no file you read that changes nothing, no code pasted.
+- A section with nothing to say is "None". Out of scope and left unchanged go in section 7 only.
 
 1. **The ask** — the problem behind the request, in one or two lines; the requirements it touches.
 2. **Today** — what the code does now, from the code.
