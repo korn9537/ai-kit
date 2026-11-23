@@ -9,6 +9,7 @@ import { isMain } from "./lib/is-main.mjs";
 import { deciderDir, usageBufDir, usageCacheDir } from "./lib/state-dirs.mjs";
 import { collectSession, loadCache, mergeCommits, saveCache, transcriptsDir } from "./lib/usage-collect.mjs";
 import { formatHooks, scanHooks } from "./lib/hook-events.mjs";
+import { formatHandoffs, scanHandoffs } from "./lib/handoff-audit.mjs";
 import { DEFAULT_PRICES, baselineRecords, buildRecord, compare, digest, enc, summaryLine } from "./lib/usage-digest.mjs";
 import { HOST, LOCK_STALE_MS, LOCK_WAIT_MS, breakLock, withLock } from "./lib/usage-lock.mjs";
 import { VIEW_FILTERS, endpointOf, formatTable, getAll, getJson, projectId } from "./lib/usage-api.mjs";
@@ -298,12 +299,28 @@ async function migrateCmd() {
     + `commit it: git commit -m "chore: drop ai/usage, its records are in the usage API" -m "Job: <job id>"\n`);
 }
 
+// a real calendar day: Date.parse rolls an impossible one (February 30) into the next month
+const isDay = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d ?? "") && !isNaN(Date.parse(d)) && new Date(Date.parse(d)).toISOString().slice(0, 10) === d;
+
+// handoffs [--since YYYY-MM-DD]: per subagent role in this machine's transcripts of the project, brief and report
+// size and how often the parent re-read what a report had named. Prints counts only; writes nothing.
+function handoffsCmd(args) {
+  let since = "";
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--since" && isDay(args[i + 1])) since = args[++i];
+    else throw new Error("usage: usage.mjs handoffs [--since YYYY-MM-DD]");
+  }
+  const dir = transcriptsDir(projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd()));
+  if (!existsSync(dir)) return void process.stdout.write("no transcripts for this project\n");
+  process.stdout.write(`${formatHandoffs(scanHandoffs(dir, { since }))}\n`);
+}
+
 // hooks [--since YYYY-MM-DD]: counts each kit hook's firings in this machine's transcripts of the project. Prints
 // counts only; writes nothing.
 async function hooksCmd(args) {
   let since = "";
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--since" && /^\d{4}-\d{2}-\d{2}$/.test(args[i + 1] ?? "")) since = args[++i];
+    if (args[i] === "--since" && isDay(args[i + 1])) since = args[++i];
     else throw new Error("usage: usage.mjs hooks [--since YYYY-MM-DD]");
   }
   const root = projectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd());
@@ -394,9 +411,16 @@ function main() {
     return;
   }
   if (cmd === "hooks") return void hooksCmd(args).catch(failWith("usage-hooks"));
+  if (cmd === "handoffs") {
+    try {
+      return void handoffsCmd(args);
+    } catch (e) {
+      return void failWith("usage-handoffs")(e);
+    }
+  }
   process.stderr.write("usage: usage.mjs record | end | refusal <rule-id> | flush --session <id> | flush --idle [--except <id>] | send [--session <id>]..."
     + " | digest [--since YYYY-MM-DD] [--project] [--baseline | --compare <kitA> <kitB>] | views <view> [--kit <v>] [--project] [--since YYYY-MM-DD]"
-    + " | migrate | hooks [--since YYYY-MM-DD]\n");
+    + " | migrate | hooks [--since YYYY-MM-DD] | handoffs [--since YYYY-MM-DD]\n");
   process.exitCode = 2;
 }
 

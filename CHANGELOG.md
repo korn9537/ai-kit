@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `usage.mjs handoffs [--since YYYY-MM-DD]` (`scripts/lib/handoff-audit.mjs`): per subagent role in this machine's
+  transcripts of the project, the median brief and report size, the share of briefs with a line range, searches and
+  reads before a committer's first edit, and how often the main session re-read a path a report had just named in
+  its next 15 calls, with the worst five. Counts only: no brief or report text is printed. `/ai-kit:usage` runs it
+  before judging a handoff.
 - `docs/plan-batching.md`, `CLAUDE.core.md`: a `path:start-end` from a BA, explorer or decider report of this turn
   counts as checked against the code; the main session copies it into the brief and reads again only what the
   report marks assumed or not found, or a file edited since. A traced path with a step missing goes back to that

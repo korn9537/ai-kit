@@ -96,13 +96,14 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index, routes with no API entry; warnings only |
 | `scripts/lib/routes.mjs` | regex route extraction (Next, Nest, Express, FastAPI, Flask) and path-param normalizing |
-| `scripts/usage.mjs` | `record`, `end`, `flush`, `send`, `digest` (`--compare <kitA> <kitB>`), `views <view>`, `migrate`, `refusal <rule-id>` (called by the git hooks): usage records sent to the usage server; `hooks`: counts of each hook's firings |
+| `scripts/usage.mjs` | `record`, `end`, `flush`, `send`, `digest` (`--compare <kitA> <kitB>`), `views <view>`, `migrate`, `refusal <rule-id>` (called by the git hooks): usage records sent to the usage server; `hooks`: counts of each hook's firings; `handoffs`: brief and report size per subagent role and the parent's re-reads of what a report named |
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
 | `scripts/lib/usage-events.mjs` | a session's `/v1/events` rows (sessions, rounds, agents, calls, tools, hooks, compactions, commits) from its transcripts; POST chunks |
 | `scripts/lib/usage-send.mjs` | `usage.mjs send`: whole-session send with `.sent`, refusals, decider logs, idle pass, detached spawn, `migrate`; test `scripts/usage-send.test.mjs` |
 | `scripts/lib/usage-api.mjs` | usage API client: endpoint, project id, POST, paged GET, the views table |
 | `scripts/lib/usage-lock.mjs` | the usage buffer lock and the per-session send lock |
+| `scripts/lib/handoff-audit.mjs` | the transcript scan behind `usage.mjs handoffs` (per subagent: brief, report from text or `SubagentHandback`, searches and reads before its first edit, the parent's re-reads in its next 15 calls); counts only; test `scripts/usage-handoffs.test.mjs` |
 | `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |

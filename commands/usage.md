@@ -35,5 +35,8 @@ version: the goal is to see which kit version cost more or less and why, not to 
 7. Before judging that a hook or rule can go, run `node "${CLAUDE_PLUGIN_ROOT}/scripts/usage.mjs" views v_hook_stats`
    and `usage.mjs hooks [--since YYYY-MM-DD]` (this machine's transcripts): how often each hook fired (an older kit's
    changed hook text is undercounted).
+   Before judging a handoff (a brief, a report, what the main session did with it), run `usage.mjs handoffs
+   [--since YYYY-MM-DD]` (this machine's transcripts): brief and report size per role and how often the main session
+   re-read a range a report had just named.
 8. End with the working-conventions report: files written under Files, the proposal or setting chosen under Decided,
    what the views could not show under Open.
