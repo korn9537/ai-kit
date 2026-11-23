@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.61.0
 
 Tests leave the process: a plan has no `tests` field, the plan review no longer asks for one, and the committer
 writes and runs none. Verify is the build and typecheck; the reviewer reads the code. No project needs to edit
