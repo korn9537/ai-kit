@@ -31,11 +31,11 @@ The delegation half of the ai-kit rules (`${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md` 
   is a general-purpose subagent with `model: "sonnet"` (hook-guarded; a kit-agent fallback follows the Agent model
   bullet); another typed agent (web-fetch) keeps its own model. It returns evidence; the main session judges.
 - **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
-  done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
-  out as `ai-kit:committer` batches per `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md` §Coordinator pipeline, each
+  done and no go is pending (`ai-kit:summarize`), or the files are named for a change that needs neither, the change
+  goes out as `ai-kit:committer` batches per `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md` §Coordinator pipeline, each
   brief carrying the `path:start-end` and decisions already found and the summary's Done when checks for that batch.
   The main session edits code itself only for: at most `review.skip_lines` code lines with no new file and no
-  `review.always` path; a small job (list under the summary rule); debugging or a UI tweak iterated with the user
+  `review.always` path; a small job (the list in `ai-kit:summarize`); debugging or a UI tweak iterated with the user
   watching each step (settled and over the limit → one committer); the large-refactor exception of §Coordinator
   pipeline. Review fixes follow §Coordinator pipeline.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per

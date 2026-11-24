@@ -17,7 +17,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 |---|---|
 | `.claude-plugin/plugin.json` | plugin name and version; the version is bumped on every release |
 | `.claude-plugin/marketplace.json` | marketplace entry for `korn9537` |
-| `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report (a pointer to the `ai-kit:delegate` skill, then the final report); injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest); each half's size checked by `scripts/check-core-size.mjs` |
+| `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report (pointers to the `ai-kit:summarize` and `ai-kit:delegate` skills, then the final report); injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest); each half's size checked by `scripts/check-core-size.mjs` |
 | `CHANGELOG.md` | one entry per version |
 | `README.md` | install, settings, commands, editing the kit |
 | `.shellcheckrc` | lets `shellcheck` follow `lib.sh` into each hook (CI) |
@@ -68,6 +68,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
+| `skills/summarize/SKILL.md` | `ai-kit:summarize`, hidden from the `/` menu: the summary before a UI, DB or business-rule change (when the BA runs, the six items, the wait for a go while the design is under discussion, `ai/decisions.md`, the small jobs that skip it); loaded before the first edit of such a change |
 | `skills/delegate/SKILL.md` | `ai-kit:delegate`, hidden from the `/` menu: agent model and effort, heavy reads to a subagent, code past the small-change limit to committers, several items to a plan, the run-plan runner and its plain-word modes; loaded before a subagent launch, a code edit past `review.skip_lines` or a plan |
 
 ### commands/ (slash commands)

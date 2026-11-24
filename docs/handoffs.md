@@ -11,7 +11,7 @@ row here and its test together.
 | user → main | the request in their words |
 | main → `business-analyst` | the request, what is known |
 | BA → main | 8 sections (`agents/business-analyst.md`); 7 Done when, 8 Owner decisions with sources |
-| main → user | the summary, item 6 Done when (CLAUDE.core.md, Summarize) |
+| main → user | the summary, item 6 Done when (skill `ai-kit:summarize`) |
 | main → `decider` | the question, options, request, what is known; when BA ran, its Owner decisions item with sources |
 | main → plan file | per batch `id, title, brief, accept, risks, verify, waitsFor, alsoInScope, size` (`commands/run-plan.md` Args) |
 | plan → plan reviewer | the request, per batch id, title, size (normal when absent), brief, Done when, risks, also in scope, waits for (`plan-batching.md` §Plan review) |

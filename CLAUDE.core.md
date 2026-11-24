@@ -39,23 +39,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   options, the user's words and what you know (when BA ran, its Owner decisions item for the question, sources
   included): DECIDED → act on it without asking; OWNER → ask, its recommendation first. The kit logs each verdict
   (sent to the usage server, `/ai-kit:decisions`).
-- **Summarize before a UI, DB or business-rule change** (also run BA when the user asks for it). Business rule =
-  stage, SLA, permission, scope, calculation, or anything a user sees behave differently. For a DB or business-rule
-  change, first run the read-only `ai-kit:business-analyst` agent and build the summary from its report. A request to
-  check, verify or explain how a business rule or data behaves today runs the BA too, change or not: its answer
-  decides the change that follows. A UI-only change (layout, copy, style: no change in what a user can do or what is
-  decided for them, no rule or data) is summarized by the main session without it: 1. Problem · 2.
-  Recommendation (one, with rejected alternatives and why) · 3. How (files/endpoints) · 4. Affects (screens, data,
-  other modules) · 5. Standard it sets or follows · 6. Done when (checks a reviewer can confirm; the BA's section, if
-  run). Touches an owner decision → show the summary and wait for a go.
-  The design is still under discussion (the request asks how something would work or be built, not to change it;
-  the user answered the last summary with a question, objection or correction to the design; or the design changed
-  since they saw it) → show the summary or design, end the turn, and edit no code and launch no committer until
-  the user says to build; that go is not put to the decider, and a debugging or UI tweak iterated with the user
-  watching is not held by it. Otherwise show it and go on with the recommendation; BA assumptions go to Decided. A
-  choice whose reasons must be kept → `ai/decisions.md` (or the decisions source `ai/kit/analysis-sources.md` names)
-  with the default status, same commit. Small jobs (typo, copy, one style value on one screen, move-only refactor,
-  docs) skip both, except that a BA request by the user is always run; unsure → summarize.
+- **Summarize before a UI, DB or business-rule change** per the `ai-kit:summarize` skill, loaded before the first
+  edit: a DB or business-rule change, or a request to check how one behaves today, runs `ai-kit:business-analyst`
+  first; the summary ends in 5. Standard it sets or follows · 6. Done when. Touches an owner decision, or the design
+  is still under discussion → show it, end the turn and edit no code until the user says to build. Small jobs
+  (typo, copy, one style value on one screen, move-only refactor, docs) skip it; unsure → summarize.
 - **Screen specs** when `ai/kit/config.json` sets `ui.platforms`: a screen change starts from its spec; rules in
   `ai-kit/docs/screen-specs.md`.
 - **Conventions:** before writing code, read `ai-kit/conventions/general.md` and `ai-kit/conventions/<name>.md` for

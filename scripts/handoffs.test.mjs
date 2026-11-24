@@ -137,7 +137,7 @@ const stop = para(read("hooks/review-before-stop.sh"), "Brief:", "Fix every CONF
 ok("Stop-hook reviewer: request, Done when, the job's commits, its range by file, uncommitted diff",
   has(stop, /the user's request in their\s+words/, /Done when checks/, /--grep '\^Job: <id>\$'/, /git diff <first>\^\.\.HEAD -- <files> ':\(exclude\)ai\/usage'/, /not in scope/, /git diff -- <files>/));
 // per-commit review is gone: no route still names a single commit's show as the review read, or one review per commit
-const routes = ["CLAUDE.core.md", "skills/delegate/SKILL.md", "agents/change-reviewer.md", "commands/run-plan.md", "commands/continuous.md", "docs/plan-batching.md",
+const routes = ["CLAUDE.core.md", "skills/delegate/SKILL.md", "skills/summarize/SKILL.md", "agents/change-reviewer.md", "commands/run-plan.md", "commands/continuous.md", "docs/plan-batching.md",
   "docs/handoffs.md", "docs/spec.md", "hooks/review-before-stop.sh", "workflows/run-plan.js", "README.md"];
 const left = routes.filter((p) => /git show <hash> -- \.|reviewer per commit|one per commit,|review per commit|its review is clean/.test(read(p).replace(/not one per\s+commit/g, "")));
 ok(`no per-commit review wording left: ${left.join(", ") || "none"}`, !left.length);
@@ -169,7 +169,7 @@ ok("continuous next: the run's args keep every batch field", run1.action === "ru
 ok("run-plan.md Args lists every batch field", /`\{id, title, brief, accept, risks, verify, waitsFor, alsoInScope\}`/.test(read("commands/run-plan.md")));
 const ba = read("agents/business-analyst.md");
 ok("BA: 7 Done when, 8 Owner decisions with sources", /7\. \*\*Done when\*\*/.test(ba) && /8\. \*\*Owner decisions\*\*[^\n]*\n[^\n]*sources/.test(ba));
-ok("summary item 6 is Done when", /6\. Done when/.test(read("CLAUDE.core.md")));
+ok("summary item 6 is Done when", /6\. Done when/.test(read("skills/summarize/SKILL.md")));
 ok("committer reads core from Screen specs on, so no rule it needs drops out", /bullets from "Screen specs" on/.test(read("agents/committer.md")));
 ok("reviewer: a re-check reads only the findings' rules", /A re-check of a fix[\s\S]{0,250}no step 2 pass beyond the rules the findings name/.test(read("agents/change-reviewer.md")));
 ok("decider brief names the BA's Owner decisions item in CLAUDE.core.md and ask-guard.sh",

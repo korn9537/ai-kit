@@ -13,6 +13,9 @@ to edit anything.
   10,000-character SessionStart cap with an 80-character plugin path, the second half 2,000 under it for the notes.
 - `hooks/agent-model-guard.sh`, `hooks/handoff-nudge.sh`, `docs/plan-batching.md` point to the skill;
   `scripts/handoffs.test.mjs` reads the plain-words rule from it.
+- `skills/summarize/SKILL.md`: the summary rule (BA, the six items, the wait for a go, decisions, small jobs),
+  unchanged; core keeps a five-line pointer with the triggers, items 5 and 6, the wait and the skip list, so the
+  first half goes from about 9,100 to 7,800 characters with an 80-character plugin path.
 
 ## 2.61.0
 
