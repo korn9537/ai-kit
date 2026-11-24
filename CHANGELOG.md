@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.62.0
 
-Delegation moves out of the always-injected rules into the `ai-kit:delegate` skill, so each session start carries
-about 4,000 fewer characters (the second half of `CLAUDE.core.md` goes from about 7,200 to 3,100). No project needs
-to edit anything.
+Delegation and the summary rule move out of the always-injected rules into the `ai-kit:delegate` and
+`ai-kit:summarize` skills, so each session start carries about 5,400 fewer characters (`CLAUDE.core.md` halves go
+from about 9,100 and 7,200 to 7,800 and 3,100). No project needs to edit anything.
 
 - `skills/delegate/SKILL.md`: the Agent model, heavy reads, commit subagent, several items, plan runner and plain
   words bullets, unchanged; model-invoked only (`user-invocable: false`), its description and `when_to_use` say when.
