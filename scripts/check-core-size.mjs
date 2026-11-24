@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 const CAP = 10000;
 // a plugin path longer than the usual ~/.claude/plugins/cache/korn9537/ai-kit/<version>/
 const PLUGIN_PATH = `/${"x".repeat(78)}/`;
-// session-start.sh appends its notes (open plans, proposals, auto-memory, stale unattended files) to the second half
+// session-start.sh appends its notes to the second half; its open-plan lines stop at 1,000 characters
 const NOTES = 2000;
 
 const staged = process.argv.includes("--staged");

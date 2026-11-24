@@ -16,6 +16,9 @@ to edit anything.
 - `skills/summarize/SKILL.md`: the summary rule (BA, the six items, the wait for a go, decisions, small jobs),
   unchanged; core keeps a five-line pointer with the triggers, items 5 and 6, the wait and the skip list, so the
   first half goes from about 9,100 to 7,800 characters with an 80-character plugin path.
+- `hooks/session-start.sh`: the open-plan note keeps at most 1,000 characters of plan lines, each cut at 200, then
+  says how many more there are and that `plan.mjs status` lists them, so many open plans no longer push the second
+  half past the cap.
 
 ## 2.61.0
 
