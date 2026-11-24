@@ -17,7 +17,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 |---|---|
 | `.claude-plugin/plugin.json` | plugin name and version; the version is bumped on every release |
 | `.claude-plugin/marketplace.json` | marketplace entry for `korn9537` |
-| `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report; injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest) |
+| `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report (a pointer to the `ai-kit:delegate` skill, then the final report); injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest); each half's size checked by `scripts/check-core-size.mjs` |
 | `CHANGELOG.md` | one entry per version |
 | `README.md` | install, settings, commands, editing the kit |
 | `.shellcheckrc` | lets `shellcheck` follow `lib.sh` into each hook (CI) |
@@ -25,7 +25,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `.github/ISSUE_TEMPLATE/proposal.md` | body of a kit proposal issue (`docs/kit-proposals.md`) |
 | `.github/workflows/test.yml` | CI: `scripts/test-all.mjs` on ubuntu and windows, `shellcheck` on the hooks; push to `main`, pull requests |
 | `.github/workflows/evals.yml` | CI by hand only: `claude plugin eval` over `evals/` (a real session per case; needs an API key secret) |
-| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the handoff and run-plan tests when a route changes |
+| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the `CLAUDE.core.md` size check when it is staged; the handoff and run-plan tests when a route changes |
 
 ### hooks/ (Claude Code hooks)
 
@@ -64,6 +64,12 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `agents/decider.md` | opus medium | decides a question the main session would put to the owner: DECIDED or OWNER with one recommendation; its verdict lines are logged |
 | `agents/explorer.md` | sonnet medium | read-only code search for the main session: where the code is, what it does, the path from an entry point to the deciding line; returns `path:start-end` facts, no judgment |
 
+### skills/ (model-invoked skills)
+
+| File | Role |
+|---|---|
+| `skills/delegate/SKILL.md` | `ai-kit:delegate`, hidden from the `/` menu: agent model and effort, heavy reads to a subagent, code past the small-change limit to committers, several items to a plan, the run-plan runner and its plain-word modes; loaded before a subagent launch, a code edit past `review.skip_lines` or a plan |
+
 ### commands/ (slash commands)
 
 | File | Role |
@@ -92,6 +98,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/kit/uninstall.mjs` | `uninstall [--purge]`: reverses `initFiles` |
 | `scripts/kit/unattended.mjs` | `unattended`: rewrites `ai/kit/pre-commit.sh` to `$AI_KIT_RANGE`, then runs sync, which writes `requires.txt` |
 | `scripts/kit/inventory.mjs` | `inventory`: read-only list of what a retrofit starts from |
+| `scripts/check-core-size.mjs` | each half of `CLAUDE.core.md`, with an 80-character plugin path, under the 10,000-character SessionStart cap (the second half 2,000 under it, for `session-start.sh`'s notes); `--staged` reads the index; run by `.githooks/pre-commit` |
 | `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index, routes with no API entry; warnings only |

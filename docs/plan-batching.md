@@ -178,7 +178,7 @@ left to run.
 - The coordinator reads only what it needs to route a batch: `grep -n` and line ranges in a large doc
   (`ai/decisions.md`), never the whole file, and no code beyond what a brief must point at; the subagents read the
   code. Its context is re-read on every batch's notification, so all it reads is paid once per batch after it.
-  A browser check or a broad search goes to a subagent, as in any session (CLAUDE.core.md, heavy reads).
+  A browser check or a broad search goes to a subagent, as in any session (skill ai-kit:delegate, heavy reads).
 - The plan waits for the owner's go only when an owner decision is open; otherwise show the plan and go on. Every
   planned commit then runs to the end in one run with one report: never stop between commits to ask whether to
   continue; stop early only for an owner decision or a blocker.

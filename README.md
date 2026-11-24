@@ -13,9 +13,10 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | Path                          | What                                                                                           |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
 | `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                                           |
-| `CLAUDE.core.md`              | git, language and working conventions, the final-report format                                 |
+| `CLAUDE.core.md`              | git, language and working conventions, the final-report format (delegation: `skills/delegate`) |
 | `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`, `ai-kit:explorer` |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
+| `skills/delegate/`            | `ai-kit:delegate`: the delegation rules (subagents, models, committers, plans), loaded when needed |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
 | `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `kit-log.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
@@ -42,6 +43,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record; `usage-hooks.test.mjs`: hook counts and the anchor drift check): `node scripts/<name>.test.mjs` |
 | `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite in parallel: `node scripts/test-all.mjs` |
 | `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from; test `scripts/spec.test.mjs` |
+| `scripts/check-core-size.mjs` | each injected half of `CLAUDE.core.md` under the 10,000-character SessionStart cap; run by `.githooks/pre-commit` |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
 | `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit; `--wrap`: kit clone only, added prose lines over 120 characters, run by `.githooks/pre-commit` |

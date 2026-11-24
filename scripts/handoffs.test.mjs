@@ -101,9 +101,9 @@ ok("plan-batching names the plan review: risks, claims, findings into the briefs
   has0(read("docs/plan-batching.md"), /## Plan review/, /`risks`/, /against the code when written/, /findings go into the brief of the batch they name/, /`planReview`/));
 ok("reviewer: a plan review checks failure modes, claims and conflicts",
   has0(read("agents/change-reviewer.md"), /A plan review/, /failure mode `risks` leaves out/, /the code does not make true/, /`conflict`/));
-// a request in plain words reaches the plan and queue modes: the core rule names them, the descriptions say them
-const coreText = read("CLAUDE.core.md");
-ok("core maps plain words to run-plan plan and queue and to continuous queue",
+// a request in plain words reaches the plan and queue modes: the delegate skill names them, the descriptions say them
+const coreText = read("skills/delegate/SKILL.md");
+ok("delegate skill maps plain words to run-plan plan and queue and to continuous queue",
   /Plain words pick the run-plan mode/.test(coreText) && /with `plan`/.test(coreText) && /its\s+`queue`/.test(coreText) &&
   /continuous\.md` with `queue`/.test(coreText));
 for (const [p, re] of [["commands/run-plan.md", /^description:.*`plan`.*`queue`/m], ["commands/continuous.md", /^description:.*`queue`/m]])
@@ -137,7 +137,7 @@ const stop = para(read("hooks/review-before-stop.sh"), "Brief:", "Fix every CONF
 ok("Stop-hook reviewer: request, Done when, the job's commits, its range by file, uncommitted diff",
   has(stop, /the user's request in their\s+words/, /Done when checks/, /--grep '\^Job: <id>\$'/, /git diff <first>\^\.\.HEAD -- <files> ':\(exclude\)ai\/usage'/, /not in scope/, /git diff -- <files>/));
 // per-commit review is gone: no route still names a single commit's show as the review read, or one review per commit
-const routes = ["CLAUDE.core.md", "agents/change-reviewer.md", "commands/run-plan.md", "commands/continuous.md", "docs/plan-batching.md",
+const routes = ["CLAUDE.core.md", "skills/delegate/SKILL.md", "agents/change-reviewer.md", "commands/run-plan.md", "commands/continuous.md", "docs/plan-batching.md",
   "docs/handoffs.md", "docs/spec.md", "hooks/review-before-stop.sh", "workflows/run-plan.js", "README.md"];
 const left = routes.filter((p) => /git show <hash> -- \.|reviewer per commit|one per commit,|review per commit|its review is clean/.test(read(p).replace(/not one per\s+commit/g, "")));
 ok(`no per-commit review wording left: ${left.join(", ") || "none"}`, !left.length);

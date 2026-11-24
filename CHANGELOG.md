@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+Delegation moves out of the always-injected rules into the `ai-kit:delegate` skill, so each session start carries
+about 4,000 fewer characters (the second half of `CLAUDE.core.md` goes from about 7,200 to 3,100). No project needs
+to edit anything.
+
+- `skills/delegate/SKILL.md`: the Agent model, heavy reads, commit subagent, several items, plan runner and plain
+  words bullets, unchanged; model-invoked only (`user-invocable: false`), its description and `when_to_use` say when.
+- `CLAUDE.core.md` keeps a five-line Delegation pointer: when to load the skill and the routing in one sentence.
+- `scripts/check-core-size.mjs`, run by `.githooks/pre-commit` when `CLAUDE.core.md` is staged: each half under the
+  10,000-character SessionStart cap with an 80-character plugin path, the second half 2,000 under it for the notes.
+- `hooks/agent-model-guard.sh`, `hooks/handoff-nudge.sh`, `docs/plan-batching.md` point to the skill;
+  `scripts/handoffs.test.mjs` reads the plain-words rule from it.
+
 ## 2.61.0
 
 Tests leave the process: a plan has no `tests` field, the plan review no longer asks for one, and the committer

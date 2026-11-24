@@ -92,46 +92,11 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
 
 ## Delegation and report
 
-- **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
-  effort, `ai-kit:committer` and `ai-kit:explorer` on sonnet at medium effort, from their frontmatter; the Agent
-  call passes neither, except a committer's batch size: `light` sonnet low, `heavy` opus high
-  (`ai-kit/docs/plan-batching.md` §Coordinator pipeline). A general-purpose fallback for a kit agent (type not
-  loaded) passes that agent's frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet medium for
-  committer at size normal); an explorer not loaded, and every other general-purpose or Explore subagent, gets
-  `model: "sonnet"`.
-- **Heavy reads go to a subagent** (hook-nudged), plan or not: a browser check (screenshots, page reads, clicking
-  through a flow) or a search likely to need more than about three reads or greps. Finding what a summary, plan or
-  brief needs (where the code is, what it does today, which files a change touches) is such a search: one
-  `ai-kit:explorer` subagent per question (sonnet, read-only; Explore with `model: "sonnet"` when the type is not
-  loaded), sent together when independent, returns the `path:start-end` ranges and facts the brief carries; the main
-  session coordinates, it does not explore. For a DB or business-rule change, or a check of how one
-  works today, the BA is that subagent. A brief asking how something works asks for the path traced from the entry
-  point (route, handler, screen) to the line that decides it, each step as `file:line`: a matching line says where
-  code is, not that the flow reaches it. The main session checks that the report gives every step, not only the
-  line; a missing step goes back to that agent, and the ranges a report cites are not read again. Reads
-  while debugging with the user watching each step stay in the main session. The brief names what to
-  check or find and what comes back: pass or fail with the evidence, or a `file:line` list. The main session reads
-  that report, never the pages, screenshots or raw output; every later call re-reads them. One screenshot or one
-  `grep -n` the next edit needs stays. A code search is an `ai-kit:explorer`; a browser check or another heavy read
-  is a general-purpose subagent with `model: "sonnet"` (hook-guarded; a kit-agent fallback follows the Agent model
-  bullet); another typed agent (web-fetch) keeps its own model. It returns evidence; the main session judges.
-- **Code past the small-change limit goes to a commit subagent**, one item or several. Once the summary (or BA) is
-  done and no go is pending (summary rule), or the files are named for a change that needs neither, the change goes
-  out as `ai-kit:committer` batches per `ai-kit/docs/plan-batching.md` §Coordinator pipeline, each brief carrying the
-  `path:start-end` and decisions already found and the summary's Done when checks for that batch. The main session
-  edits code itself only for: at most `review.skip_lines` code lines with no new file and no `review.always` path; a
-  small job (list under the summary rule); debugging or a UI tweak iterated with the user watching each step
-  (settled and over the limit → one committer); the large-refactor exception of §Coordinator pipeline. Review fixes
-  follow §Coordinator pipeline.
-- **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
-  `ai-kit/docs/plan-batching.md`.
-- **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read
-  `ai-kit/docs/plan-batching.md` §Coordinator pipeline before the first batch. Two batches or more → the run-plan
-  workflow per `ai-kit/commands/run-plan.md` (the owner's standing opt-in to it); one, or the Workflow call
-  refused → the main session as coordinator.
-- **Plain words pick the run-plan mode**, in any language: plan now, run later (`วางแผนไว้ก่อน`, "prepare it, don't
-  build yet") → `ai-kit/commands/run-plan.md` with `plan`; work through the planned jobs (`ไล่ทำที่วางไว้`) → its
-  `queue`; the same with nobody watching (`ทำไปเลยไม่ต้องรอ`) → `ai-kit/commands/continuous.md` with `queue`.
+- **Delegation** follows the `ai-kit:delegate` skill: load it before launching any subagent, before a code edit
+  past `review.skip_lines` lines or with a new file, before planning several items, and when the user asks to plan
+  now and build later, work through the planned jobs or run them with nobody watching. In short: a search past
+  about three reads goes to `ai-kit:explorer`, a browser check to a general-purpose subagent with `model: "sonnet"`,
+  code past the small-change limit to `ai-kit:committer` batches, two batches or more to the run-plan workflow.
 - No emoji in replies, docs or UI copy.
 - **A finished task ends with this report** (drop a line that does not apply; a task that skips the
   summary reports Done, Checked and Git, plus Decided and Open when they hold anything):

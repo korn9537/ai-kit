@@ -4,7 +4,7 @@
 # was given, a note to open the reply by offering a fresh session or /compact. Never stops a plan; never blocks;
 # repeats only every further 50k.
 # PostToolUse on Bash|Read|Grep|Glob: every handoff.max_reads reads or searches since the last prompt, past
-# handoff.reads_from tokens, a note to send the search to a subagent (CLAUDE.core.md, heavy reads). max_reads 0: off.
+# handoff.reads_from tokens, a note to send the search to a subagent (skill ai-kit:delegate). max_reads 0: off.
 # A Read with no range or a plain cat of a code file of handoff.big_read lines or more: a note to read a range, once
 # per prompt in the main session and once per subagent. big_read 0: off.
 set -euo pipefail
@@ -89,7 +89,7 @@ if [[ -n "$reading" ]]; then
   mkdir "$reads.$step" 2>/dev/null || exit 0
   used="$(context_used)"
   [[ -n "$used" ]] && ((used >= $(kit_conf '.handoff.reads_from' 0))) || exit 0
-  note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to an ai-kit:explorer subagent (sonnet from its frontmatter; Explore with model \"sonnet\" when the type is not loaded) that returns a file:line list, or put what is left to find in a committer's brief (CLAUDE.core.md, heavy reads). The one grep the next edit needs stays here, and so do reads while debugging with the user watching each step."
+  note="$count reads or searches since the last prompt in the main session at about $((used / 1000))k tokens of context; each result is paid again on every later call. Send the rest of this search to an ai-kit:explorer subagent (sonnet from its frontmatter; Explore with model \"sonnet\" when the type is not loaded) that returns a file:line list, or put what is left to find in a committer's brief (skill ai-kit:delegate, heavy reads). The one grep the next edit needs stays here, and so do reads while debugging with the user watching each step."
   jq -n --arg n "$note" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $n}}'
   exit 0
 fi
