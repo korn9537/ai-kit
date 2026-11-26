@@ -4,12 +4,10 @@ import { isMain } from "./lib/is-main.mjs";
 import { allWarnings } from "./kit/check.mjs";
 import { init } from "./kit/init.mjs";
 import { inventory } from "./kit/inventory.mjs";
-import { HELPERS, kit, readConf, root } from "./kit/shared.mjs";
+import { kit, readConf, root } from "./kit/shared.mjs";
 import { syncSnapshot } from "./kit/sync.mjs";
 import { uninstall } from "./kit/uninstall.mjs";
 import { unattended } from "./kit/unattended.mjs";
-
-export { HELPERS };
 
 if (isMain(import.meta.url)) {
   const cmd = process.argv[2];

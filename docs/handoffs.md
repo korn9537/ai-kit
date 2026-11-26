@@ -1,8 +1,6 @@
 # Handoffs
 
-What each step hands the next, on every route. A route that sends less than its row is a bug;
-`scripts/handoffs.test.mjs` checks the workflow prompts and the docs of the other routes against this file. Change a
-row here and its test together.
+What each step hands the next, on every route. A route that sends less than its row is a bug.
 
 ## Before the work
 

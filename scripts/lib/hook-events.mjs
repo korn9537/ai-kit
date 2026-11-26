@@ -1,5 +1,5 @@
-// Counts kit hook firings in a project's transcripts. HOOK_EVENTS is the one table: scripts/usage-hooks.test.mjs checks
-// `anchor` against `file`; a kit version whose hook text differs is undercounted, so `no firing` is no proof of no use
+// Counts kit hook firings in a project's transcripts. HOOK_EVENTS is the one table; `anchor` must match
+// text in `file`; a kit version whose hook text differs is undercounted, so `no firing` is no proof of no use
 import { createReadStream, readdirSync, statSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join, sep } from "node:path";

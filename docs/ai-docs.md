@@ -7,7 +7,7 @@
 - Human-read docs, mockups, design assets, and any human-form doc the user asks for: outside `ai/`, never checked.
 - Applies to text you write. Restyling or splitting existing text is its own ask (split: move-only, own commit).
 - Goal: fewest tokens that still prevent a wrong build.
-- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit; tests: `scripts/check-docs.test.mjs`):
+- Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit):
   emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a
   number other than a year 1900-2099, `every <number>`, or (a) dozen, hundred, thousand), dates (only
   `YYYY-MM-DD`, `D Month YYYY` and `Month D, YYYY` are matched), Thai outside quotes or code, a code file pointer in the

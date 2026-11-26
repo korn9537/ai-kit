@@ -1,7 +1,7 @@
 # Owner kinds
 
 The one list of what only the owner decides. CLAUDE.core.md, `agents/business-analyst.md`, `agents/decider.md` and
-`agents/committer.md` point here and do not restate it; `scripts/handoffs.test.mjs` fails when one does.
+`agents/committer.md` point here and do not restate it.
 
 1. **money** — a price, purchase, paid service or added infra cost; any change to an amount a customer pays, a bug fix
    toward the evident intent included (never filed as "assumed").

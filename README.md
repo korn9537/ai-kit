@@ -20,41 +20,29 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `skills/delegate/`            | `ai-kit:delegate`: the delegation rules (subagents, models, committers, plans), loaded when needed |
 | `commands/`                   | `/ai-kit:init`, `/ai-kit:check`, `/ai-kit:harvest`, `/ai-kit:memory-export`, `/ai-kit:retrofit`, `/ai-kit:usage`, `/ai-kit:decisions`, `/ai-kit:jobs`, `/ai-kit:continuous` |
 | `githooks/pre-commit`         | git pre-commit runner, called by the project's `.githooks/pre-commit`                          |
-| `hooks/*.test.sh`             | fixture tests for `bash-guard.sh`, `post-edit-check.sh`, `review-before-stop.sh`, `session-start.sh`, `kit-log.sh`, `ask-guard.sh`, `memory-guard.sh` and `agent-model-guard.sh`: `hooks/<name>.test.sh` |
 | `githooks/commit-msg`         | git commit-msg runner (one `Job:` trailer, `docs/shared-checkout.md` §Jobs), called by `.githooks/commit-msg` |
-| `githooks/commit-msg.test.sh` | fixture test for the commit-msg runner: `githooks/commit-msg.test.sh`                          |
-| `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command; test `scripts/jobs.test.mjs` |
-| `githooks/pre-commit.test.sh` | fixture test for the pre-commit runner: `githooks/pre-commit.test.sh`                          |
+| `scripts/jobs.mjs`            | `/ai-kit:jobs`: lists jobs, or one job's commits, files, migrations and revert command |
 | `scripts/kit.mjs`             | dispatcher for `init` / `check` / `sync` / `unattended` / `uninstall` / `inventory` (§Commands)  |
 | `scripts/kit/*.mjs`           | one module per command (`init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`) and `shared.mjs` |
-| `scripts/kit-inventory.test.mjs` | fixture test for `kit.mjs inventory`: `node scripts/kit-inventory.test.mjs`                 |
-| `scripts/kit-init.test.mjs`   | fixture test for the `.gitattributes` LF rules of `kit.mjs init` and `check`                   |
 | `scripts/usage.mjs`           | `record` (Stop hook) / `end` (SessionEnd: record, then flush) / `flush --idle` (SessionStart) / `refusal` (git hooks) / `digest` / `hooks` (§Commands), over `scripts/lib/usage-collect.mjs`, `scripts/lib/usage-digest.mjs` and `scripts/lib/hook-events.mjs` |
-| `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`); test `scripts/decider.test.mjs` |
+| `scripts/decider.mjs`         | `sync` (SubagentStop, Stop) / `guard` (`ask-guard.sh`) / `report` (`/ai-kit:decisions`) |
 | `commands/usage.md`           | `/ai-kit:usage`: finds the largest token driver from the digest and the one change that cuts it |
 | `commands/run-plan.md`        | `/ai-kit:run-plan`: runs a multi-commit plan as the `workflows/run-plan.js` workflow, one report; `plan` only writes the plan, `queue` runs the open plans one at a time |
 | `commands/continuous.md`      | `/ai-kit:continuous`: runs work to its end with nobody watching: asks once, runs the plan, retries failed committers, one report |
-| `scripts/continuous.mjs`      | the next step of a continuous run, from its state file; test `scripts/continuous.test.mjs`     |
-| `workflows/run-plan.js`       | Workflow script: a committer per batch, one reviewer for the whole job, fixes, one re-check, a second fix for what it leaves; `scripts/run-plan.test.mjs` |
-| `scripts/queue.mjs`           | the state of a `/ai-kit:continuous queue` run; test `scripts/queue.test.mjs`                   |
-| `scripts/lib/workflow-run.mjs` | `readRun`, the run file of a workflow, shared by `continuous.mjs` and `plan.mjs`; tested through `continuous.test.mjs` and `plan.test.mjs` |
-| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, `queue`, close, `mark` / `unmark` (the run marker), `live` (a run-plan workflow's journal); tests `scripts/plan.test.mjs`, `plan-live.test.mjs` |
-| `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`) and `claude-plan-run` (`planRunDir`, no shell twin); test `scripts/state-dirs.test.mjs` |
+| `scripts/continuous.mjs`      | the next step of a continuous run, from its state file     |
+| `workflows/run-plan.js`       | Workflow script: a committer per batch, one reviewer for the whole job, fixes, one re-check, a second fix for what it leaves |
+| `scripts/queue.mjs`           | the state of a `/ai-kit:continuous queue` run                   |
+| `scripts/lib/workflow-run.mjs` | `readRun`, the run file of a workflow, shared by `continuous.mjs` and `plan.mjs` |
+| `scripts/plan.mjs`            | the plan file `ai/plans/<job>.md`: write, status from the job's commits, resume, `queue`, close, `mark` / `unmark` (the run marker), `live` (a run-plan workflow's journal) |
+| `scripts/lib/state-dirs.mjs`  | the `claude-review`, `claude-usage`, `claude-decider` state-folder paths (twin of `kit_state_dir` in `hooks/lib.sh`) and `claude-plan-run` (`planRunDir`, no shell twin) |
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
-| `scripts/usage*.test.mjs`     | fixture tests for the usage modules (`usage.test.mjs`: buffer lock, parallel flush and record; `usage-hooks.test.mjs`: hook counts and the anchor drift check): `node scripts/<name>.test.mjs` |
-| `scripts/test-all.mjs`        | kit clone only: runs every `*.test.sh` / `*.test.mjs` suite in parallel: `node scripts/test-all.mjs` |
-| `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from; test `scripts/spec.test.mjs` |
+| `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from |
 | `scripts/check-core-size.mjs` | each injected half of `CLAUDE.core.md` under the 10,000-character SessionStart cap; run by `.githooks/pre-commit` |
 | `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
-| `scripts/check-comments.test.mjs` | fixture tests for `check-comments.mjs`: `node scripts/check-comments.test.mjs`             |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit; `--wrap`: kit clone only, added prose lines over 120 characters, run by `.githooks/pre-commit` |
-| `scripts/check-docs.test.mjs` | fixture tests for `check-docs.mjs`: `node scripts/check-docs.test.mjs`                         |
 | `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |
-| `scripts/check-specs.test.mjs` | fixture tests for `check-specs.mjs`: `node scripts/check-specs.test.mjs`                       |
 | `docs/`                       | `hooks.md` (what each hook does), `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md`, `handoffs.md`, `owner-kinds.md` |
 | `.github/ISSUE_TEMPLATE/`     | `proposal.md`: body of a kit proposal issue                                                    |
-| `.github/workflows/`          | `test.yml`: every suite on ubuntu and windows plus shellcheck, on push to `main` and pull requests; `evals.yml`: the agent evals, by hand |
-| `evals/`                      | `claude plugin eval` cases for the agents (decider, change-reviewer, business-analyst); not run by `test-all`  |
 | `conventions/`                | cross-repo coding rules: `general.md`, one per language or framework (`python`, `react`, ...)  |
 | `templates/ai-kit-project/`   | starter `ai/kit/` files, copied by `init` when missing                                         |
 | `templates/ai/`               | one template per `ai/` doc type (`docs/ai-layout.md`); never copied by `init`                  |
@@ -243,32 +231,15 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
    `git config core.hooksPath .githooks` once for the clone's pre-commit: the line wrap check, and on the kit's own
    code the comment and 40 KB checks it runs for every project.
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
-   and `node scripts/test-all.mjs`, the one command for every test suite and the line wrap check. GitHub Actions
-   (`.github/workflows/test.yml`) runs the same on ubuntu and windows for every push to `main` and every pull
-   request, plus `shellcheck` on the hooks; a red run on either platform on `main` is reverted like a bad release.
+   (no tests, no CI).
 3. A new, renamed or removed file of the kit is named in `docs/spec.md` in the same commit, and a changed process is
-   changed there; `scripts/spec.test.mjs` fails on a file the spec does not name.
+   changed there.
 4. Bump `version` in `.claude-plugin/plugin.json` and add a `CHANGELOG.md` line: patch for a fix, minor for a new
    hook, command, check or config key with a default, major when a project must edit `ai/kit/`, `CLAUDE.md` or its
    settings to keep working.
 5. Work on a branch: `main` is the release, since every project with `autoUpdate` installs from it. Merge with
-   `git merge --ff-only` once `node scripts/test-all.mjs` passes (rerun a flaky test alone before counting it) and
-   the review leaves no CONFIRMED finding open, or `CHANGELOG.md` names the ones left. Tag the version commit
-   `vX.Y.Z` and push `main` with the tag; a bad release is reverted on `main`.
-
-Agent evals (optional): `evals/<case>/prompt.md` plus `graders/*.md` hold seven cases (`decider-decided`,
-`decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `reviewer-no-findings`, `reviewer-plan-review`,
-`ba-summary`). `claude plugin eval` is early access:
-on an account without it the command prints "`plugin eval` is currently in early access", exits 1 and runs nothing.
-Each run is a real `claude -p` session, so `node scripts/test-all.mjs` does not run them. What a session costs depends
-on how Claude Code is signed in: on a subscription (Pro, Max) it uses the plan's usage limits, with no charge beyond
-the plan; with `ANTHROPIC_API_KEY` set it is billed per token, and `--max-cost-usd` caps that bill. Run one family by
-hand: `claude plugin eval . --ablation none --runs 1 --case 'decider-*'`. CI form: add `--no-publish --max-cost-usd 5
---threshold 0.9`. Size: one session per case per run (cases x runs: the full suite at `--runs 1` is 7 sessions, the
-decider and business-analyst ones on opus). Results go to `evals/results/` (git-ignored). The cases carry their
-context inline, so they need no `--allow-tools` or `--scaffold`. The `tool_used` graders name the `Agent` tool; the
-first run that gets through confirms that is the name in the trace. `node scripts/evals.test.mjs` checks the case
-files offline, with no model call.
+   `git merge --ff-only` once the review leaves no CONFIRMED finding open, or `CHANGELOG.md` names the ones left.
+   Tag the version commit `vX.Y.Z` and push `main` with the tag; a bad release is reverted on `main`.
 
 Improvements found in projects arrive as GitHub issues labelled `proposal` (`docs/kit-proposals.md`): a project
 session files one when it sets a standard that passes the cross-repo test, sees a review finding twice, is corrected
@@ -371,17 +342,14 @@ Claude Code ใหม่
    `git config core.hooksPath .githooks` ครั้งเดียว pre-commit ของ clone จะตรวจความยาวบรรทัดของเอกสาร และตรวจ
    comment กับขนาดไฟล์ 40 KB ของ code ใน kit ด้วยกฎเดียวกับที่ใช้กับทุกโปรเจกต์
 2. ทดสอบในโปรเจกต์ด้วย `claude --plugin-dir /path/to/ai-kit` และรัน `claude plugin validate /path/to/ai-kit`
-   กับ `node scripts/test-all.mjs` GitHub Actions (`.github/workflows/test.yml`) รันชุดเดียวกันบน ubuntu และ
-   windows ทุกครั้งที่ push `main` หรือเปิด pull request พร้อม `shellcheck` บน hook ถ้าแดงบน `main` ไม่ว่า
-   platform ไหน ให้ revert เหมือน release ที่เสีย
+   (ไม่มี test ไม่มี CI)
 3. เพิ่มเลข `version` ใน `.claude-plugin/plugin.json` และเขียนหนึ่งบรรทัดใน `CHANGELOG.md`
    - patch (2.0.x) — แก้บั๊ก
    - minor (2.x.0) — เพิ่ม hook, command, check หรือ config key ที่มีค่า default
    - major (x.0.0) — โปรเจกต์ต้องแก้ `ai/kit/`, `CLAUDE.md` หรือ settings ถึงจะใช้ต่อได้
 4. ทำงานบน branch: `main` คือ release เพราะทุกโปรเจกต์ที่ตั้ง `autoUpdate` ติดตั้งจาก `main` merge ด้วย
-   `git merge --ff-only` เมื่อ `node scripts/test-all.mjs` ผ่าน (test ที่ flaky ให้รันเดี่ยวซ้ำก่อนนับ) และ review
-   ไม่มี finding CONFIRMED ค้าง หรือ `CHANGELOG.md` ระบุข้อที่ค้างไว้ ใส่ tag `vX.Y.Z` ที่ commit ที่เปลี่ยน version
-   แล้ว push `main` พร้อม tag release ที่เสียให้ revert บน `main`
+   `git merge --ff-only` เมื่อ review ไม่มี finding CONFIRMED ค้าง หรือ `CHANGELOG.md` ระบุข้อที่ค้างไว้
+   ใส่ tag `vX.Y.Z` ที่ commit ที่เปลี่ยน version แล้ว push `main` พร้อม tag release ที่เสียให้ revert บน `main`
 
 กฎหรือข้อบกพร่องที่เจอระหว่างทำงานในโปรเจกต์ agent จะเปิดเป็น GitHub issue label `proposal` ใน repo นี้
 (เกณฑ์และรูปแบบอยู่ใน `docs/kit-proposals.md`: ต้องเขียนกฎได้โดยไม่อ้างชื่อโปรเจกต์ code หรือ path จริง ไม่อย่างนั้นลง

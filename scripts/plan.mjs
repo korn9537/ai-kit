@@ -224,7 +224,7 @@ export function sharedFiles(batches, root = "") {
   return [...by].filter(([, ids]) => ids.length > 1).map(([file, batches]) => ({ file, batches }));
 }
 
-// the files a plan's batch texts name: a path, root file, directory (evals/), glob or <placeholder> path (a wildcard
+// the files a plan's batch texts name: a path, root file, directory (docs/), glob or <placeholder> path (a wildcard
 // segment); accept counts too, not only the briefs
 export function scopePaths(batches, root = "") {
   const top = `${root.replace(/\/+$/, "")}/`;

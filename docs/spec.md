@@ -1,9 +1,8 @@
 # ai-kit spec
 
 Reader: agents changing the kit. What each file does and which process calls it. Behavior detail lives in the
-file named; this file is the map. `scripts/spec.test.mjs` fails when a file below `agents/`, `commands/`, `hooks/`,
-`githooks/`, `scripts/`, `workflows/`, `docs/`, `templates/` or `conventions/` (any depth)
-is not named here, when a file named here does not exist, and on a prose line over 120 characters.
+file named; this file is the map. Name every file below `agents/`, `commands/`, `hooks/`, `githooks/`, `scripts/`,
+`workflows/`, `docs/`, `templates/` or `conventions/` here.
 
 Shape: a Claude Code plugin. `hooks/hooks.json` wires hooks, `commands/` are slash commands, `agents/` are subagents,
 `CLAUDE.core.md` is injected at session start. Every hook exits 0 in a project without `ai/kit/` (`kit_enabled`).
@@ -20,12 +19,9 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `CLAUDE.core.md` | the rules every session reads: Git, Language, Working conventions, Delegation and report (pointers to the `ai-kit:summarize` and `ai-kit:delegate` skills, then the final report); injected by `session-context.sh` (up to "Delegation and report") and `session-start.sh` (the rest); each half's size checked by `scripts/check-core-size.mjs` |
 | `CHANGELOG.md` | one entry per version |
 | `README.md` | install, settings, commands, editing the kit |
-| `.shellcheckrc` | lets `shellcheck` follow `lib.sh` into each hook (CI) |
 | `.gitattributes`, `.gitignore`, `LICENSE` | `.gitattributes` forces LF (the scripts must run from a Windows checkout); the others as named |
 | `.github/ISSUE_TEMPLATE/proposal.md` | body of a kit proposal issue (`docs/kit-proposals.md`) |
-| `.github/workflows/test.yml` | CI: `scripts/test-all.mjs` on ubuntu and windows, `shellcheck` on the hooks; push to `main`, pull requests |
-| `.github/workflows/evals.yml` | CI by hand only: `claude plugin eval` over `evals/` (a real session per case; needs an API key secret) |
-| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the `CLAUDE.core.md` size check when it is staged; the handoff and run-plan tests when a route changes |
+| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the `CLAUDE.core.md` size check when it is staged |
 
 ### hooks/ (Claude Code hooks)
 
@@ -44,7 +40,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `hooks/post-edit-check.sh` | PostToolUse Edit, Write, MultiEdit, Bash; PostToolUseFailure Bash; PreToolUse Bash with `mark` | runs the comment and doc checks and `ai/kit/post-edit.sh` on the edited file, in parallel; after a Bash call on the files it changed (marker from the `mark` run, `git status` mtime newer, 20 at most; not after a background call or a work-tree-rewriting git command) |
 | `hooks/handoff-nudge.sh` | UserPromptSubmit; PostToolUse Bash, Read, Grep, Glob | notes only, never blocks: "Next session" prompt past `handoff.max_context`, a fresh session or `/compact` offered `handoff.fresh_after` further on; send searches to a subagent; read a line range instead of a whole file |
 | `hooks/kit-log.sh` | Stop (`stop`, `subagent-stop`), SubagentStop (`subagent-stop`), SessionEnd (`session-end`) | calls `usage.mjs` (`record`, `end`) and `decider.mjs sync`; buffers each round's token use; starts a detached send to the usage server at session end; logs decider verdicts until sent |
-| `hooks/*.test.sh` | n/a | fixture tests, one per hook that has one |
 
 ### githooks/ (git hooks, called by the project's `.githooks/` shims)
 
@@ -52,7 +47,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 |---|---|
 | `githooks/pre-commit` | runs in order: backslash path, `check-docs`, `eslint-disable ... moved verbatim`, 40 KB size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
 | `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer on a commit made under Claude Code (`CLAUDECODE=1`); a merge, a `fixup!`, `squash!` or `amend!` commit and a person's own commit pass |
-| `githooks/*.test.sh` | fixture tests |
 
 ### agents/ (subagents)
 
@@ -91,7 +85,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `scripts/kit.mjs` | dispatcher for `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory`; re-exports `HELPERS` for the tests |
+| `scripts/kit.mjs` | dispatcher for `init`, `check`, `sync`, `unattended`, `uninstall`, `inventory` |
 | `scripts/kit/shared.mjs` | constants and helpers more than one command uses: `kit` (plugin root), `root` (git top of cwd), git and file readers, the hook shim texts |
 | `scripts/kit/sync.mjs` | `sync`: writes the generated copies in `ai/kit/`, `check.sh` (`CHECK_SH`) and `requires.txt`; `snapshotWarnings`, their drift check |
 | `scripts/kit/check.mjs` | `check`: every warning and problem (`allWarnings`), also run by `init` |
@@ -108,28 +102,24 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/lib/usage-collect.mjs` | reads session transcripts into per-agent token totals |
 | `scripts/lib/usage-digest.mjs` | per-round record, prices, the fixed-size digest |
 | `scripts/lib/usage-events.mjs` | a session's `/v1/events` rows (sessions, rounds, agents, calls, tools, hooks, compactions, commits) from its transcripts; POST chunks |
-| `scripts/lib/usage-send.mjs` | `usage.mjs send`: whole-session send with `.sent`, refusals, decider logs, idle pass, detached spawn, `migrate`; test `scripts/usage-send.test.mjs` |
+| `scripts/lib/usage-send.mjs` | `usage.mjs send`: whole-session send with `.sent`, refusals, decider logs, idle pass, detached spawn, `migrate` |
 | `scripts/lib/usage-api.mjs` | usage API client: endpoint, project id, POST, paged GET, the views table |
 | `scripts/lib/usage-lock.mjs` | the usage buffer lock and the per-session send lock |
-| `scripts/lib/usage-flow.mjs` | `usage.mjs flow`: `v_flow_nodes` and `v_flow_edges` rows merged into one graph, the steps taken both ways, a text summary and an HTML page drawn with Mermaid; test `scripts/usage-flow.test.mjs` |
-| `scripts/lib/handoff-audit.mjs` | the transcript scan behind `usage.mjs handoffs` (per subagent: brief, report from text or `SubagentHandback`, searches and reads before its first edit, the parent's re-reads in its next 15 calls); counts only; test `scripts/usage-handoffs.test.mjs` |
-| `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks`; test `scripts/usage-hooks.test.mjs` (fixtures, and a drift check of each anchor against its hook file) |
+| `scripts/lib/usage-flow.mjs` | `usage.mjs flow`: `v_flow_nodes` and `v_flow_edges` rows merged into one graph, the steps taken both ways, a text summary and an HTML page drawn with Mermaid |
+| `scripts/lib/handoff-audit.mjs` | the transcript scan behind `usage.mjs handoffs` (per subagent: brief, report from text or `SubagentHandback`, searches and reads before its first edit, the parent's re-reads in its next 15 calls); counts only |
+| `scripts/lib/hook-events.mjs` | `HOOK_EVENTS` (one table: id, hook file, anchor, transcript regex) and the transcript scan behind `usage.mjs hooks` |
 | `scripts/decider.mjs` | `sync` (log verdicts), `guard` (for `ask-guard.sh`), `report` |
 | `scripts/jobs.mjs` | job listing and revert plan from the `Job:` trailer |
 | `scripts/plan.mjs` | plan file `ai/plans/<job>.md`: write (refuses a `heavy` batch naming more than 5 code files, `heavyFiles`; one the plan file already holds passes unless it names more), status from commits, resume (with `stale` since the plan's base and a live `running` marker), close, live, scope (the paths the plan names plus its commits' files; `--outside` filters stdin paths), queue (open plans oldest first, `shared` paths), mark and unmark (the run marker); the file format is in `scripts/lib/plan-file.mjs` and `live` in `scripts/lib/plan-live.mjs`, both re-exported |
 | `scripts/lib/plan-file.mjs` | the plan file format and batch rules: `render`, `parse`, `merge`, `ordered`, `checkBatch`, `checkMaxSize`, `progress`, `resumeArgs`, `JOB`, `SIZES` |
 | `scripts/lib/plan-live.mjs` | `plan.mjs live`: `liveStatus` (one line per batch from a workflow transcript dir), `parseLabel`, `nodePath` |
 | `scripts/continuous.mjs` | next step of a continuous run, from its state file; `init` refuses a wide heavy batch as `plan.mjs write` does |
-| `scripts/queue.mjs` | queue state of `/ai-kit:continuous queue`: jobs in order, current job, outcomes, approvals; test `scripts/queue.test.mjs` |
+| `scripts/queue.mjs` | queue state of `/ai-kit:continuous queue`: jobs in order, current job, outcomes, approvals |
 | `scripts/lib/workflow-run.mjs` | `readRun`: a workflow's run file status and idle time, shared by `continuous.mjs` and `plan.mjs` |
 | `scripts/review-needed.sh` | prints `skip` for a commit with no code line, else `review` |
-| `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders, and `claude-plan-run` (`planRunDir`, no shell twin); twin of `kit_state_dir` in `hooks/lib.sh`; test `scripts/state-dirs.test.mjs` |
+| `scripts/lib/state-dirs.mjs` | paths of the `claude-review`, `claude-usage`, `claude-decider` state folders, and `claude-plan-run` (`planRunDir`, no shell twin); twin of `kit_state_dir` in `hooks/lib.sh` |
 | `scripts/lib/is-main.mjs` | the one "is this the entry script" check, symlink-safe |
-| `scripts/lib/test-util.mjs` | node:test helpers of the `*.test.mjs` suites: `check`, `ok`, `eq`, `match`, `throws` |
 | `scripts/lib/` | note: modules with no CLI; every CLI entry point stays in `scripts/` (commands, hooks and project copies name those paths) |
-| `scripts/test-all.mjs` | kit clone only: runs every test suite in parallel |
-| `scripts/fixtures/plan-gaps-and-measurement.md` | a copy of a real plan file: `plan.test.mjs` reads the scope of its briefs |
-| `scripts/*.test.mjs` | fixture tests, one per module (`handoffs.test.mjs` checks `docs/handoffs.md` against prompts, `spec.test.mjs` this file) |
 
 ### workflows/
 
@@ -152,14 +142,6 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `docs/owner-kinds.md` | the one list of what only the owner decides |
 | `docs/kit-proposals.md` | filing and landing kit proposals |
 | `docs/screen-specs.md` | screen and API specs when `ui.platforms` is set; route check when `ui.api` is set |
-
-### evals/ (agent evals for `claude plugin eval`, run by hand, not by `scripts/test-all.mjs`)
-
-| File | Role |
-|---|---|
-| `evals/<case>/prompt.md`, `evals/<case>/graders/*.md` | one case each: `decider-decided`, `decider-owner-money`, `decider-format`, `reviewer-finds-bug`, `reviewer-no-findings`, `reviewer-plan-review`, `ba-summary`; regex, tool_used and llm graders; every run costs model calls |
-| `evals/results/` | run output, git-ignored |
-| `scripts/evals.test.mjs` | offline test of the grader files: known match modes, each regex on a valid and a broken sample |
 
 ### conventions/ and templates/
 
@@ -308,8 +290,7 @@ Each step names the file that does it.
 ### P8 Editing the kit
 
 1. Cross-repo improvements arrive as `proposal` issues; `/ai-kit:harvest` lands the accepted ones.
-2. In the clone `.githooks/pre-commit` runs the wrap, comment and 40 KB checks, and the handoff and run-plan tests when
-   a route changes; `.github/workflows/test.yml` runs every suite on ubuntu and windows.
-   Work on a branch, `node scripts/test-all.mjs`, review, bump `plugin.json`, add a `CHANGELOG.md`
+2. In the clone `.githooks/pre-commit` runs the wrap, comment and 40 KB checks. No tests, no CI.
+   Work on a branch, review, bump `plugin.json`, add a `CHANGELOG.md`
    entry, add the new file to this spec, `git merge --ff-only`, tag `vX.Y.Z`, push `main` with the tag
    (`README.md` §Editing the kit).
