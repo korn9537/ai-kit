@@ -22,8 +22,8 @@ deploy the project's CLAUDE.md wins. The four owner decision kinds (`ai-kit/docs
   output, the report item labels, the Next-session prompt, and the Review closed phrase of report item 3
   (hook-matched, plain text).
 - Docs under `ai/`, code comments, commit messages, subagent briefs and their reports: English. A doc you create
-  goes in its `ai/` category (`ai-kit/docs/ai-layout.md`), AI-only and token-minimal (`ai-kit/docs/ai-docs.md`);
-  another place or form only when the user names it.
+  goes in its `ai/` category (`ai-kit/docs/ai-layout.md`), AI-only and token-minimal (`ai-kit/docs/ai-docs.md`),
+  written by `ai-kit:doc-writer` (`ai-kit:delegate`); another place or form only when the user names it.
 
 ## Working conventions
 

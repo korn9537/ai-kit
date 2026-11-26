@@ -3,8 +3,8 @@
 ## 2.63.0
 
 The large-file rule counts characters, so Thai copy no longer trips it at a third of the size; a component
-extraction passes it; a job with a plan cannot commit another session's staged files; `ai/` docs keep tables
-unpadded. No project needs to edit anything.
+extraction passes it; a job with a plan cannot commit another session's staged files; `ai/` docs are written by a
+new `doc-writer` agent that holds their format. No project needs to edit anything.
 
 - `conventions/general.md` item 12, `scripts/check-comments.mjs --size`: the limit is 40,000 characters at HEAD, not
   40 KB (Thai and other non-Latin text is 3 UTF-8 bytes a character). Committer, plan review and docs say so.
@@ -15,6 +15,9 @@ unpadded. No project needs to edit anything.
   only its own batch's commit (#64).
 - `docs/ai-docs.md`: tables unpadded, file pointers as repo-root paths in code spans; `githooks/pre-commit` runs
   prettier on no `ai/**/*.md` (#67).
+- New `agents/doc-writer.md` (sonnet medium): writes or restyles `ai/` docs in the AI-only form, so the user no
+  longer restates it; `ai-kit:delegate` sends it every new `ai/` doc, restyle and edit past a few lines, and an
+  `ai/` doc still in human form is restyled before an edit without an ask (#67).
 
 ## 2.62.1
 

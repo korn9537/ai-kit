@@ -14,7 +14,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
 | `.claude-plugin/`             | `plugin.json` (name, version) and `marketplace.json`                                           |
 | `CLAUDE.core.md`              | git, language and working conventions, the final-report format (summary, delegation: `skills/`) |
-| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`, `ai-kit:explorer` |
+| `agents/`                     | `ai-kit:business-analyst`, `ai-kit:change-reviewer`, `ai-kit:committer`, `ai-kit:decider`, `ai-kit:doc-writer`, `ai-kit:explorer` |
 | `hooks/`                      | Claude Code hooks (below), wired in `hooks/hooks.json`                                         |
 | `skills/summarize/`           | `ai-kit:summarize`: the summary (and BA) before a UI, DB or business-rule change, loaded when needed |
 | `skills/delegate/`            | `ai-kit:delegate`: the delegation rules (subagents, models, committers, plans), loaded when needed |

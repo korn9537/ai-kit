@@ -56,6 +56,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `agents/change-reviewer.md` | opus medium | read-only fresh review of a change (findings CONFIRMED or PLAUSIBLE), re-check mode, plan-review mode |
 | `agents/committer.md` | sonnet medium | implements one batch, verifies once, makes one commit; reports hash, files, choices, open items |
 | `agents/decider.md` | opus medium | decides a question the main session would put to the owner: DECIDED or OWNER with one recommendation; its verdict lines are logged |
+| `agents/doc-writer.md` | sonnet medium | writes or restyles `ai/` docs in the AI-only form (`docs/ai-docs.md`); restyle keeps every fact and table row; runs `check-docs`, does not commit; reports dropped history, doubtful claims, unresolved pointers |
 | `agents/explorer.md` | sonnet medium | read-only code search for the main session: where the code is, what it does, the path from an entry point to the deciding line; returns `path:start-end` facts, no judgment |
 
 ### skills/ (model-invoked skills)

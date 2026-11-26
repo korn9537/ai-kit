@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: "ai-kit delegation rules: which subagent takes a search, a browser check or a code change, with which model and effort, and how several items become a plan run by committers or the run-plan workflow. Load before launching any subagent, before a code edit past review.skip_lines lines or with a new file, and before planning several items."
+description: "ai-kit delegation rules: which subagent takes a search, a browser check or a code change, with which model and effort, and how several items become a plan run by committers or the run-plan workflow. Load before launching any subagent, before a code edit past review.skip_lines lines or with a new file, before planning several items, and before writing or restyling a doc under ai/."
 when_to_use: "Also when the user asks to plan now and build later (วางแผนไว้ก่อน, prepare it, don't build yet), to work through the planned jobs (ไล่ทำที่วางไว้), or to run them with nobody watching (ทำไปเลยไม่ต้องรอ)."
 user-invocable: false
 ---
@@ -8,8 +8,8 @@ user-invocable: false
 The delegation half of the ai-kit rules (`${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md` keeps the rest and the final report).
 
 - **Agent model:** `ai-kit:business-analyst`, `ai-kit:change-reviewer` and `ai-kit:decider` run on opus at medium
-  effort, `ai-kit:committer` and `ai-kit:explorer` on sonnet at medium effort, from their frontmatter; the Agent
-  call passes neither, except a committer's batch size: `light` sonnet low, `heavy` opus high
+  effort, `ai-kit:committer`, `ai-kit:doc-writer` and `ai-kit:explorer` on sonnet at medium effort, from their
+  frontmatter; the Agent call passes neither, except a committer's batch size: `light` sonnet low, `heavy` opus high
   (`${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md` §Coordinator pipeline). A general-purpose fallback for a kit agent
   (type not loaded) passes that agent's frontmatter model and effort (opus medium for reviewer, BA, decider; sonnet
   medium for committer at size normal); an explorer not loaded, and every other general-purpose or Explore subagent,
@@ -38,6 +38,11 @@ The delegation half of the ai-kit rules (`${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md` 
   `review.always` path; a small job (the list in `ai-kit:summarize`); debugging or a UI tweak iterated with the user
   watching each step (settled and over the limit → one committer); the large-refactor exception of §Coordinator
   pipeline. Review fixes follow §Coordinator pipeline.
+- **Docs under `ai/` go to `ai-kit:doc-writer`**: a new file, a restyle of one still in human form
+  (`${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`), an edit past a few lines. The brief names the file(s), write or restyle,
+  and the source (human doc, code paths, the decisions of this turn); never the format, which the agent holds. One
+  file per agent, sent together when independent; the main session reads its report, `git diff --stat`, and commits
+  (a restyle its own commit). A one-line fact (a decision's status, a table row) the main session writes itself.
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md`.
 - **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read
