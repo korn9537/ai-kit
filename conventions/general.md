@@ -37,12 +37,13 @@ on a conflict and is where a repo writes an exception, with its reason.
     component) that composes it; the client only formats, never joins responses or computes business values
     (totals, status, what a role may do). Extra reads only for cached lookups, parts loaded on their own, a
     sub-list with its own paging; a repo with screen specs declares them there (`docs/screen-specs.md`).
-12. **Large files** — a source file over 40 KB that you need to edit is split first, move-only, in its own commit.
-    A lint error the move surfaces is fixed in a follow-up commit, or its suppression names the real reason the rule
-    does not apply; "moved verbatim" is no reason (pre-commit rejects it). Pre-commit also rejects an edit to a
-    code file over 40 KB at HEAD that adds more than moved lines, imports and the `partial` a C# split puts on its
-    class line (`ALLOW_LARGE_EDIT=1` when it cannot wait). How: `typescript.md` item 11, `csharp.md` item 11,
-    `nestjs.md` item 1.
+12. **Large files** — a source file over 40,000 characters (not bytes: Thai is 3 UTF-8 bytes a character) that you
+    need to edit is split first, move-only, in its own commit. A lint error the move surfaces is fixed in a follow-up
+    commit, or its suppression names the real reason the rule does not apply; "moved verbatim" is no reason
+    (pre-commit rejects it). Pre-commit also rejects an edit to a code file over 40,000 characters at HEAD that adds
+    more than moved lines, imports, the `<Name a={a} />` call site of a component the commit adds and the `partial` a
+    C# split puts on its class line (`ALLOW_LARGE_EDIT=1` when it cannot wait). How: `typescript.md` item 11,
+    `csharp.md` item 11, `nestjs.md` item 1.
 13. **Limits and thresholds** — compare a value with a threshold, limit or gate unrounded; round only to format
     for display, never before the decision (`10.004` rounded to `10.00` passes a `<= 10.00` check it fails). A
     number shown next to its limit (a daily total beside its cap) comes from the same function that enforces the

@@ -38,7 +38,7 @@ Requires `jq` (hooks) and Node 22+ (scripts). On Windows the hooks run under Git
 | `scripts/review-needed.sh`    | prints `skip` for a commit with no code line, else `review`; read by the run-plan workflow     |
 | `docs/spec.md`                | what each kit file does and the processes that call them; the map a refactor starts from |
 | `scripts/check-core-size.mjs` | each injected half of `CLAUDE.core.md` under the 10,000-character SessionStart cap; run by `.githooks/pre-commit` |
-| `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40 KB at HEAD that is not a move-only split |
+| `scripts/check-comments.mjs`  | comment rule check (`//`, `/* */`, `#`, Python docstrings), run by pre-commit and post-edit; `--size`: pre-commit blocks an edit to a code file over 40,000 characters at HEAD that is not a move-only split |
 | `scripts/check-docs.mjs`      | doc rule check on added lines, run by pre-commit and post-edit; `--wrap`: kit clone only, added prose lines over 120 characters, run by `.githooks/pre-commit` |
 | `scripts/check-specs.mjs`     | screen-spec links (API, screen files, ids, index), warnings only, run by pre-commit            |
 | `docs/`                       | `hooks.md` (what each hook does), `ai-docs.md`, `code-comments.md`, `shared-checkout.md`, `kit-proposals.md`, `screen-specs.md`, `ai-layout.md`, `plan-batching.md`, `handoffs.md`, `owner-kinds.md` |
@@ -229,7 +229,7 @@ Rule: anything shared lives here; anything about one project goes in its `ai/kit
 
 1. Clone `korn9537/ai-kit` and edit there, never the installed copy under `~/.claude/plugins/`. Run
    `git config core.hooksPath .githooks` once for the clone's pre-commit: the line wrap check, and on the kit's own
-   code the comment and 40 KB checks it runs for every project.
+   code the comment and file-size checks it runs for every project.
 2. Test in a project with `claude --plugin-dir /path/to/ai-kit`; run `claude plugin validate /path/to/ai-kit`
    (no tests, no CI).
 3. A new, renamed or removed file of the kit is named in `docs/spec.md` in the same commit, and a changed process is
@@ -340,7 +340,7 @@ Claude Code ใหม่
 
 1. clone `korn9537/ai-kit` แล้วแก้ที่นั่น ห้ามแก้ตัวที่ติดตั้งอยู่ใน `~/.claude/plugins/` สั่ง
    `git config core.hooksPath .githooks` ครั้งเดียว pre-commit ของ clone จะตรวจความยาวบรรทัดของเอกสาร และตรวจ
-   comment กับขนาดไฟล์ 40 KB ของ code ใน kit ด้วยกฎเดียวกับที่ใช้กับทุกโปรเจกต์
+   comment กับขนาดไฟล์ 40,000 ตัวอักษรของ code ใน kit ด้วยกฎเดียวกับที่ใช้กับทุกโปรเจกต์
 2. ทดสอบในโปรเจกต์ด้วย `claude --plugin-dir /path/to/ai-kit` และรัน `claude plugin validate /path/to/ai-kit`
    (ไม่มี test ไม่มี CI)
 3. เพิ่มเลข `version` ใน `.claude-plugin/plugin.json` และเขียนหนึ่งบรรทัดใน `CHANGELOG.md`

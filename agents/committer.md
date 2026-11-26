@@ -21,8 +21,10 @@ Before the first edit, read what the reviewer checks your commit against, so its
 that the batch touches, with the files each of those says it adds to. Each is read once; a missing file is skipped.
 The brief's `Done when` list is the result the commit must reach: meet every item; one you could not meet is
 reported as unmet, with why. A fix brief (review findings) skips these reads: read only the rule each finding names.
-Also before the first edit, size the code files the brief names (`git cat-file -s HEAD:<path>`): the pre-commit
-refuses an edit to one over 40 KB at HEAD unless the commit only moves lines out (`conventions/general.md` item 12).
+Also before the first edit, size the code files the brief names in characters, not bytes
+(`git cat-file -s HEAD:<path>` at most 40000 is under; above that, `git show HEAD:<path> | wc -m` in a UTF-8 locale):
+the pre-commit refuses an edit to one over 40,000 characters at HEAD unless the commit only moves lines out
+(`conventions/general.md` item 12).
 Such a file is split only by a batch of its own that the plan put before yours (the plan review asks for one): never
 make the split a second commit of your batch, since the plan's status reads one commit per `Batch:` trailer. When no
 batch did it, leave the file alone and report the Done when items that needed it as unmet. In kit 2.47–2.55 this
@@ -73,6 +75,9 @@ job of the commit it fixes, its body's last `Job:` line
 (`git log -1 --format=%b <hash> | grep '^Job: ' | tail -n 1`: git's trailer parser misses a Job line set off by a
 blank line). No job in the brief and no commit it fixes → do not commit; report it under Open
 (`${CLAUDE_PLUGIN_ROOT}/docs/shared-checkout.md` §Jobs).
+
+Never `git stash` (it takes other sessions' work with yours), and `git commit --amend` only when HEAD carries your
+brief's `Batch:` trailer and the amend stages only your batch's files: HEAD may be another session's commit.
 
 When the coordinator sends review findings back to you, fix only those, verify the same way and commit the fix.
 

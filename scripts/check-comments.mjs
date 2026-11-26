@@ -181,7 +181,7 @@ const generatedGo = (f, lines, cl) => {
 
 // --size: see the header
 if (flag("size")) {
-  const LIMIT = 40 * 1024;
+  const LIMIT = 40000;
   const gitRaw = (...a) => execFileSync("git", a, { windowsHide: true, encoding: "utf8", maxBuffer: 1 << 30 });
   if (process.env.ALLOW_LARGE_EDIT === "1") process.exit(0);
   // a merge, cherry-pick or revert brings in lines the committer did not write
@@ -209,11 +209,14 @@ if (flag("size")) {
     changed.push([ns[i + (two ? 2 : 1)], ns[i + 1]]);
     i += two ? 3 : 2;
   }
+  // characters, not bytes: Thai and other non-Latin text is 3 UTF-8 bytes a character; bytes <= LIMIT skips the read
   const big = changed
     .filter(([f]) => INCLUDE.test(f) && !SKIP.test(f))
     .map(([f, old]) => {
       try {
-        return [f, Number(gitRaw("cat-file", "-s", `HEAD:${old}`).trim())];
+        if (Number(gitRaw("cat-file", "-s", `HEAD:${old}`).trim()) <= LIMIT) return [f, 0];
+        const text = gitRaw("show", `HEAD:${old}`);
+        return [f, text.length - (text.match(/[\uD800-\uDBFF]/g)?.length ?? 0)];
       } catch {
         return [f, 0];
       }
@@ -237,6 +240,29 @@ if (flag("size")) {
   const staged = gitRaw("diff", "--cached", "--name-only", "--no-renames", "-z").split("\0").filter(Boolean);
   const diffs = new Map(staged.map((f) => [f, lines(f)]));
 
+  // component names the files this commit adds export: a split's `<Name a={a} />` call site in the old file is wiring
+  const exported = new Set();
+  for (const f of gitRaw("diff", "--cached", "--name-only", "--diff-filter=A", "-z").split("\0").filter(Boolean)) {
+    if (!/\.(tsx?|jsx?|mjs)$/.test(f)) continue;
+    const text = gitRaw("show", `:${f}`);
+    for (const m of text.matchAll(/^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Z][\w$]*)/gm)) exported.add(m[1]);
+    for (const m of text.matchAll(/^export\s+default\s+([A-Z][\w$]*)\s*;?\s*$/gm)) exported.add(m[1]);
+    for (const m of text.matchAll(/^export\s*\{([^}]*)\}/gm))
+      for (const n of m[1].split(",")) exported.add(n.trim().split(/\s+as\s+/).pop());
+    if (/^export\s+default\s+(function|class)\s*[(<{]/m.test(text)) exported.add(f.split("/").pop().replace(/\..*$/, ""));
+  }
+  // attributes that only pass names on: a={a}, a={x.y}, a, a="text", {...a}; anything else is new code. Whitespace
+  // between attributes is required, so a name reads one way only (no backtracking blow-up)
+  const ATTR = String.raw`(?:[A-Za-z_][\w-]*(?:=(?:\{[A-Za-z_$][\w$]*(?:\??\.[A-Za-z_$][\w$]*)*\}|"[^"]*"|'[^']*'))?|\{\.\.\.[A-Za-z_$][\w$.]*\})`;
+  const ATTRS = new RegExp(String.raw`^(?:${ATTR}(?:\s+${ATTR})*)?\s*(\/>)?$`);
+  const jsxOpen = (t) => {
+    const m = t.match(/^<([A-Z][\w$]*)(\s.*|\/>)?$/);
+    if (!m || !exported.has(m[1])) return null;
+    const rest = (m[2] ?? "").trim();
+    const a = ATTRS.exec(rest);
+    return a ? { done: !!a[1] } : null;
+  };
+
   const add = (bag, t) => bag.set(t, (bag.get(t) ?? 0) + 1);
   const pay = (bag, t) => !!bag.get(t) && !!bag.set(t, bag.get(t) - 1);
 
@@ -249,26 +275,53 @@ if (flag("size")) {
       if (g !== f) for (const t of d["-"]) add(left, t);
     if (f.endsWith(".cs")) for (const t of diffs.get(f)["-"]) add(own, t);
     let open = false;
+    // lines of a `<Name` call site not yet closed by `/>` in its hunk: unclosed, each is paid like any other line
+    let jsx = null;
+    const paid = (t) => {
+      const plain = t.replace(PARTIAL, "$1");
+      return pay(left, t) || (plain !== t && pay(own, plain));
+    };
+    const charge = () => {
+      const held = jsx ?? [];
+      jsx = null;
+      return held.every(paid);
+    };
     for (const t of diffs.get(f)["+"]) {
       // an import whose `} from` line is context ends with its hunk
       if (t === null) {
         open = false;
+        if (!charge()) return false;
         continue;
+      }
+      if (jsx) {
+        const a = ATTRS.exec(t);
+        if (a) {
+          if (a[1]) jsx = null;
+          else jsx.push(t);
+          continue;
+        }
+        if (!charge()) return false;
       }
       if (open || WIRING.test(t)) {
         open = open ? !CLOSE.test(t) : OPEN.test(t);
         continue;
       }
-      const plain = t.replace(PARTIAL, "$1");
-      if (!pay(left, t) && (plain === t || !pay(own, plain))) return false;
+      if (!f.endsWith(".cs")) {
+        const o = jsxOpen(t);
+        if (o) {
+          if (!o.done) jsx = [t];
+          continue;
+        }
+      }
+      if (!paid(t)) return false;
     }
-    return true;
+    return charge();
   };
 
   const bad = big.filter(([f]) => !moveOnly(f));
   for (const [f, size] of bad)
     console.log(
-      `${f} is ${Math.round(size / 1024)} KB at HEAD: split it first in a move-only commit (general.md item 12)`,
+      `${f} is ${size} characters at HEAD (limit ${LIMIT}): split it first in a move-only commit (general.md item 12)`,
     );
   if (bad.length) process.exit(1);
   process.exit(0);

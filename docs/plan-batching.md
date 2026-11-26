@@ -49,8 +49,8 @@ anyway is found before the code exists. Each batch carries, set when the plan is
 - A statement a doc or brief makes about behavior is checked against the code when written, not after. A
   `path:start-end` from a BA, explorer or decider report of this turn is that check: copy it into the brief, and read
   again only what the report marks assumed or not found, or a file edited since.
-- File size: a batch that edits a code file over 40 KB at HEAD with no move-only split planned before it is a
-  CONFIRMED finding (kind claim): the pre-commit refuses the edit (`conventions/general.md` item 12), and the
+- File size: a batch that edits a code file over 40,000 characters at HEAD with no move-only split planned before it
+  is a CONFIRMED finding (kind claim): the pre-commit refuses the edit (`conventions/general.md` item 12), and the
   committer would learn it only once the batch is built.
 
 The reviewer reads the plan and the code the batches touch, and reports per batch: a failure mode missing from

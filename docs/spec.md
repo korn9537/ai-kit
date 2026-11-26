@@ -21,7 +21,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `README.md` | install, settings, commands, editing the kit |
 | `.gitattributes`, `.gitignore`, `LICENSE` | `.gitattributes` forces LF (the scripts must run from a Windows checkout); the others as named |
 | `.github/ISSUE_TEMPLATE/proposal.md` | body of a kit proposal issue (`docs/kit-proposals.md`) |
-| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and 40 KB checks; the `CLAUDE.core.md` size check when it is staged |
+| `.githooks/pre-commit` | the kit clone's own pre-commit: wrap, comment and file-size checks; the `CLAUDE.core.md` size check when it is staged |
 
 ### hooks/ (Claude Code hooks)
 
@@ -45,8 +45,8 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 
 | File | Role |
 |---|---|
-| `githooks/pre-commit` | runs in order: backslash path, `check-docs`, `eslint-disable ... moved verbatim`, 40 KB size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
-| `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer on a commit made under Claude Code (`CLAUDECODE=1`); a merge, a `fixup!`, `squash!` or `amend!` commit and a person's own commit pass |
+| `githooks/pre-commit` | runs in order: backslash path, `check-docs`, `eslint-disable ... moved verbatim`, file size, prettier, `ai/kit/pre-commit.sh`, `check-comments`, `check-specs`, `kit.mjs check` when kit files are staged |
+| `githooks/commit-msg` | requires exactly one `Job: <yyyy-mm-dd>-<slug>` trailer on a commit made under Claude Code (`CLAUDECODE=1`); a merge, a `fixup!`, `squash!` or `amend!` commit and a person's own commit pass; a job with `ai/plans/<id>.md` is refused a staged path outside `plan.mjs scope` (`*.md` exempt; `ALLOW_OUTSIDE_PLAN=1`) |
 
 ### agents/ (subagents)
 
@@ -94,7 +94,7 @@ A project holds its own settings in `ai/kit/` and two git shims in `.githooks/` 
 | `scripts/kit/unattended.mjs` | `unattended`: rewrites `ai/kit/pre-commit.sh` to `$AI_KIT_RANGE`, then runs sync, which writes `requires.txt` |
 | `scripts/kit/inventory.mjs` | `inventory`: read-only list of what a retrofit starts from |
 | `scripts/check-core-size.mjs` | each half of `CLAUDE.core.md`, with an 80-character plugin path, under the 10,000-character SessionStart cap (the second half 2,000 under it, for `session-start.sh`'s notes); `--staged` reads the index; run by `.githooks/pre-commit` |
-| `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40 KB unless it only moves lines |
+| `scripts/check-comments.mjs` | comment rule (`docs/code-comments.md`); `--size`: blocks an edit to a code file over 40,000 characters at HEAD unless it only moves lines (imports and a call site of a component the commit adds count as moved) |
 | `scripts/check-docs.mjs` | doc rule on added lines (`docs/ai-docs.md`); `--wrap`: the kit clone's 120-character check |
 | `scripts/check-specs.mjs` | screen spec links to the API, files, ids, index, routes with no API entry; warnings only |
 | `scripts/lib/routes.mjs` | regex route extraction (Next, Nest, Express, FastAPI, Flask) and path-param normalizing |
@@ -290,7 +290,7 @@ Each step names the file that does it.
 ### P8 Editing the kit
 
 1. Cross-repo improvements arrive as `proposal` issues; `/ai-kit:harvest` lands the accepted ones.
-2. In the clone `.githooks/pre-commit` runs the wrap, comment and 40 KB checks. No tests, no CI.
+2. In the clone `.githooks/pre-commit` runs the wrap, comment and file-size checks. No tests, no CI.
    Work on a branch, review, bump `plugin.json`, add a `CHANGELOG.md`
    entry, add the new file to this spec, `git merge --ff-only`, tag `vX.Y.Z`, push `main` with the tag
    (`README.md` §Editing the kit).

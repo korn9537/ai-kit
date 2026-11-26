@@ -62,7 +62,8 @@ For a project with `claude -p` runs that do not load the plugin (a CI job, a que
   on `$(tool)` output otherwise passes without the tool. `sync` writes the file once, from the commands it knows in
   `pre-commit.sh`; it is a start, so add the rest by hand (one per line, `#` for a comment).
 - `check.sh` runs the kit's comment and doc checks from `ai/kit/checks/`, then the project's, on committed files, and
-  prints how many it covered. The 40 KB rule stays out: a range cannot tell its move-only commit from the edit after it.
+  prints how many it covered. The file-size rule stays out: a range cannot tell its move-only commit from the edit
+  after it.
 - `ai/kit/review-prompt.md` is `agents/change-reviewer.md` with repo paths, for a pipeline's own review. The reply
   format is the agent's; the pipeline's schema wins.
 - A path starting `ai-kit/` inside a copy is a plugin doc, not in the repo.

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.63.0
+
+The large-file rule counts characters, so Thai copy no longer trips it at a third of the size; a component
+extraction passes it; a job with a plan cannot commit another session's staged files; `ai/` docs keep tables
+unpadded. No project needs to edit anything.
+
+- `conventions/general.md` item 12, `scripts/check-comments.mjs --size`: the limit is 40,000 characters at HEAD, not
+  40 KB (Thai and other non-Latin text is 3 UTF-8 bytes a character). Committer, plan review and docs say so.
+- `check-comments.mjs --size`: a split's `<Name ... />` call site counts as wiring when `Name` is exported by a file
+  the commit adds and its attributes only pass names on (`a={a}`, `a={x.y}`, `a`, `a="text"`, `{...a}`) (#66).
+- `githooks/commit-msg`: a commit whose job has `ai/plans/<id>.md` is refused a staged path outside `plan.mjs scope`
+  (`*.md` exempt, `ALLOW_OUTSIDE_PLAN=1` for a lockfile or generated output); the committer never stashes and amends
+  only its own batch's commit (#64).
+- `docs/ai-docs.md`: tables unpadded, file pointers as repo-root paths in code spans; `githooks/pre-commit` runs
+  prettier on no `ai/**/*.md` (#67).
+
 ## 2.62.1
 
 The kit clone drops its test suites, agent evals and CI; nothing changes for projects.

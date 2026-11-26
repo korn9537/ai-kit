@@ -58,7 +58,7 @@ if [ -n "$(git diff --cached --name-only --diff-filter=ACMR)" ]; then
   }
 fi
 
-# A lint suppression names why the rule does not apply; "moved verbatim" is no reason (conventions/general.md item 12, 40 KB split).
+# A lint suppression names why the rule does not apply; "moved verbatim" is no reason (conventions/general.md item 12, large-file split).
 moved="$(git -c core.quotePath=false diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*.md' ':(exclude)ai/usage' \
   | grep -E '^\+' | grep -vE '^\+\+\+ ' | grep -iE 'eslint-disable[^*]*--[[:space:]]*moved verbatim')"
 if [ -n "$moved" ]; then
@@ -69,7 +69,7 @@ if [ -n "$moved" ]; then
   exit 1
 fi
 
-# An edit to a code file over 40 KB at HEAD waits for its move-only split (conventions/general.md item 12).
+# An edit to a code file over 40,000 characters at HEAD waits for its move-only split (conventions/general.md item 12).
 if [ -n "$(git diff --cached --name-only -M20% --diff-filter=MR)" ]; then
   node "$ai_kit_plugin/scripts/check-comments.mjs" --size || {
     echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"
@@ -92,8 +92,9 @@ if grep -q '"prettier"' package.json 2>/dev/null && [ -n "$(git diff --cached --
   # paths are literal below: a Next.js route `app/[id]/page.tsx` is a glob to git
   whole="" partial=""
   while IFS= read -r f; do
-    # a generated copy keeps the text its hash covers (scripts/kit.mjs)
-    case "$f" in ai/kit/conventions/*|ai/kit/checks/*|ai/kit/review-prompt.md) continue ;; esac
+    # a generated copy keeps the text its hash covers (scripts/kit.mjs); ai/ docs keep tables unpadded
+    # (docs/ai-docs.md §Shape), which prettier would align with spaces
+    case "$f" in ai/kit/conventions/*|ai/kit/checks/*|ai/kit/review-prompt.md|ai/*.md) continue ;; esac
     if printf '%s\n' "$unstaged" | grep -qxF -- "$f"; then partial="$partial$f
 "; else whole="$whole$f
 "; fi

@@ -50,6 +50,7 @@ export const HOOK_EVENTS = [
   m("pre-commit.node-missing", PC, "git", "'node' is not on PATH for this git client", "commit blocked: 'node' is not on PATH for this git client."),
   m("pre-commit.kit-check", PC, "git", "ai-kit check failed", "ai-kit check failed: apply the fix each line names."),
   m("commit-msg.job", "githooks/commit-msg", "git", "commit-msg: the message needs exactly one trailer", "commit-msg: the message needs exactly one trailer 'Job: <yyyy-mm-dd>-<slug>'"),
+  m("commit-msg.plan", "githooks/commit-msg", "git", "staged paths outside the plan of job", "commit-msg: staged paths outside the plan of job 2026-01-05-x (ai/plans/2026-01-05-x.md)"),
   // no hook message: a user prompt, an assistant text, a Bash command. Each mirrors the hook's own test
   { id: "stop.skip-review-escape", kind: "prompt", file: "hooks/review-before-stop.sh", anchor: "skip review", sample: "skip review, ship it",
     re: /^\s*(ไม่ต้อง ?review|skip review)/i },
@@ -57,6 +58,8 @@ export const HOOK_EVENTS = [
     sample: "Review closed: re-checked once, no third pass", re: /(?<!["`'“])Review closed: re-checked once/i },
   { id: "bash-guard.allow-build-while-dev", kind: "command", file: BG, anchor: "ALLOW_BUILD_WHILE_DEV=1", sample: "ALLOW_BUILD_WHILE_DEV=1 npm run build",
     re: /ALLOW_BUILD_WHILE_DEV=1/ },
+  { id: "commit-msg.allow-outside-plan", kind: "command", file: "githooks/commit-msg", anchor: "ALLOW_OUTSIDE_PLAN=1", sample: "ALLOW_OUTSIDE_PLAN=1 git commit -m x",
+    re: /ALLOW_OUTSIDE_PLAN=1/ },
   { id: "pre-commit.allow-large-edit", kind: "command", file: PC, anchor: "ALLOW_LARGE_EDIT=1", sample: "ALLOW_LARGE_EDIT=1 git commit -m x", re: /ALLOW_LARGE_EDIT=1/ },
   { id: "pre-commit.no-verify", kind: "command", file: PC, anchor: "--no-verify", sample: "git commit --no-verify -m x",
     re: /(?:^|[;&|\n(])\s*(?:\w+=\S+\s+)*git(?:\s+(?:-C\s+\S+|-c\s+\S+|--?[\w-]+(?:=\S+)?))*\s+commit\s[^|;&\n]*--no-verify/ },

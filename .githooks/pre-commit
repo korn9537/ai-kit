@@ -5,7 +5,7 @@ node scripts/check-docs.mjs --wrap --staged || { echo "To bypass: git commit --n
 if git diff --cached --name-only | grep -qx 'CLAUDE.core.md'; then
   node scripts/check-core-size.mjs --staged || { echo "To bypass: git commit --no-verify"; exit 1; }
 fi
-# The kit's own code keeps the rules it enforces on every project: comment blocks of at most two lines, 40 KB files.
+# The kit's own code keeps the rules it enforces on every project: comment blocks of at most two lines, files of at most 40,000 characters.
 node scripts/check-comments.mjs --staged --strict || { echo "To bypass: git commit --no-verify"; exit 1; }
 if [ -n "$(git diff --cached --name-only -M20% --diff-filter=MR)" ]; then
   node scripts/check-comments.mjs --size || { echo "When the split cannot come first: ALLOW_LARGE_EDIT=1 git commit ... To bypass: git commit --no-verify"; exit 1; }

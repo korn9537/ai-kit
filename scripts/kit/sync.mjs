@@ -42,7 +42,7 @@ AI_KIT_FILES="$(git -c core.quotePath=false diff --name-only --diff-filter=ACMR 
   echo "check blocked: no diff from $base (a shallow clone needs the base's history)"
   exit 1
 }
-# the kit's own checks; the 40 KB rule stays out: a range cannot tell its move-only commit from the edit after it
+# the kit's own checks; the file-size rule stays out: a range cannot tell its move-only commit from the edit after it
 node ai/kit/checks/check-docs.mjs --range="$base...HEAD" --strict || exit 1
 node ai/kit/checks/check-comments.mjs --range="$base...HEAD" --strict || exit 1
 ${HELPERS}AI_KIT_RANGE="$base...HEAD"

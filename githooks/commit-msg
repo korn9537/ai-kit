@@ -24,4 +24,19 @@ if [ "$n" -ne 1 ] || ! printf '%s\n' "$jobs" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9
   node "$(cd "$(dirname "$0")/.." && pwd)/scripts/usage.mjs" refusal commit-msg.job >/dev/null 2>&1 || true
   exit 1
 fi
+
+# a job with a plan commits only paths the plan covers (plan.mjs scope): in a shared index, a path outside it may be
+# another session's staged work. *.md is exempt (a committer fixes any doc naming what it changed); amends included
+[ "${ALLOW_OUTSIDE_PLAN:-}" = 1 ] && exit 0
+[ -f "ai/plans/$jobs.md" ] && command -v node >/dev/null 2>&1 || exit 0
+plugin="$(cd "$(dirname "$0")/.." && pwd)"
+stray=$(git -c core.quotePath=false diff --cached --name-only --no-renames | grep -v '\.md$' |
+  node "$plugin/scripts/plan.mjs" scope "$jobs" --outside 2>/dev/null) || exit 0
+if [ -n "$stray" ]; then
+  echo "commit-msg: staged paths outside the plan of job $jobs (ai/plans/$jobs.md), maybe another session's work:"
+  printf '%s\n' "$stray" | sed 's/^/   /'
+  echo "Unstage each that is not yours: git restore --staged <path>. Yours (a lockfile, generated output): ALLOW_OUTSIDE_PLAN=1 git commit ..."
+  node "$plugin/scripts/usage.mjs" refusal commit-msg.plan >/dev/null 2>&1 || true
+  exit 1
+fi
 exit 0

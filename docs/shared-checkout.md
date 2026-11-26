@@ -40,6 +40,9 @@ until a session or `init` has recorded the plugin path (a fresh clone, an old pl
   from the handoff prompt, or from the request's last commit (its body's last `Job:` line,
   `git log -1 --format=%b <hash> | grep '^Job: ' | tail -n 1`: git's trailer parser misses a Job line set off by a
   blank line); the "Next session" prompt names it.
+- A job with a plan (`ai/plans/<id>.md`): `githooks/commit-msg` refuses a staged path outside the plan's scope
+  (`plan.mjs scope`: the files its batches name and its commits touched; `*.md` exempt), amends included. Not yours
+  → `git restore --staged <path>`; yours (a lockfile, generated output) → `ALLOW_OUTSIDE_PLAN=1 git commit`.
 - Same job: every batch of the request, its review-fix commits (copy the job of the commit being fixed, read the
   same way), and output it regenerates. New job: a follow-up outside the request, and a later request on the
   same feature.

@@ -34,6 +34,10 @@
 - Fragments, not sentences: drop articles, filler, hedges, politeness.
 - 3+ parallel items → table or `key: value` lines. Rules → bullets. Prose only for a cause chain a list cannot hold.
 - One fact, one place. Elsewhere a pointer (`→ ai/specs/x.md §3`, `→ D3`), never a copy.
+- A pointer to a file is its repo-root path in a code span (`ai/reference/audit.md`), never a Markdown link
+  `[text](../path)`: the link text repeats the target and a relative path breaks when either file moves.
+- Tables unpadded: `|a|b|` rows under a `|-|-|` separator, no spaces aligning columns. The kit's pre-commit keeps
+  prettier off `ai/**/*.md`; another formatter the repo runs on them is excluded in its own config.
 - A pointer into code names the file and a symbol (`orders.service.ts` `approveOrder`), never a line number:
   code edits shift lines silently.
 - Stable ids on rules, decisions, requirements, screens (`D3`, `REQ-3`, `S-2`) so pointers stay short.
