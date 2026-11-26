@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.62.1
+
+The kit clone drops its test suites, agent evals and CI; nothing changes for projects.
+
+- Removed `.github/workflows/`, every `*.test.sh` / `*.test.mjs`, `scripts/test-all.mjs`, `scripts/lib/test-util.mjs`,
+  `scripts/fixtures/`, `evals/` and `.shellcheckrc`.
+- `.githooks/pre-commit` no longer runs the handoff and run-plan tests; README and `docs/spec.md` updated.
+
 ## 2.62.0
 
 Delegation and the summary rule move out of the always-injected rules into the `ai-kit:delegate` and
