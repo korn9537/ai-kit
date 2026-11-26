@@ -1,6 +1,6 @@
 ---
 name: delegate
-description: "ai-kit delegation rules: which subagent takes a search, a browser check or a code change, with which model and effort, and how several items become a plan run by committers or the run-plan workflow. Load before launching any subagent, before a code edit past review.skip_lines lines or with a new file, before planning several items, and before writing or restyling a doc under ai/."
+description: "ai-kit delegation rules: which subagent takes a search, a browser check or a code change, with which model and effort, and how several items become a plan run by committers or the run-plan workflow. Load before launching any subagent, before a code edit past review.skip_lines lines or with a new file, before planning several items, and before writing a new doc under ai/."
 when_to_use: "Also when the user asks to plan now and build later (วางแผนไว้ก่อน, prepare it, don't build yet), to work through the planned jobs (ไล่ทำที่วางไว้), or to run them with nobody watching (ทำไปเลยไม่ต้องรอ)."
 user-invocable: false
 ---
@@ -38,11 +38,11 @@ The delegation half of the ai-kit rules (`${CLAUDE_PLUGIN_ROOT}/CLAUDE.core.md` 
   `review.always` path; a small job (the list in `ai-kit:summarize`); debugging or a UI tweak iterated with the user
   watching each step (settled and over the limit → one committer); the large-refactor exception of §Coordinator
   pipeline. Review fixes follow §Coordinator pipeline.
-- **Docs under `ai/` go to `ai-kit:doc-writer`**: a new file, a restyle of one still in human form
-  (`${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md`), an edit past a few lines. The brief names the file(s), write or restyle,
-  and the source (human doc, code paths, the decisions of this turn); never the format, which the agent holds. One
-  file per agent, sent together when independent; the main session reads its report, `git diff --stat`, and commits
-  (a restyle its own commit). A one-line fact (a decision's status, a table row) the main session writes itself.
+- **A new file under `ai/` goes to `ai-kit:doc-writer`**: the brief names the file and the source (human doc, code
+  paths, the decisions of this turn), never the format, which the agent holds. Several files → one agent each, sent
+  together; the main session reads its report and `git diff --stat`, and commits. An edit to an existing `ai/` doc
+  the main session writes itself in the `${CLAUDE_PLUGIN_ROOT}/docs/ai-docs.md` form; a restyle of existing docs only
+  when the user asks (`${CLAUDE_PLUGIN_ROOT}/commands/retrofit.md` `restyle`).
 - **Several items** (fixes, features, review findings, upgrades): plan them before the first edit per
   `${CLAUDE_PLUGIN_ROOT}/docs/plan-batching.md`.
 - **A multi-commit plan picks its runner itself**, one `ai-kit:committer` per batch; read

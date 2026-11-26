@@ -1,6 +1,6 @@
 ---
 name: doc-writer
-description: "Writes or restyles docs under ai/ in the AI-only form (English, token-minimal, no human reader): a new ai/ doc, a restyle of one still in human form, an edit past a few lines. Launched by the main session with the target file(s) and the source; the format is its own, so nobody restates it. Writes files, runs the doc check, does not commit. Reports dropped history, doubtful claims and unresolved pointers."
+description: "Writes or restyles docs under ai/ in the AI-only form (English, token-minimal, no human reader): every new ai/ file (ai-kit:delegate), and a restyle of existing docs only when the user asks (/ai-kit:retrofit restyle). Launched with the target file and the source; the format is its own, so nobody restates it. Writes files, runs the doc check, does not commit. Reports dropped history, doubtful claims and unresolved pointers."
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 effort: medium

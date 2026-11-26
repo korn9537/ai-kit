@@ -1,6 +1,6 @@
 ---
 description: Bring this project's docs into the ai/ layout from its code and existing docs, one category per commit
-argument-hint: "[config|move|data|decisions|requirements|screens|api] [area]"
+argument-hint: "[config|move|data|decisions|requirements|screens|api|restyle] [area]"
 ---
 
 Retrofit the project's docs into `${CLAUDE_PLUGIN_ROOT}/docs/ai-layout.md`. Arguments: `$ARGUMENTS`.
@@ -46,6 +46,7 @@ Rules for every step:
 | `requirements` | `ai/requirements/<area>.md` only from an existing human source (`source:` points to it); none → skip |
 | `screens` | `ai/screens/index.md`, one line per screen: `- <name> → <entry file> (no spec)` until its spec exists (`docs/screen-specs.md` §Screen spec); full `S-<n>` specs only for the `area` argument, or when the screen is next changed |
 | `api` | when `ui.api` is an OpenAPI file: nothing. Else `ai/api/<area>.md` from the route files, one heading per endpoint |
+| `restyle` | existing `ai/` docs still in human form (Thai prose, padded tables, Markdown links, history) into the `docs/ai-docs.md` form; `area` = a file or folder, default every `ai/**/*.md`. Needs no `ai/plans/retrofit.md` and is not in the survey. One `ai-kit:doc-writer` per file (sent together, at most 5 at a time), each file its own commit; the agent's Dropped and Doubtful lines go to Decided and Open |
 
 ## With an argument
 

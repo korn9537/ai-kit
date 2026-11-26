@@ -5,9 +5,8 @@
 - Categories, file names, ids and format per type: `docs/ai-layout.md`; screen and API specs:
   `docs/screen-specs.md`.
 - Human-read docs, mockups, design assets, and any human-form doc the user asks for: outside `ai/`, never checked.
-- Applies to text you write, by `ai-kit:doc-writer` (`ai-kit:delegate`). An `ai/` doc you edit that is still in human
-  form (Thai prose, padded tables, Markdown links, history) is restyled whole first, own commit, no ask; a split is
-  its own ask (move-only, own commit).
+- Applies to text you write; a new `ai/` file is written by `ai-kit:doc-writer` (`ai-kit:delegate`). Restyling or
+  splitting existing text is its own ask: restyle → `/ai-kit:retrofit restyle`; split → move-only, own commit.
 - Goal: fewest tokens that still prevent a wrong build.
 - Enforced on added lines by `scripts/check-docs.mjs` (pre-commit, post-edit):
   emoji, bold, filler (fixed list; `~` before a digit, a year too; about, around, roughly, approximately before a

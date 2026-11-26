@@ -15,9 +15,9 @@ new `doc-writer` agent that holds their format. No project needs to edit anythin
   only its own batch's commit (#64).
 - `docs/ai-docs.md`: tables unpadded, file pointers as repo-root paths in code spans; `githooks/pre-commit` runs
   prettier on no `ai/**/*.md` (#67).
-- New `agents/doc-writer.md` (sonnet medium): writes or restyles `ai/` docs in the AI-only form, so the user no
-  longer restates it; `ai-kit:delegate` sends it every new `ai/` doc, restyle and edit past a few lines, and an
-  `ai/` doc still in human form is restyled before an edit without an ask (#67).
+- New `agents/doc-writer.md` (sonnet medium): writes `ai/` docs in the AI-only form, so the user no longer restates
+  it. `ai-kit:delegate` sends it every new `ai/` file; edits to existing docs stay with the main session. New
+  `/ai-kit:retrofit restyle [file|folder]` revises an old repo's `ai/` docs, one agent and one commit per file (#67).
 
 ## 2.62.1
 
